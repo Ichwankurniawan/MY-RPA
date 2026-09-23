@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Platform-neutral contracts and domain concepts.
+    MUST NOT have PackageReference, FrameworkReference or ProjectReference (ADR-0004).
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Core</RootNamespace>
+    <Description>MyRPA platform-neutral core contracts: identifiers, execution identity, diagnostics names, activity metadata.</Description>
+  </PropertyGroup>
+</Project>

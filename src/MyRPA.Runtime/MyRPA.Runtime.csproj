@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Runtime composition and observability foundation; hosts the Phase 2 engine.
+    May reference MyRPA.Core and MyRPA.Workflow only; NOT MyRPA.Activities (ADR-0003).
+    Packages: Microsoft.Extensions.*.Abstractions only.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Runtime</RootNamespace>
+    <Description>MyRPA runtime composition, execution scopes, logging and tracing foundation.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+</Project>

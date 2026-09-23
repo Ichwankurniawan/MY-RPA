@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The single workflow model shared by CLI, Studio, Robot, Orchestrator and AI generation (ADR-0002).
+    May reference MyRPA.Core only. No packages, no serializer, no XAML/WF4/UI dependencies.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Workflow</RootNamespace>
+    <Description>MyRPA workflow model (definition, nodes, schema version).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+  </ItemGroup>
+</Project>

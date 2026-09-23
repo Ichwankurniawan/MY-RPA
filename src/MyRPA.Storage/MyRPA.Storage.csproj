@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Storage abstractions. MUST NOT reference database drivers or ORMs; concrete stores
+    go into separate projects (e.g. MyRPA.Storage.Sqlite) in later phases (reconciliation C7).
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Storage</RootNamespace>
+    <Description>MyRPA storage abstractions (no database implementation).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+</Project>

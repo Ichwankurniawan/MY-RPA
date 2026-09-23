@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+  </ItemGroup>
+</Project>

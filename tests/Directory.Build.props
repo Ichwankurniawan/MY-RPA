@@ -1,0 +1,27 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- xUnit v3 test projects are executables. -->
+    <OutputType>Exe</OutputType>
+    <IsTestProject>true</IsTestProject>
+    <!--
+      GenerateDocumentationFile stays on (inherited) so IDE0005 is enforced; CS1591 is suppressed instead.
+      CS1591: XML docs are not required on tests.
+      CA1707: test names use underscores (Subject_Condition_Result).
+      CA1515: test classes must be public for xUnit.
+      CA1848: LoggerMessage performance guidance does not apply to tests.
+      CA2007: ConfigureAwait is not needed in tests.
+    -->
+    <NoWarn>$(NoWarn);CS1591;CA1707;CA1515;CA1848;CA2007</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- xUnit v3 runs on Microsoft.Testing.Platform (opted in via global.json "test.runner"). -->
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

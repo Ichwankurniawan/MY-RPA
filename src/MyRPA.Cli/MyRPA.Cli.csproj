@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Composition root: the only Phase 1 project allowed to reference Microsoft.Extensions.Hosting
+    and to know the full project graph (ADR-0003, ADR-0005).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MyRPA.Cli</RootNamespace>
+    <AssemblyName>myrpa</AssemblyName>
+    <Description>MyRPA command-line interface.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+    <ProjectReference Include="..\MyRPA.Activities\MyRPA.Activities.csproj" />
+    <ProjectReference Include="..\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\MyRPA.Storage\MyRPA.Storage.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+</Project>

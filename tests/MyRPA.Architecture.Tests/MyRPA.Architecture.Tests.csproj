@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- References every src project so rules can inspect compiled assemblies (ADR-0007). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Activities\MyRPA.Activities.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Storage\MyRPA.Storage.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Cli\MyRPA.Cli.csproj" />
+  </ItemGroup>
+</Project>
