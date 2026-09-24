@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "1.0",
+  "id": "control-flow-tour",
+  "name": "Control flow tour",
+  "version": "1.0.0",
+  "description": "Exercises every built-in control-flow activity.",
+  "arguments": [
+    { "name": "tier", "direction": "In", "type": "String", "default": "gold" },
+    { "name": "total", "direction": "Out", "type": "Int" },
+    { "name": "discount", "direction": "Out", "type": "Decimal" },
+    { "name": "handledError", "direction": "Out", "type": "String" }
+  ],
+  "variables": [
+    { "name": "counter", "type": "Int", "default": 0 },
+    { "name": "prices", "type": "List", "default": [10, 20, 30] },
+    { "name": "sum", "type": "Int", "default": 0 }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      {
+        "id": "count-to-three",
+        "type": "Core.While",
+        "properties": { "condition": "counter < 3", "maxIterations": 100 },
+        "slots": {
+          "body": { "id": "increment", "type": "Core.Assign", "properties": { "to": "counter", "value": "counter + 1" } }
+        }
+      },
+      {
+        "id": "sum-prices",
+        "type": "Core.ForEach",
+        "properties": { "items": "prices", "itemVariable": "price" },
+        "slots": {
+          "body": { "id": "add-price", "type": "Core.Assign", "properties": { "to": "sum", "value": "sum + price" } }
+        }
+      },
+      {
+        "id": "do-once",
+        "type": "Core.DoWhile",
+        "properties": { "condition": "false" },
+        "slots": {
+          "body": { "id": "set-total", "type": "Core.Assign", "properties": { "to": "total", "value": "sum * counter" } }
+        }
+      },
+      {
+        "id": "pick-discount",
+        "type": "Core.Switch",
+        "properties": { "expression": "tier" },
+        "slots": {
+          "case:gold": { "id": "gold", "type": "Core.Assign", "properties": { "to": "discount", "value": "0.20" } },
+          "case:silver": { "id": "silver", "type": "Core.Assign", "properties": { "to": "discount", "value": "0.10" } },
+          "default": { "id": "none", "type": "Core.Assign", "properties": { "to": "discount", "value": 0 } }
+        }
+      },
+      {
+        "id": "check-total",
+        "type": "Core.If",
+        "properties": { "condition": "total > 100" },
+        "slots": {
+          "then": { "id": "log-big", "type": "Core.Log", "properties": { "message": "'Big order: ' + total" } },
+          "else": { "id": "log-small", "type": "Core.Log", "properties": { "message": "'Small order: ' + total" } }
+        }
+      },
+      {
+        "id": "short-pause",
+        "type": "Core.Delay",
+        "properties": { "milliseconds": 10 }
+      },
+      {
+        "id": "guarded",
+        "type": "Core.TryCatch",
+        "properties": { "exceptionVariable": "err" },
+        "slots": {
+          "try": { "id": "fail-on-purpose", "type": "Core.Throw", "properties": { "message": "'Out of stock'" } },
+          "catch": { "id": "remember-error", "type": "Core.Assign", "properties": { "to": "handledError", "value": "err.message + ' (node ' + err.nodeId + ')'" } },
+          "finally": { "id": "log-finally", "type": "Core.Log", "properties": { "message": "'TryCatch finished'", "level": "Debug" } }
+        }
+      }
+    ]
+  }
+}

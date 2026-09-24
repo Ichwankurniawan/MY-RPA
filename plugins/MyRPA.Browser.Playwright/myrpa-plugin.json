@@ -1,0 +1,28 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Browser.Playwright",
+  "name": "MyRPA browser automation (Playwright)",
+  "version": "0.1.0",
+  "description": "Browser.* activities over Microsoft Playwright 1.63.0 (Chromium). Requires browsers installed with playwright.ps1 install chromium.",
+  "sdkVersion": "1.0",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Browser.Playwright.dll",
+    "type": "MyRPA.Browser.Playwright.BrowserPlugin"
+  },
+  "capabilities": [ "Process", "Network", "FileSystem" ],
+  "activities": [
+    "Browser.Open",
+    "Browser.Navigate",
+    "Browser.Click",
+    "Browser.TypeText",
+    "Browser.GetText",
+    "Browser.GetAttribute",
+    "Browser.WaitForElement",
+    "Browser.SelectOption",
+    "Browser.UploadFile",
+    "Browser.DownloadFile",
+    "Browser.Close"
+  ],
+  "providers": [ "Browser.Playwright" ]
+}

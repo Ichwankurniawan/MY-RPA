@@ -1,0 +1,7 @@
+<Project>
+  <!--
+    Plugin fixtures for MyRPA.Plugins.Tests. They are plugins, not test projects: they import the repository defaults
+    but not tests/Directory.Build.props (no xUnit, library output).
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../../'))" />
+</Project>

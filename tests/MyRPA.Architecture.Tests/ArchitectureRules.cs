@@ -17,17 +17,26 @@ public static class ArchitectureRules
         new("MyRPA.Workflow", typeof(MyRPA.Workflow.WorkflowDefinition).Assembly,
             AllowedProjects: ["MyRPA.Core"],
             AllowedPackages: []),
+        // ADR-0010 amends ADR-0003: Activities implements the execution contracts that live in Workflow.
         new("MyRPA.Activities", typeof(MyRPA.Activities.ActivityCatalog).Assembly,
-            AllowedProjects: ["MyRPA.Core"],
-            AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions"]),
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow"],
+            AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions", "Microsoft.Extensions.Logging.Abstractions"]),
         new("MyRPA.Runtime", typeof(MyRPA.Runtime.RuntimeServiceCollectionExtensions).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow"],
             AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions", "Microsoft.Extensions.Logging.Abstractions"]),
         new("MyRPA.Storage", typeof(MyRPA.Storage.StorageServiceCollectionExtensions).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow"],
             AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions"]),
+        // ADR-0013: the Automation SDK is what plugins compile against; contracts only.
+        new("MyRPA.Sdk", typeof(MyRPA.Sdk.AutomationSdk).Assembly,
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow"],
+            AllowedPackages: []),
+        // ADR-0014: the plugin host is used by composition roots only; the engine never references it.
+        new("MyRPA.Plugins", typeof(MyRPA.Plugins.PluginLoader).Assembly,
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Sdk", "MyRPA.Activities"],
+            AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions"]),
         new("MyRPA.Cli", typeof(MyRPA.Cli.CliApplication).Assembly,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage"],
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins"],
             AllowedPackages: ["Microsoft.Extensions.Hosting"],
             IsCompositionRoot: true),
     ];
@@ -37,7 +46,39 @@ public static class ArchitectureRules
     {
         "MyRPA.Core",
         "MyRPA.Workflow",
+        "MyRPA.Sdk",
     };
+
+    /// <summary>
+    /// Banned APIs that one specific type may call (ADR-0014). The plugin load context is the single place that loads
+    /// assemblies and resolves a manifest-named entry type inside a plugin's own assembly.
+    /// </summary>
+    public static IReadOnlyList<BannedApiExemption> BannedApiExemptions { get; } =
+    [
+        new("MyRPA.Plugins.Loading.PluginLoadContext", "AssemblyLoadContext.LoadFrom", "loads verified plugin assemblies into the plugin's own context"),
+        new("MyRPA.Plugins.Loading.PluginLoadContext", "Assembly.GetType(string)", "finds the manifest's entry type inside the plugin's entry assembly"),
+    ];
+
+    /// <summary>Projects the engine must never depend on (ADR-0013, ADR-0014).</summary>
+    public static IReadOnlyList<string> PluginSystemProjects { get; } = ["MyRPA.Sdk", "MyRPA.Plugins"];
+
+    /// <summary>The src project a plugin project (plugins, samples/plugins, tests/fixtures) may reference (ADR-0014).</summary>
+    public static IReadOnlyList<string> PluginProjectAllowedReferences { get; } = ["MyRPA.Sdk"];
+
+    /// <summary>
+    /// Technology packages that are forbidden in src but allowed in exactly one provider plugin (ADR-0017). A technology
+    /// lives behind its plugin boundary and nowhere else.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> TechnologyPackageOwners { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Microsoft.Playwright"] = "MyRPA.Browser.Playwright",
+    };
+
+    /// <summary>Returns <see langword="true"/> when <paramref name="violation"/> (from the IL scan) is exempted.</summary>
+    public static bool IsExempt(string violation) =>
+        BannedApiExemptions.Any(e =>
+            (violation.StartsWith(e.TypeName + ".", StringComparison.Ordinal) || violation.StartsWith(e.TypeName + "+", StringComparison.Ordinal))
+            && violation.Contains(e.Api, StringComparison.Ordinal));
 
     /// <summary>
     /// Assembly/package name prefixes that no Phase 1 src project may reference: UI frameworks, browser and Windows
@@ -79,11 +120,22 @@ public static class ArchitectureRules
     {
         ["MyRPA.Core.Tests"] = ["MyRPA.Core"],
         ["MyRPA.Workflow.Tests"] = ["MyRPA.Workflow"],
-        ["MyRPA.Activities.Tests"] = ["MyRPA.Activities"],
+        // Built-in activities are tested through the real engine (not through test doubles).
+        ["MyRPA.Activities.Tests"] = ["MyRPA.Activities", "MyRPA.Runtime"],
+        // The engine is tested with test-only activities, proving it does not depend on the built-in library.
         ["MyRPA.Runtime.Tests"] = ["MyRPA.Runtime"],
+        ["MyRPA.Storage.Tests"] = ["MyRPA.Storage"],
+        // SDK contracts are tested through the real engine and built-in activities.
+        ["MyRPA.Sdk.Tests"] = ["MyRPA.Sdk", "MyRPA.Activities", "MyRPA.Runtime"],
+        ["MyRPA.Plugins.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        // The browser plugin is tested through the real plugin host (it is only built, never compiled against).
+        ["MyRPA.Browser.Playwright.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
-        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Cli"],
+        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Cli"],
     };
+
+    /// <summary>A banned API allowed in one type.</summary>
+    public sealed record BannedApiExemption(string TypeName, string Api, string Reason);
 
     /// <summary>A src project and its dependency allow-lists.</summary>
     public sealed record ProjectRule(

@@ -15,14 +15,21 @@ public sealed class ProjectFile
 
         string? Property(string name) => document.Descendants(name).Select(e => e.Value.Trim()).FirstOrDefault();
 
-        ProjectReferencePaths = Values("ProjectReference");
-        ProjectReferences = [.. ProjectReferencePaths.Select(p => System.IO.Path.GetFileNameWithoutExtension(p.Replace('\\', '/')))];
+        static string NameOf(string path) => System.IO.Path.GetFileNameWithoutExtension(path.Replace('\\', '/'));
+        static bool IsBuildOnly(XElement e) =>
+            string.Equals((string?)e.Attribute("ReferenceOutputAssembly") ?? e.Element("ReferenceOutputAssembly")?.Value, "false", StringComparison.OrdinalIgnoreCase);
+
+        var references = document.Descendants("ProjectReference").Where(e => e.Attribute("Include") is not null).ToList();
+        ProjectReferencePaths = [.. references.Where(e => !IsBuildOnly(e)).Select(e => (string)e.Attribute("Include")!)];
+        ProjectReferences = [.. ProjectReferencePaths.Select(NameOf)];
+        BuildOnlyReferences = [.. references.Where(IsBuildOnly).Select(e => NameOf((string)e.Attribute("Include")!))];
         PackageReferences = Values("PackageReference");
         FrameworkReferences = Values("FrameworkReference");
         TargetFramework = Property("TargetFramework") ?? Property("TargetFrameworks");
         OutputType = Property("OutputType");
         UseWpf = string.Equals(Property("UseWPF"), "true", StringComparison.OrdinalIgnoreCase);
         UseWindowsForms = string.Equals(Property("UseWindowsForms"), "true", StringComparison.OrdinalIgnoreCase);
+        EnableDynamicLoading = string.Equals(Property("EnableDynamicLoading"), "true", StringComparison.OrdinalIgnoreCase);
     }
 
     public string Path { get; }
@@ -31,7 +38,11 @@ public sealed class ProjectFile
 
     public IReadOnlyList<string> ProjectReferencePaths { get; }
 
+    /// <summary>Referenced projects whose output assembly is referenced (compile-time dependencies).</summary>
     public IReadOnlyList<string> ProjectReferences { get; }
+
+    /// <summary>Projects referenced with ReferenceOutputAssembly=false: built first, never compiled against.</summary>
+    public IReadOnlyList<string> BuildOnlyReferences { get; }
 
     public IReadOnlyList<string> PackageReferences { get; }
 
@@ -45,6 +56,8 @@ public sealed class ProjectFile
     public bool UseWpf { get; }
 
     public bool UseWindowsForms { get; }
+
+    public bool EnableDynamicLoading { get; }
 
     public static ProjectFile Load(string path) => new(path, XDocument.Load(path));
 

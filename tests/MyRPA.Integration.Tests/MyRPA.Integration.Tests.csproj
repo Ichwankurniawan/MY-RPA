@@ -1,5 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyRPA.Cli\MyRPA.Cli.csproj" />
+    <!-- Built first, never compiled against: the CLI loads it with the plugin option like a user would. -->
+    <ProjectReference Include="..\..\samples\plugins\MyRPA.Samples.DemoPlugin\MyRPA.Samples.DemoPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SamplePluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\samples\plugins\MyRPA.Samples.DemoPlugin\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

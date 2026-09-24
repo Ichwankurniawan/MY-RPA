@@ -47,22 +47,13 @@ public sealed class IdentifierTests
     }
 
     [Fact]
-    public void CorrelationId_New_IsValidAndUnique()
-    {
-        var a = CorrelationId.New();
-        var b = CorrelationId.New();
-        Assert.True(Identifier.IsValid(a.Value));
-        Assert.NotEqual(a, b);
-    }
-
-    [Fact]
     public void ExecutionId_Empty_Throws() =>
         Assert.Throws<ArgumentException>(() => new ExecutionId(Guid.Empty));
 
     [Fact]
     public void ExecutionId_ToStringAndTryParse_RoundTrip()
     {
-        var id = ExecutionId.New();
+        var id = new ExecutionId(Guid.NewGuid());
         Assert.True(ExecutionId.TryParse(id.ToString(), out var parsed));
         Assert.Equal(id, parsed);
         Assert.Equal(32, id.ToString().Length);
@@ -75,13 +66,4 @@ public sealed class IdentifierTests
     [InlineData("not-a-guid")]
     public void ExecutionId_TryParse_InvalidInput_ReturnsFalse(string? value) =>
         Assert.False(ExecutionId.TryParse(value, out _));
-
-    [Fact]
-    public void ExecutionId_New_IsTimeOrdered()
-    {
-        var first = ExecutionId.New();
-        Thread.Sleep(2);
-        var second = ExecutionId.New();
-        Assert.True(first.Value.CompareTo(second.Value) < 0);
-    }
 }

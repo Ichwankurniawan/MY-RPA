@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The plugin host (ADR-0014, ADR-0015): manifest reading, explicit discovery, trust checks, AssemblyLoadContext
+    loading, the plugin lifecycle and registration into the host's service collection.
+    Used only by composition roots. The engine (MyRPA.Runtime) never references it.
+    References MyRPA.Core, MyRPA.Workflow, MyRPA.Sdk and MyRPA.Activities (activity registrations).
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Plugins</RootNamespace>
+    <Description>MyRPA plugin host: manifests, discovery, trust policy, isolated loading and lifecycle.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+    <ProjectReference Include="..\MyRPA.Sdk\MyRPA.Sdk.csproj" />
+    <ProjectReference Include="..\MyRPA.Activities\MyRPA.Activities.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyRPA.Plugins.Tests" />
+  </ItemGroup>
+</Project>

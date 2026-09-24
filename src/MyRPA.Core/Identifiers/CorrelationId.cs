@@ -16,9 +16,6 @@ public sealed record CorrelationId
     /// <summary>The identifier text.</summary>
     public string Value { get; }
 
-    /// <summary>Creates a new, locally generated correlation identifier.</summary>
-    public static CorrelationId New() => new(Guid.CreateVersion7().ToString("N"));
-
     /// <summary>Tries to create a correlation identifier without throwing.</summary>
     /// <param name="value">Identifier text.</param>
     /// <param name="result">The identifier when valid.</param>

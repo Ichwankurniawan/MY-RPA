@@ -1,25 +1,18 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using MyRPA.Cli;
 using MyRPA.Cli.Commands;
-using MyRPA.Core.Activities;
 using MyRPA.Core.Diagnostics;
 using MyRPA.Runtime.Diagnostics;
+using MyRPA.Workflow.Execution;
 
 namespace MyRPA.Integration.Tests;
 
-/// <summary>Runs the real CLI composition in-process (same host, DI graph and logging setup as the executable).</summary>
+/// <summary>Host composition and the non-workflow commands.</summary>
 public sealed class CliHostTests
 {
-    private static async Task<(int ExitCode, string Out, string Error)> RunAsync(params string[] args)
-    {
-        using var stdout = new StringWriter();
-        using var stderr = new StringWriter();
-        var exitCode = await CliApplication.RunAsync(args, stdout, stderr, TestContext.Current.CancellationToken);
-        return (exitCode, stdout.ToString(), stderr.ToString());
-    }
-
     [Fact]
     public void BuildHost_ResolvesWholeGraph_WithValidation()
     {
@@ -27,22 +20,36 @@ public sealed class CliHostTests
         using var host = CliApplication.BuildHost(new CliOutput(TextWriter.Null, TextWriter.Null), verbose: false);
 
         Assert.NotNull(host.Services.GetRequiredService<CliCommandDispatcher>());
-        Assert.NotNull(host.Services.GetRequiredService<IActivityCatalog>());
+        Assert.NotNull(host.Services.GetRequiredService<IWorkflowRunner>());
         Assert.NotNull(host.Services.GetRequiredService<IExecutionScopeFactory>());
-        Assert.Contains(host.Services.GetServices<ICliCommand>(), c => c.Name == "info");
+        Assert.Equal(["info", "plugins", "run", "validate"], host.Services.GetServices<ICliCommand>().Select(c => c.Name).Order());
+        using var scope = host.Services.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowResolver>());
     }
 
     [Fact]
-    public async Task Info_PrintsFoundationFacts_AndSucceeds()
+    public void BuildHost_ApplicationNameMatchesExecutable_AndContentRootIsInstallDirectory()
     {
-        var (exitCode, stdout, _) = await RunAsync("info");
+        using var host = CliApplication.BuildHost(new CliOutput(TextWriter.Null, TextWriter.Null), verbose: false);
+        var environment = host.Services.GetRequiredService<IHostEnvironment>();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.StartsWith("MyRPA ", stdout, StringComparison.Ordinal);
-        Assert.Contains("Workflow schema version: 1.0", stdout, StringComparison.Ordinal);
-        Assert.Contains($"Activity source: {DiagnosticNames.RuntimeActivitySource}", stdout, StringComparison.Ordinal);
-        Assert.Contains("Registered activity types: 0", stdout, StringComparison.Ordinal);
-        Assert.Matches(@"Execution ID: [0-9a-f]{32}", stdout);
+        Assert.Equal("myrpa", environment.ApplicationName);
+        Assert.Equal(typeof(CliApplication).Assembly.GetName().Name, environment.ApplicationName);
+        Assert.Equal(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), Path.TrimEndingDirectorySeparator(environment.ContentRootPath));
+    }
+
+    [Fact]
+    public async Task Info_PrintsFoundationFacts_AndRegisteredActivities()
+    {
+        var result = await Cli.RunAsync("info");
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.StartsWith("MyRPA ", result.Out, StringComparison.Ordinal);
+        Assert.Contains("Workflow schema version: 1.0", result.Out, StringComparison.Ordinal);
+        Assert.Contains($"Activity source: {DiagnosticNames.RuntimeActivitySource}", result.Out, StringComparison.Ordinal);
+        Assert.Contains("Registered activity types: 12", result.Out, StringComparison.Ordinal);
+        Assert.Contains("Core.InvokeWorkflow", result.Out, StringComparison.Ordinal);
+        Assert.Matches(@"Execution ID: [0-9a-f]{32}", result.Out);
     }
 
     [Fact]
@@ -57,13 +64,13 @@ public sealed class CliHostTests
         };
         ActivitySource.AddActivityListener(listener);
 
-        var (exitCode, stdout, _) = await RunAsync("info");
+        var result = await Cli.RunAsync("info");
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        var executionId = stdout.Split('\n').Single(l => l.StartsWith("Execution ID: ", StringComparison.Ordinal))["Execution ID: ".Length..].Trim();
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        var executionId = result.Out.Split('\n').Single(l => l.StartsWith("Execution ID: ", StringComparison.Ordinal))["Execution ID: ".Length..].Trim();
         Assert.Contains(stopped, a => a.OperationName == InfoCommand.OperationName
             && Equals(a.GetTagItem(DiagnosticNames.ExecutionIdKey), executionId)
-            && a.GetTagItem(DiagnosticNames.CorrelationIdKey) is string);
+            && Equals(a.GetTagItem(DiagnosticNames.OutcomeKey), "Succeeded"));
     }
 
     [Theory]
@@ -71,59 +78,55 @@ public sealed class CliHostTests
     [InlineData("version")]
     public async Task Version_PrintsVersion(string arg)
     {
-        var (exitCode, stdout, _) = await RunAsync(arg);
+        var result = await Cli.RunAsync(arg);
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.StartsWith("MyRPA 0.1.0", stdout, StringComparison.Ordinal);
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.StartsWith("MyRPA 0.1.0", result.Out, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Help_ListsRegisteredCommands()
+    public async Task Help_ListsCommandsUsageAndExitCodes()
     {
-        var (exitCode, stdout, _) = await RunAsync("--help");
+        var result = await Cli.RunAsync("--help");
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Contains("info", stdout, StringComparison.Ordinal);
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Contains("myrpa run <workflow.json>", result.Out, StringComparison.Ordinal);
+        Assert.Contains("myrpa validate <workflow.json>", result.Out, StringComparison.Ordinal);
+        Assert.Contains("3 invalid workflow, 4 timed out", result.Out, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task NoArguments_ReturnsUsage()
     {
-        var (exitCode, stdout, stderr) = await RunAsync();
+        var result = await Cli.RunAsync();
 
-        Assert.Equal(CliExitCodes.Usage, exitCode);
-        Assert.Empty(stdout);
-        Assert.Contains("Usage:", stderr, StringComparison.Ordinal);
+        Assert.Equal(CliExitCodes.Usage, result.ExitCode);
+        Assert.Empty(result.Out);
+        Assert.Contains("Usage:", result.Error, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task UnknownCommand_ReturnsUsage_OnStandardError()
     {
-        var (exitCode, stdout, stderr) = await RunAsync("run", "workflow.json");
+        var result = await Cli.RunAsync("deploy");
 
-        // "run" is a Phase 2 command and must not exist yet.
-        Assert.Equal(CliExitCodes.Usage, exitCode);
-        Assert.Empty(stdout);
-        Assert.Contains("Unknown command 'run'", stderr, StringComparison.Ordinal);
+        Assert.Equal(CliExitCodes.Usage, result.ExitCode);
+        Assert.Empty(result.Out);
+        Assert.Contains("Unknown command 'deploy'", result.Error, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task VerboseOption_IsAcceptedBeforeOrAfterCommand()
     {
-        Assert.Equal(CliExitCodes.Success, (await RunAsync("--verbose", "info")).ExitCode);
-        Assert.Equal(CliExitCodes.Success, (await RunAsync("info", "--verbose")).ExitCode);
+        Assert.Equal(CliExitCodes.Success, (await Cli.RunAsync("--verbose", "info")).ExitCode);
+        Assert.Equal(CliExitCodes.Success, (await Cli.RunAsync("info", "--verbose")).ExitCode);
     }
 
     [Fact]
     public async Task CancelledToken_ReturnsCancelled()
     {
-        using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
-        using var stdout = new StringWriter();
-        using var stderr = new StringWriter();
+        var result = await Cli.RunAsync(new CancellationToken(canceled: true), "info");
 
-        var exitCode = await CliApplication.RunAsync(["info"], stdout, stderr, cts.Token);
-
-        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        Assert.Equal(CliExitCodes.Cancelled, result.ExitCode);
     }
 }

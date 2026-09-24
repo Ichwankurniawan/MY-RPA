@@ -70,18 +70,26 @@ public sealed class CliCommandDispatcher
 
     private async Task WriteHelpAsync(TextWriter writer)
     {
-        await writer.WriteLineAsync("Usage: myrpa [--verbose] <command> [arguments]").ConfigureAwait(false);
+        await writer.WriteLineAsync("Usage: myrpa [--verbose] [--plugin <directory>]... <command> [arguments]").ConfigureAwait(false);
         await writer.WriteLineAsync().ConfigureAwait(false);
         await writer.WriteLineAsync("Commands:").ConfigureAwait(false);
         foreach (var command in _commands.Values)
         {
             await writer.WriteLineAsync($"  {command.Name,-10} {command.Description}").ConfigureAwait(false);
+            if (!string.Equals(command.Usage, command.Name, StringComparison.Ordinal))
+            {
+                await writer.WriteLineAsync($"  {string.Empty,-10} myrpa {command.Usage}").ConfigureAwait(false);
+            }
         }
 
         await writer.WriteLineAsync($"  {"help",-10} Show this help.").ConfigureAwait(false);
         await writer.WriteLineAsync($"  {"version",-10} Show the version.").ConfigureAwait(false);
         await writer.WriteLineAsync().ConfigureAwait(false);
         await writer.WriteLineAsync("Options:").ConfigureAwait(false);
-        await writer.WriteLineAsync("  --verbose  Write debug logs to standard error.").ConfigureAwait(false);
+        await writer.WriteLineAsync("  --verbose           Write debug logs to standard error (workflow Log messages are always shown).").ConfigureAwait(false);
+        await writer.WriteLineAsync("  --plugin <directory> Load the plugin in <directory> (contains myrpa-plugin.json). Repeatable.").ConfigureAwait(false);
+        await writer.WriteLineAsync("                      Plugins run with full trust: only load plugins you trust.").ConfigureAwait(false);
+        await writer.WriteLineAsync().ConfigureAwait(false);
+        await writer.WriteLineAsync("Exit codes: 0 success, 1 failure, 2 usage, 3 invalid workflow, 4 timed out, 5 plugin failure, 130 cancelled.").ConfigureAwait(false);
     }
 }

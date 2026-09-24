@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Activity catalog implementation and (from Phase 2) the built-in activity library.
-    References MyRPA.Core only (ADR-0003). Contracts live in MyRPA.Core.
+    Activity catalog/factory and the built-in activity library.
+    References MyRPA.Core and MyRPA.Workflow (execution contracts) only (ADR-0003 as amended by ADR-0010).
   -->
   <PropertyGroup>
     <RootNamespace>MyRPA.Activities</RootNamespace>
@@ -9,8 +9,10 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 </Project>

@@ -24,7 +24,31 @@ public sealed class CodeRuleTests
 
     [Theory]
     [MemberData(nameof(SourceProjectNames))]
-    public void NoBannedApiCalls(string name) => Assert.Empty(FindBannedCalls(AssemblyOf(name).GetTypes()));
+    public void NoBannedApiCalls(string name) =>
+        Assert.DoesNotContain(FindBannedCalls(AssemblyOf(name).GetTypes()), v => !ArchitectureRules.IsExempt(v));
+
+    [Fact]
+    public void BannedApiExemptions_AreUsedOnlyByTheirType()
+    {
+        // The exemption must cover real calls (so it is not stale) and nothing outside the exempted type.
+        var plugins = FindBannedCalls(AssemblyOf("MyRPA.Plugins").GetTypes());
+
+        foreach (var exemption in ArchitectureRules.BannedApiExemptions)
+        {
+            Assert.Contains(plugins, v => v.StartsWith(exemption.TypeName, StringComparison.Ordinal) && v.Contains(exemption.Api, StringComparison.Ordinal));
+        }
+
+        Assert.All(plugins, v => Assert.True(ArchitectureRules.IsExempt(v), v));
+    }
+
+    [Fact]
+    public void Exemptions_DoNotApplyToOtherTypes()
+    {
+        Assert.False(ArchitectureRules.IsExempt("MyRPA.Plugins.PluginLoader.Load: AssemblyLoadContext.LoadFromStream loads arbitrary code"));
+        Assert.False(ArchitectureRules.IsExempt("MyRPA.Plugins.Loading.PluginLoadContextHelper.X: AssemblyLoadContext.LoadFromStream loads arbitrary code"));
+        Assert.False(ArchitectureRules.IsExempt("MyRPA.Plugins.Loading.PluginLoadContext.Load: Process.Start executes external programs"));
+        Assert.True(ArchitectureRules.IsExempt("MyRPA.Plugins.Loading.PluginLoadContext.LoadVerified: AssemblyLoadContext.LoadFromStream loads arbitrary code (only the plugin load context may, ADR-0014)"));
+    }
 
     [Fact]
     public void Detectors_FindViolationsInKnownBadSamples()
@@ -37,9 +61,13 @@ public sealed class CodeRuleTests
         var banned = FindBannedCalls(samples);
         Assert.Contains(banned, v => v.Contains("Type.GetType", StringComparison.Ordinal));
         Assert.Contains(banned, v => v.Contains("Assembly.LoadFrom", StringComparison.Ordinal));
+        Assert.Contains(banned, v => v.Contains("Assembly.GetType(string)", StringComparison.Ordinal));
+        Assert.Contains(banned, v => v.Contains("AssemblyLoadContext.LoadFromAssemblyPath", StringComparison.Ordinal));
         Assert.Contains(banned, v => v.Contains("Activator.CreateInstance", StringComparison.Ordinal));
         // The call inside an async method lives in a compiler-generated state machine type; it must still be found.
         Assert.Contains(banned, v => v.Contains("Assembly.LoadFile", StringComparison.Ordinal));
+        Assert.Contains(banned, v => v.Contains("Process.Start", StringComparison.Ordinal));
+        Assert.Contains(banned, v => v.Contains("HttpClient", StringComparison.Ordinal));
     }
 
     private static List<string> FindAsyncVoid(IEnumerable<Type> types) =>
@@ -79,12 +107,24 @@ public sealed class CodeRuleTests
 
         public static Assembly LoadFromPath() => Assembly.LoadFrom("plugin.dll");
 
+        public static Type? ResolveInsideAssembly(Assembly assembly) => assembly.GetType("Some.Type");
+
+        public static Assembly LoadIntoContext() => System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath("plugin.dll");
+
         public static object? CreateFromText() => Activator.CreateInstance("asm", "type");
 
         public static async Task<Assembly> LoadInsideAsync()
         {
             await Task.Yield();
             return Assembly.LoadFile("plugin.dll");
+        }
+
+        public static System.Diagnostics.Process? StartProcess() => System.Diagnostics.Process.Start("calc.exe");
+
+        public static async Task<string> Download()
+        {
+            using var client = new System.Net.Http.HttpClient();
+            return await client.GetStringAsync(new Uri("https://example.invalid/"));
         }
     }
 #pragma warning restore CA1822, CA1823, CA1859, IDE0051, IDE0052, CS0414, CA2211

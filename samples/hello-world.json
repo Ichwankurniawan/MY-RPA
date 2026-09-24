@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "description": "Greets a user and returns the greeting.",
+  "arguments": [
+    { "name": "userName", "direction": "In", "type": "String", "default": "World" },
+    { "name": "greeting", "direction": "Out", "type": "String" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      {
+        "id": "build-greeting",
+        "type": "Core.Assign",
+        "properties": { "to": "greeting", "value": "'Hello, ' + userName + '!'" }
+      },
+      {
+        "id": "log-greeting",
+        "type": "Core.Log",
+        "properties": { "message": "greeting" }
+      }
+    ]
+  }
+}

@@ -15,6 +15,8 @@
     <ProjectReference Include="..\MyRPA.Activities\MyRPA.Activities.csproj" />
     <ProjectReference Include="..\MyRPA.Runtime\MyRPA.Runtime.csproj" />
     <ProjectReference Include="..\MyRPA.Storage\MyRPA.Storage.csproj" />
+    <ProjectReference Include="..\MyRPA.Sdk\MyRPA.Sdk.csproj" />
+    <ProjectReference Include="..\MyRPA.Plugins\MyRPA.Plugins.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" />

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0",
+  "id": "plugin-demo",
+  "name": "Plugin demo",
+  "version": "1.0.0",
+  "description": "Runs activities from the sample plugin. Needs --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/<Configuration>/net10.0.",
+  "arguments": [
+    { "name": "customer", "direction": "In", "type": "String", "default": "Ada" },
+    { "name": "echoed", "direction": "Out", "type": "String" },
+    { "name": "city", "direction": "Out", "type": "String" },
+    { "name": "missingField", "direction": "Out", "type": "String" }
+  ],
+  "variables": [
+    { "name": "record", "type": "Dictionary", "default": { "name": "Ada Lovelace", "city": "London", "orders": 3 } }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "echo", "type": "Demo.Echo", "properties": { "text": "'Hello, ' + customer", "to": "echoed" } },
+      { "id": "read-city", "type": "Demo.GetField", "properties": { "document": "record", "field": "city", "to": "city" } },
+      {
+        "id": "guard",
+        "type": "Core.TryCatch",
+        "properties": { "exceptionVariable": "err" },
+        "slots": {
+          "try": { "id": "read-zip", "type": "Demo.GetField", "properties": { "document": "record", "field": "zip", "to": "city" } },
+          "catch": { "id": "note-missing", "type": "Core.Assign", "properties": { "to": "missingField", "value": "err.errorType" } }
+        }
+      }
+    ]
+  }
+}

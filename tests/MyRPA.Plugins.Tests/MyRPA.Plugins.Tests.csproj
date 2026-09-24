@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Plugin host tests. The fixture and sample plugins are built first (ReferenceOutputAssembly=false) but never
+    compiled against or copied here: they must only ever be loaded through the plugin host, into their own contexts.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Plugins\MyRPA.Plugins.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\fixtures\MyRPA.Tests.FixturePlugin\MyRPA.Tests.FixturePlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\samples\plugins\MyRPA.Samples.DemoPlugin\MyRPA.Samples.DemoPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>FixturePluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\fixtures\MyRPA.Tests.FixturePlugin\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SamplePluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\samples\plugins\MyRPA.Samples.DemoPlugin\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

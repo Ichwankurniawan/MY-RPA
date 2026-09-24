@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A plugin-private dependency: must be loaded into the plugin's AssemblyLoadContext, never the default one. -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Tests.FixtureDependency</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,58 +1,91 @@
 using Microsoft.Extensions.DependencyInjection;
+using MyRPA.Activities.BuiltIn;
 using MyRPA.Core.Activities;
+using MyRPA.Workflow.Execution;
 
 namespace MyRPA.Activities.Tests;
 
 public sealed class ActivityCatalogTests
 {
-    private static ActivityDescriptor Descriptor(string name) =>
-        new(new ActivityTypeName(name), name, "Test");
-
-    [Fact]
-    public void Catalog_ListsDescriptorsSortedByName()
+    private sealed class Custom : IActivity
     {
-        var catalog = new ActivityCatalog([Descriptor("Test.B"), Descriptor("Test.A")]);
+        public ValueTask<ActivityResult> ExecuteAsync(IActivityContext context) => ActivityResult.CompletedTask;
+    }
 
-        Assert.Equal(["Test.A", "Test.B"], catalog.Descriptors.Select(d => d.TypeName.Value));
+    private static ActivityDescriptor Descriptor(string name) => new(new ActivityTypeName(name), name, "Test");
+
+    private static ServiceProvider Build(Action<IServiceCollection> configure)
+    {
+        var services = new ServiceCollection().AddLogging();
+        configure(services);
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 
     [Fact]
-    public void TryGet_RegisteredAndUnknownNames()
+    public void AddMyRpaActivities_RegistersAllBuiltIns_SortedByName()
     {
-        var catalog = new ActivityCatalog([Descriptor("Test.A")]);
+        using var provider = Build(s => s.AddMyRpaActivities());
 
-        Assert.True(catalog.TryGet(new ActivityTypeName("Test.A"), out var found));
-        Assert.Equal("Test.A", found.DisplayName);
-        Assert.False(catalog.TryGet(new ActivityTypeName("Test.Missing"), out _));
+        Assert.Equal(
+            [
+                "Core.Assign", "Core.Delay", "Core.DoWhile", "Core.ForEach", "Core.If", "Core.InvokeWorkflow",
+                "Core.Log", "Core.Sequence", "Core.Switch", "Core.Throw", "Core.TryCatch", "Core.While",
+            ],
+            provider.GetRequiredService<IActivityCatalog>().Descriptors.Select(d => d.TypeName.Value));
     }
 
     [Fact]
-    public void Catalog_DuplicateNames_Throws()
+    public void AddMyRpaActivities_IsIdempotent_AndCatalogIsAlsoTheFactory()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => new ActivityCatalog([Descriptor("Test.A"), Descriptor("Test.A")]));
-        Assert.Contains("Test.A", ex.Message, StringComparison.Ordinal);
+        using var provider = Build(s => s.AddMyRpaActivities().AddMyRpaActivities());
+
+        Assert.Equal(12, provider.GetRequiredService<IActivityCatalog>().Descriptors.Count);
+        Assert.Same(provider.GetRequiredService<IActivityCatalog>(), provider.GetRequiredService<IActivityFactory>());
     }
 
     [Fact]
-    public void AddMyRpaActivities_WithoutRegistrations_IsEmpty()
+    public void AddActivity_RegistersCustomActivityExplicitly()
     {
-        // Phase 1 ships no built-in activities; nothing is discovered implicitly (ADR-0005).
-        using var provider = new ServiceCollection().AddMyRpaActivities().BuildServiceProvider(validateScopes: true);
+        using var provider = Build(s => s.AddMyRpaActivities().AddActivity<Custom>(Descriptor("Acme.Custom")));
+        var catalog = provider.GetRequiredService<ActivityCatalog>();
 
-        Assert.Empty(provider.GetRequiredService<IActivityCatalog>().Descriptors);
+        Assert.True(catalog.TryGet(new ActivityTypeName("Acme.Custom"), out _));
+        using var scope = provider.CreateScope();
+        Assert.IsType<Custom>(catalog.Create(new ActivityTypeName("Acme.Custom"), scope.ServiceProvider));
+        Assert.IsType<SequenceActivity>(catalog.Create(SequenceActivity.Descriptor.TypeName, scope.ServiceProvider));
     }
 
     [Fact]
-    public void AddActivityDescriptor_RegistersExplicitly()
+    public void DuplicateTypeNames_AreAConfigurationError()
     {
-        using var provider = new ServiceCollection()
-            .AddMyRpaActivities()
-            .AddActivityDescriptor(Descriptor("Test.A"))
-            .AddActivityDescriptor(Descriptor("Test.B"))
-            .BuildServiceProvider(validateScopes: true);
+        using var provider = Build(s => s.AddMyRpaActivities().AddActivity<Custom>(Descriptor("Core.Sequence")));
 
-        var catalog = provider.GetRequiredService<IActivityCatalog>();
-        Assert.Equal(2, catalog.Descriptors.Count);
-        Assert.True(catalog.TryGet(new ActivityTypeName("Test.B"), out _));
+        var ex = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IActivityCatalog>());
+        Assert.Contains("Core.Sequence", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Create_UnknownType_Throws()
+    {
+        using var provider = Build(s => s.AddMyRpaActivities());
+        var factory = provider.GetRequiredService<IActivityFactory>();
+
+        Assert.Throws<InvalidOperationException>(() => factory.Create(new ActivityTypeName("Core.Missing"), provider));
+    }
+
+    [Fact]
+    public void Registration_RejectsNonActivityTypes() =>
+        Assert.Throws<ArgumentException>(() => new ActivityRegistration(Descriptor("Test.X"), typeof(string)));
+
+    [Fact]
+    public void BuiltInDescriptors_DeclareTheirSchemas()
+    {
+        Assert.True(SequenceActivity.Descriptor.AllowsChildren);
+        Assert.True(IfActivity.Descriptor.FindSlot("then")!.IsRequired);
+        Assert.NotNull(SwitchActivity.Descriptor.FindSlot("case:anything"));
+        Assert.Equal(["body"], ForEachActivity.Descriptor.FindProperty("itemVariable")!.ScopeSlots);
+        Assert.Equal(ActivityPropertyKind.AssignmentTarget, AssignActivity.Descriptor.FindProperty("to")!.Kind);
+        Assert.Contains("Warning", LogActivity.Descriptor.FindProperty("level")!.AllowedValues);
+        Assert.Equal(ActivityPropertyKind.AssignmentTargetMap, InvokeWorkflowActivity.Descriptor.FindProperty("outputs")!.Kind);
     }
 }

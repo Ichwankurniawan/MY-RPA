@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "id": "browser-demo",
+  "name": "Browser demo",
+  "version": "1.0.0",
+  "description": "Opens a page, reads its heading and first link, then closes the browser. Needs --plugin plugins/MyRPA.Browser.Playwright/bin/<Configuration>/net10.0 and installed Chromium.",
+  "arguments": [
+    { "name": "url", "direction": "In", "type": "String", "default": "https://example.com" },
+    { "name": "heading", "direction": "Out", "type": "String" },
+    { "name": "link", "direction": "Out", "type": "String" },
+    { "name": "session", "direction": "Out", "type": "String" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "open", "type": "Browser.Open", "properties": { "url": "url", "to": "session" } },
+      { "id": "wait", "type": "Browser.WaitForElement", "properties": { "selector": "css=h1", "timeoutMilliseconds": 10000 } },
+      { "id": "read-heading", "type": "Browser.GetText", "properties": { "selector": "css=h1", "to": "heading" } },
+      {
+        "id": "guard",
+        "type": "Core.TryCatch",
+        "properties": { "exceptionVariable": "err" },
+        "slots": {
+          "try": { "id": "read-link", "type": "Browser.GetAttribute", "properties": { "selector": "css=a", "name": "href", "to": "link", "timeoutMilliseconds": 3000 } },
+          "catch": { "id": "no-link", "type": "Core.Assign", "properties": { "to": "link", "value": "'(' + err.errorType + ')'" } }
+        }
+      },
+      { "id": "close", "type": "Browser.Close", "properties": { "session": "session" } }
+    ]
+  }
+}

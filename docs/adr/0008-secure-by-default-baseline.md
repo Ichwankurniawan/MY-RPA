@@ -1,6 +1,6 @@
 # ADR-0008: Secure-by-default baseline
 
-- Status: Accepted
+- Status: Accepted; extended by [ADR-0012](0012-invoke-workflow-resolution-and-limits.md) (process and network APIs banned; file confinement)
 - Date: 2026-09-23
 - Phase: 1 (baseline); Phase 11 extends
 

@@ -1,0 +1,16 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Samples.Demo",
+  "name": "MyRPA demo plugin",
+  "version": "1.0.0",
+  "description": "Sample plugin: Demo.Echo and Demo.GetField activities over the in-memory Demo.Text provider.",
+  "sdkVersion": "1.0",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Samples.DemoPlugin.dll",
+    "type": "MyRPA.Samples.DemoPlugin.DemoPlugin"
+  },
+  "capabilities": [],
+  "activities": [ "Demo.Echo", "Demo.GetField" ],
+  "providers": [ "Demo.Text" ]
+}

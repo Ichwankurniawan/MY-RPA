@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Browser automation provider (ADR-0017). A plugin: it references only the Automation SDK (host-provided, so
+    Private=false / ExcludeAssets=runtime) and Microsoft.Playwright, which is plugin-private and loaded into the plugin's
+    AssemblyLoadContext. Playwright must never be referenced by src projects (architecture tests).
+    The build output directory (bin/<Configuration>/net10.0) is a complete plugin directory for the build machine's
+    platform: manifest, assemblies, .deps.json, .playwright/ (Node.js driver for this platform) and playwright.ps1
+    (browser installer). Do not set PlaywrightPlatform=all: a multi-platform output exceeds the plugin size limit.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Browser.Playwright</RootNamespace>
+    <Description>MyRPA browser automation provider based on Microsoft Playwright.</Description>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="myrpa-plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- MyRPA.Core and MyRPA.Workflow arrive transitively through MyRPA.Sdk; they are host-provided contract assemblies. -->
+  <Target Name="ExcludeHostContractAssemblies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow'" />
+    </ItemGroup>
+  </Target>
+</Project>

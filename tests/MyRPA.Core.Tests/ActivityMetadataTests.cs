@@ -47,4 +47,41 @@ public sealed class ActivityMetadataTests
         var descriptor = new ActivityDescriptor(name, "Log", "Diagnostics", "Writes a message.");
         Assert.Equal("Writes a message.", descriptor.Description);
     }
+
+    [Fact]
+    public void ActivityDescriptor_DeclaresPropertiesSlotsAndChildren()
+    {
+        var descriptor = new ActivityDescriptor(
+            new ActivityTypeName("Test.Loop"),
+            "Loop",
+            "Test",
+            properties:
+            [
+                new("items", ActivityPropertyKind.Expression, isRequired: true),
+                new("item", ActivityPropertyKind.LocalName, isRequired: true, scopeSlots: ["body"]),
+            ],
+            slots: [new("body", isRequired: true), new("case:", isPrefix: true)]);
+
+        Assert.False(descriptor.AllowsChildren);
+        Assert.Equal(ActivityPropertyKind.LocalName, descriptor.FindProperty("item")!.Kind);
+        Assert.Null(descriptor.FindProperty("missing"));
+        Assert.Equal("body", descriptor.FindSlot("body")!.Name);
+        Assert.Equal("case:", descriptor.FindSlot("case:gold")!.Name);
+        Assert.Null(descriptor.FindSlot("case:"));
+        Assert.Null(descriptor.FindSlot("else"));
+    }
+
+    [Fact]
+    public void ActivityDescriptor_RejectsInconsistentSchemas()
+    {
+        var name = new ActivityTypeName("Test.Bad");
+        Assert.Throws<ArgumentException>(() => new ActivityDescriptor(name, "Bad", "Test",
+            properties: [new("x", ActivityPropertyKind.Expression), new("x", ActivityPropertyKind.Text)]));
+        Assert.Throws<ArgumentException>(() => new ActivityDescriptor(name, "Bad", "Test",
+            slots: [new("body"), new("body")]));
+        Assert.Throws<ArgumentException>(() => new ActivityDescriptor(name, "Bad", "Test",
+            properties: [new("item", ActivityPropertyKind.LocalName, scopeSlots: ["body"])]));
+        Assert.Throws<ArgumentException>(() => new ActivityPropertyDefinition("x", ActivityPropertyKind.Expression, scopeSlots: ["body"]));
+        Assert.Throws<ArgumentException>(() => new ActivitySlotDefinition("case:", isRequired: true, isPrefix: true));
+    }
 }

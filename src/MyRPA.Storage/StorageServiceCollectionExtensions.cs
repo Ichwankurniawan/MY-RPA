@@ -1,20 +1,22 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using MyRPA.Workflow.Execution;
 
 namespace MyRPA.Storage;
 
-/// <summary>Registers MyRPA storage services.</summary>
-/// <remarks>
-/// Phase 1 establishes the project boundary and composition entry point only; no storage abstraction is needed
-/// yet, and no database is referenced. Phase 2+ adds abstractions here (for example a workflow definition store)
-/// and concrete implementations in separate projects.
-/// </remarks>
+/// <summary>Registers MyRPA storage services (file-based workflow loading in Phase 2; no database).</summary>
 public static class StorageServiceCollectionExtensions
 {
-    /// <summary>Registers storage services. Currently registers nothing (see remarks).</summary>
+    /// <summary>
+    /// Registers <see cref="WorkflowFileLoader"/> (singleton) and <see cref="FileWorkflowResolver"/> as the
+    /// <see cref="IWorkflowResolver"/> (scoped per run). Requires <c>AddMyRpaRuntime</c> for the loader pipeline.
+    /// </summary>
     /// <param name="services">The service collection.</param>
     public static IServiceCollection AddMyRpaStorage(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton<WorkflowFileLoader>();
+        services.TryAddScoped<IWorkflowResolver, FileWorkflowResolver>();
         return services;
     }
 }

@@ -1,9 +1,16 @@
 # MyRPA documentation
 
-| Folder | Contents |
+| Document | Contents |
 |---|---|
-| [architecture/](architecture/) | [Architecture overview](architecture/overview.md), [Phase 1 reconciliation](architecture/phase-1-reconciliation.md) |
+| [architecture/overview.md](architecture/overview.md) | Projects, dependency direction, enforced rules, composition |
+| [architecture/execution-model.md](architecture/execution-model.md) | Engine: loading, execution, activity execution, statuses, lifetimes, observability |
+| [architecture/workflow-format.md](architecture/workflow-format.md) | Workflow JSON v1.0, built-in activities, expressions, diagnostic and error codes |
+| [architecture/automation-sdk.md](architecture/automation-sdk.md) | Automation SDK 1.0: activity contract, lifetime, results/failures, cancellation, providers, elements, selectors |
+| [architecture/plugin-system.md](architecture/plugin-system.md) | Plugins: manifest, lifecycle, AssemblyLoadContext loading, trust model, diagnostics, CLI usage |
+| [architecture/browser-automation.md](architecture/browser-automation.md) | Playwright browser plugin: sessions, activities, selectors, errors, security, browser installation |
+| [architecture/phase-1-reconciliation.md](architecture/phase-1-reconciliation.md) | How the PRD was reconciled with the Phase 0 findings |
 | [adr/](adr/README.md) | Architecture Decision Records (the PRD's `docs/decisions/` lives here; see ADR-0001) |
 | [research/](research/openrpa-overview.md) | Phase 0 OpenRPA reverse-engineering research and analysis |
 
 Product requirements: [../MyRPA-PRD.md](../MyRPA-PRD.md). Contributor/agent rules: [../CLAUDE.md](../CLAUDE.md).
+Example workflows: [../samples/](../samples). Sample plugin: [../samples/plugins/](../samples/plugins/README.md).

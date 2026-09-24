@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The Automation SDK (ADR-0013): the plugin contract (IPlugin, IPluginRegistrar) and technology-neutral automation
+    abstractions (providers, elements, selectors). Together with the activity contracts in MyRPA.Workflow and
+    MyRPA.Core it is everything a plugin compiles against.
+    References MyRPA.Core and MyRPA.Workflow only. BCL only: no packages, no UI, browser, Windows, AI or MCP types.
+    Plugins never reference MyRPA.Runtime, MyRPA.Activities, MyRPA.Plugins, MyRPA.Storage or MyRPA.Cli.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Sdk</RootNamespace>
+    <Description>MyRPA Automation SDK: plugin contract and automation provider, element and selector abstractions.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+  </ItemGroup>
+</Project>

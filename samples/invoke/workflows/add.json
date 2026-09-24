@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "add",
+  "name": "Add two numbers",
+  "version": "1.0.0",
+  "arguments": [
+    { "name": "a", "direction": "In", "type": "Int", "required": true },
+    { "name": "b", "direction": "In", "type": "Int", "required": true },
+    { "name": "sum", "direction": "Out", "type": "Int" }
+  ],
+  "root": {
+    "id": "add",
+    "type": "Core.Assign",
+    "properties": { "to": "sum", "value": "a + b" }
+  }
+}

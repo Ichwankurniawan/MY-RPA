@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using MyRPA.Core.Diagnostics;
+using MyRPA.Core.Execution;
 
 namespace MyRPA.Runtime.Diagnostics;
 
@@ -14,7 +15,7 @@ public sealed partial class ExecutionScopeFactory(MyRpaTelemetry telemetry, ILog
     private readonly ILogger<ExecutionScopeFactory> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
-    public IExecutionScope Begin(ExecutionIdentity identity, string operationName)
+    public IExecutionScope Begin(ExecutionIdentity identity, string operationName, IEnumerable<KeyValuePair<string, object?>>? additionalTags = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
@@ -25,7 +26,7 @@ public sealed partial class ExecutionScopeFactory(MyRpaTelemetry telemetry, ILog
             operationName,
             ActivityKind.Internal,
             parentContext: default,
-            tags: tags);
+            tags: additionalTags is null ? tags : tags.Concat(additionalTags));
 
         LogScopeOpened(_logger, operationName);
         return new ExecutionScope(identity, activity, logScope);
@@ -40,6 +41,33 @@ public sealed partial class ExecutionScopeFactory(MyRpaTelemetry telemetry, ILog
         public ExecutionIdentity Identity { get; } = identity;
 
         public Activity? Activity { get; } = activity;
+
+        public void Complete(ExecutionStatus status, Exception? exception = null)
+        {
+            if (Activity is null)
+            {
+                return;
+            }
+
+            Activity.SetTag(DiagnosticNames.OutcomeKey, status.ToString());
+            switch (status)
+            {
+                case ExecutionStatus.Succeeded:
+                    Activity.SetStatus(ActivityStatusCode.Ok);
+                    break;
+                case ExecutionStatus.Cancelled:
+                    Activity.SetStatus(ActivityStatusCode.Unset);
+                    break;
+                default:
+                    Activity.SetStatus(ActivityStatusCode.Error, exception?.Message ?? status.ToString());
+                    break;
+            }
+
+            if (exception is not null && status != ExecutionStatus.Succeeded)
+            {
+                Activity.AddException(exception);
+            }
+        }
 
         public void Dispose()
         {

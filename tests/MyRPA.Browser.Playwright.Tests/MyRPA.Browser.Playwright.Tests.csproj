@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Browser plugin tests (ADR-0017). The plugin is built first but never compiled against (ReferenceOutputAssembly=false):
+    tests load it through the real plugin host, exactly like the CLI. Requires the Playwright browsers:
+      pwsh plugins/MyRPA.Browser.Playwright/bin/<Configuration>/net10.0/playwright.ps1 install chromium
+    All pages come from a local test web server; no external website is used.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Plugins\MyRPA.Plugins.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Browser.Playwright\MyRPA.Browser.Playwright.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BrowserPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Browser.Playwright\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

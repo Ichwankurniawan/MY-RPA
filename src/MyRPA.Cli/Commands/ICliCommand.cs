@@ -6,6 +6,9 @@ public interface ICliCommand
     /// <summary>The command word typed by the user, e.g. <c>info</c>.</summary>
     string Name { get; }
 
+    /// <summary>Usage line shown in help, e.g. <c>validate &lt;workflow.json&gt;</c>.</summary>
+    string Usage { get; }
+
     /// <summary>One-line description shown in help.</summary>
     string Description { get; }
 

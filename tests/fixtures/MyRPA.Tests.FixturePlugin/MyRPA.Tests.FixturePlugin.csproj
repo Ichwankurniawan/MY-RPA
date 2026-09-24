@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Fixture plugin for MyRPA.Plugins.Tests. Unlike the sample plugin it deliberately lets the build copy the SDK
+    contract assemblies (MyRPA.Sdk/Core/Workflow) next to it, to prove the load context ignores plugin copies of
+    shared assemblies. Tests write their own manifests to select one of the entry types below.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Tests.FixturePlugin</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- CA1515: types are public because the plugin host instantiates them. CA1001/CA1063 not needed for fixtures. -->
+    <NoWarn>$(NoWarn);CS1591;CA1515</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" />
+    <ProjectReference Include="..\MyRPA.Tests.FixtureDependency\MyRPA.Tests.FixtureDependency.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+</Project>

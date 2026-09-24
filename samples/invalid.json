@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0",
+  "id": "broken example",
+  "name": "Deliberately invalid",
+  "version": "1.0.0",
+  "arguments": [
+    { "name": "input", "direction": "In", "type": "Text" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "a", "type": "Core.Assign", "properties": { "to": "missing", "value": "1 +" } },
+      { "id": "a", "type": "Core.Browse", "properties": {} },
+      { "id": "c", "type": "Core.Log", "properties": { "mesage": "'typo'" } }
+    ]
+  }
+}

@@ -83,15 +83,22 @@ public static class IlScanner
             "System.Type" when name == "GetType" && firstIsString => "Type.GetType(string) resolves types from text",
             "System.Reflection.Assembly" when name is "Load" or "LoadFrom" or "LoadFile" or "UnsafeLoadFrom" or "LoadWithPartialName"
                 => $"Assembly.{name} loads arbitrary code",
+            "System.Reflection.Assembly" when name == "GetType" && firstIsString => "Assembly.GetType(string) resolves types from text",
             "System.AppDomain" when name.StartsWith("Load", StringComparison.Ordinal)
                 || name.StartsWith("ExecuteAssembly", StringComparison.Ordinal)
                 || name.StartsWith("CreateInstance", StringComparison.Ordinal)
                 => $"AppDomain.{name} loads/instantiates arbitrary code",
             "System.Runtime.Loader.AssemblyLoadContext" when name.StartsWith("LoadFrom", StringComparison.Ordinal)
-                => $"AssemblyLoadContext.{name} loads arbitrary code (Phase 3 plugin loading needs its own ADR)",
+                => $"AssemblyLoadContext.{name} loads arbitrary code (only the plugin load context may, ADR-0014)",
             "System.Activator" when (name is "CreateInstance" or "CreateInstanceFrom") && firstIsString
                 => $"Activator.{name}(string, ...) instantiates types from text",
             "System.Runtime.Serialization.Formatters.Binary.BinaryFormatter" => "BinaryFormatter is unsafe",
+            // ADR-0012: no process or network execution in Phase 2 code.
+            "System.Diagnostics.Process" when name == "Start" => "Process.Start executes external programs",
+            "System.Net.Http.HttpClient" or "System.Net.Http.HttpMessageInvoker" or "System.Net.WebClient"
+                or "System.Net.Sockets.Socket" or "System.Net.Sockets.TcpClient" or "System.Net.Sockets.TcpListener"
+                or "System.Net.Sockets.UdpClient" => $"{type} performs network I/O",
+            "System.Net.WebRequest" when name is "Create" or "CreateHttp" => "WebRequest performs network I/O",
             _ => null,
         };
     }

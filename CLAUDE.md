@@ -4,7 +4,8 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 1 — Foundation (complete, awaiting review).**
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 4 — Browser Automation (complete, awaiting review).**
+  Phase 5 (Studio) must not start without authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -13,8 +14,9 @@ Guidance for AI agents and contributors working in this repository.
 ## Sources of truth
 
 1. `MyRPA-PRD.md` — requirements and phases.
-2. `docs/adr/` — accepted decisions (they refine the PRD; see `docs/architecture/phase-1-reconciliation.md`).
-3. `docs/architecture/overview.md` — current architecture and enforced rules.
+2. `docs/adr/` — accepted decisions (they refine the PRD).
+3. `docs/architecture/overview.md`, `execution-model.md`, `workflow-format.md`, `automation-sdk.md`,
+   `plugin-system.md`, `browser-automation.md` — current architecture.
 4. `docs/research/` — Phase 0 OpenRPA evidence (codes R#/D#/N# in `openrpa-analysis.md`).
 5. `reference/openrpa/` — read-only OpenRPA clone (MPL-2.0). Never modify it; never copy its code into MyRPA.
 
@@ -23,7 +25,11 @@ Guidance for AI agents and contributors working in this repository.
 ```bash
 dotnet build MyRPA.sln
 dotnet test --solution MyRPA.sln
-dotnet run --project src/MyRPA.Cli -- info
+dotnet run --project src/MyRPA.Cli -- validate samples/control-flow.json
+dotnet run --project src/MyRPA.Cli -- run samples/hello-world.json --arg userName=Ada
+dotnet run --project src/MyRPA.Cli -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Debug/net10.0 run samples/plugins/demo-plugin.json
+dotnet format MyRPA.sln --verify-no-changes   # CI enforces naming rules the build does not
+pwsh plugins/MyRPA.Browser.Playwright/bin/Debug/net10.0/playwright.ps1 install chromium   # once, for browser tests
 ```
 
 On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet` (not on PATH). In Git Bash:
@@ -31,39 +37,70 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 
 ## Architecture rules (enforced by `tests/MyRPA.Architecture.Tests`)
 
-- Dependency direction (ADR-0003): Core ← Workflow; Core ← Activities; Core, Workflow ← Runtime; Core, Workflow ← Storage;
-  everything ← Cli. Runtime must not reference Activities. Nothing references a composition root.
-- `MyRPA.Core` and `MyRPA.Workflow`: BCL only, no packages, plain `net10.0` (ADR-0004).
+- Dependency direction (ADR-0003, amended by ADR-0010 and ADR-0013): Core ← Workflow; Core, Workflow ← Activities;
+  Core, Workflow ← Runtime; Core, Workflow ← Storage; Core, Workflow ← Sdk; Core, Workflow, Sdk, Activities ← Plugins;
+  everything ← Cli. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
+  Plugins. Nothing references a composition root.
+- `MyRPA.Core`, `MyRPA.Workflow` and `MyRPA.Sdk`: BCL only, no packages, plain `net10.0` (ADR-0004, ADR-0013).
+- Plugin projects (`plugins/*`, `samples/plugins/*`, `tests/fixtures/*`) reference only `MyRPA.Sdk` (host contract
+  assemblies with `Private="false"`), set `EnableDynamicLoading`, and are never compiled against: tests reference them
+  with `ReferenceOutputAssembly="false"` and load them through the plugin host.
+- Technology packages live only in their provider plugin (`ArchitectureRules.TechnologyPackageOwners`):
+  `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`. Never in src, tests or other plugins.
+- Browser plugin rules (ADR-0017): no JavaScript evaluation (`EvaluateAsync`), http/https/about:blank URLs only, file
+  access only through `BrowserFilePolicy`, one browser per session, sessions closed when the run ends.
 - Libraries may use only `Microsoft.Extensions.*.Abstractions`; only composition roots use `Microsoft.Extensions.Hosting`.
-- Forbidden in Phase 1 `src`: WPF/WinForms/XAML, Playwright/browser libs, FlaUI/UIA, WF4/CoreWF, database drivers/ORMs,
-  AI SDKs, MCP SDKs, messaging/orchestrator stacks.
+- Forbidden in `src`: WPF/WinForms/XAML, Playwright/browser libs, FlaUI/UIA, WF4/CoreWF, DB drivers/ORMs, AI SDKs,
+  MCP SDKs, messaging/ASP.NET Core.
 - No `async void`, no mutable static fields, no static service locators, no implicit discovery/assembly scanning (ADR-0005).
-- No `Type.GetType(string)`, `Assembly.Load*`, `Activator.CreateInstance(string…)`, `BinaryFormatter`, .NET Remoting,
-  default network listeners, or secrets in workflows/settings (ADR-0008).
+- Banned APIs (IL scan, ADR-0008/0012/0014): `Type.GetType(string)`, `Assembly.Load*`, `Assembly.GetType(string)`,
+  `AssemblyLoadContext.LoadFrom*`, `Activator.CreateInstance(string…)`, `BinaryFormatter`, `Process.Start`,
+  `HttpClient`/`WebClient`/`WebRequest`, sockets. The only exemption is `MyRPA.Plugins.Loading.PluginLoadContext`
+  (`ArchitectureRules.BannedApiExemptions`); do not add others without an ADR.
+- Never describe `AssemblyLoadContext` as a sandbox or security boundary: in-process plugins are fully trusted
+  (ADR-0015).
 - Adding a `src` project requires: an entry in `ArchitectureRules.SourceProjects`, a row in the overview's project table,
   and an ADR if it changes dependency direction.
 
-## Design conventions
+## Engine conventions (Phase 2)
 
 - **One workflow model** (`MyRPA.Workflow`) for CLI, Studio, Robot, Orchestrator and AI. Never create client-specific models.
-- Activity types are referenced by registered name (`ActivityTypeName`, e.g. `Core.Log`), never by CLR type name.
-- Activities carry no UI/designer concerns; metadata is data (`ActivityDescriptor`).
-- Async-first: public async APIs take a `CancellationToken`; library code uses `ConfigureAwait(false)`.
-- Inject `TimeProvider` instead of reading the clock; inject `ILogger<T>`; use `[LoggerMessage]` source-generated logging.
-- Correlate logs and spans with `IExecutionScopeFactory` and the keys in `DiagnosticNames` (ADR-0006).
-- Domain types are immutable; validate in constructors; identifiers are strongly typed.
+- Workflow files go through `WorkflowLoader` (parse → schema version → structure → semantics); it reports all
+  diagnostics and never throws for bad input. Model constructors enforce invariants only.
+- Activities implement `IActivity`, declare an `ActivityDescriptor` (properties by kind, children, slots) and are
+  registered with `AddActivity<T>(descriptor)` (host) or `IPluginRegistrar.AddActivity<T>` (plugin). They use only
+  `IActivityContext` — no engine internals, no service locator, no UI concerns.
+- Activity contract (ADR-0013, frozen for SDK 1.0): one instance per node invocation, disposed by the engine; exactly
+  one public constructor (dependencies are services); resources live in run- or plugin-lifetime services, never in
+  activity fields; `ActivityResult.Completed` is the only outcome; classified failures throw `ActivityFailedException` /
+  `AutomationException`; `SetValue` only for names from the node's assignment-target properties; cancellation is
+  cooperative. Changing `IActivity`, `IActivityContext`, `ActivityResult` or anything in `MyRPA.Sdk` is an SDK
+  version decision (ADR).
+- Activity type names are `Namespace.Name` (built-ins `Core.*`) and are never CLR type names.
+- Failures are exceptions; the engine attributes them to the node (`WorkflowActivityException`). Never swallow
+  exceptions; cancellation (`OperationCanceledException` of the run token) must propagate.
+- Expressions (ADR-0009) are the only computation language: no reflection, no CLR member access; new functions go
+  into the `ExpressionFunctions` whitelist with tests.
+- Values are canonical (`WorkflowValues`): null, string, long, decimal, bool, DateTimeOffset, read-only list,
+  read-only string-keyed dictionary.
+- Time and ids come from injected `TimeProvider` / `IIdGenerator`; never `DateTime.Now`, `Guid.NewGuid()` for ids, or
+  `Thread.Sleep`.
+- Correlate logs and spans with `IExecutionScopeFactory` and `DiagnosticNames` keys (ADR-0006, ADR-0010).
+- Public async APIs take a `CancellationToken`; library code uses `ConfigureAwait(false)`.
 - Public APIs in `src` have XML documentation (the build requires it).
 
 ## Code style
 
 - `.editorconfig` is authoritative: file-scoped namespaces, `_camelCase` private fields, braces required.
 - Warnings are errors. Suppress an analyzer only locally, with a justification comment.
-- Package versions live in `Directory.Packages.props` (central package management). Adding a package needs a reason in
-  the PR/commit message and must respect the allow-lists above.
+- Package versions live in `Directory.Packages.props`. Adding a package needs a reason and must respect the allow-lists.
 
 ## Tests
 
 - xUnit v3 on Microsoft.Testing.Platform. Naming: `Subject_Condition_ExpectedResult`.
-- Unit test projects reference only their subject project; `MyRPA.Integration.Tests` composes the real CLI host.
-- Tests must be deterministic and must not use the network.
+- Unit test projects reference only their subjects (Activities tests also reference Runtime to run the real engine);
+  `MyRPA.Integration.Tests` composes the real CLI host and also runs the executable as a child process.
+- Deterministic: use `FakeTimeProvider` and sequential id generators; pass `TestContext.Current.CancellationToken`;
+  no network; no `Thread.Sleep`.
 - When adding an architecture rule, also add a known-bad self-test for its detector.
+- Shipped `samples/*.json` must stay valid (`CliWorkflowTests.ShippedSamples_AreValid`).
