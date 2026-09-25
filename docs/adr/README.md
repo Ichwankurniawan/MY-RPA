@@ -14,7 +14,7 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0008](0008-secure-by-default-baseline.md) | Secure-by-default baseline | Accepted, extended by 0012, 0014 and 0015 | 1 |
 | [0009](0009-constrained-expression-language.md) | Constrained, in-house expression language | Accepted | 2 |
 | [0010](0010-workflow-execution-model.md) | Workflow execution model, contracts and lifetimes | Accepted, activity lifetime amended by 0013 | 2 |
-| [0011](0011-workflow-json-format-and-validation-pipeline.md) | Workflow JSON format v1.0 and the validation pipeline | Accepted | 2 |
+| [0011](0011-workflow-json-format-and-validation-pipeline.md) | Workflow JSON format v1.0 and the validation pipeline | Accepted, amended by 0026 | 2 |
 | [0012](0012-invoke-workflow-resolution-and-limits.md) | InvokeWorkflow resolution, confinement and limits | Accepted | 2 |
 | [0013](0013-automation-sdk-and-activity-contract.md) | Automation SDK and the frozen activity contract | Accepted | 3 |
 | [0014](0014-plugin-manifest-lifecycle-and-loading.md) | Plugin manifest, lifecycle and AssemblyLoadContext loading | Accepted, loading amended by 0016 | 3 |
@@ -27,5 +27,7 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0021](0021-web-first-studio-and-wpf-removal.md) | Web-first Studio; WPF temporary and removed at exit (with exit criteria) | Accepted | W0 |
 | [0022](0022-server-control-plane-and-project-structure.md) | MyRPA.Server control plane and project structure | Accepted | W0 |
 | [0023](0023-first-class-execution-events.md) | First-class execution events (engine observer hook) | Accepted, implemented in W1 | W0 |
-| [0024](0024-execution-event-streaming-sse.md) | Execution event streaming to browsers (SSE, one stream per tab) | Accepted | W0 |
-| [0025](0025-local-mode-security.md) | Local-mode security for MyRPA.Server | Accepted | W0 |
+| [0024](0024-execution-event-streaming-sse.md) | Execution event streaming to browsers (SSE, one stream per tab) | Accepted, implemented in W2 | W0 |
+| [0025](0025-local-mode-security.md) | Local-mode security for MyRPA.Server | Accepted, implemented in W2 | W0 |
+| [0026](0026-missing-property-diagnostic-location.md) | Missing-property diagnostics point at the property | Accepted, implemented in W2 | W2 |
+| [0027](0027-invoke-workflow-confinement-in-projects.md) | InvokeWorkflow confinement in server projects | Keep ADR-0012 in W2; project-root resolver **Proposed, deferred** | W2 |

@@ -188,6 +188,21 @@ public sealed class WorkflowLoaderTests
     }
 
     [Fact]
+    public void MissingProperty_IsLocatedAtThePropertyItself()
+    {
+        // ADR-0026: `…properties.<name>`, like every other property diagnostic, so editors can show it on the property.
+        var result = Load(Minimal("""
+            { "id": "r", "type": "Core.Sequence", "children": [
+              { "id": "a", "type": "Core.Log", "properties": { "level": "Warning" } },
+              { "id": "b", "type": "Core.Assign", "properties": { "to": "x" } } ] }
+            """, variables: """[ { "name": "x", "type": "Int" } ]"""));
+
+        var missing = result.Errors.Where(e => e.Code == DiagnosticCodes.MissingProperty).ToList();
+        Assert.Equal(["$.root.children[0].properties.message", "$.root.children[1].properties.value"], missing.Select(e => e.Path));
+        Assert.Equal(["a", "b"], missing.Select(e => e.NodeId));
+    }
+
+    [Fact]
     public void PropertyValueShapes_AreChecked()
     {
         var result = Load(Minimal("""

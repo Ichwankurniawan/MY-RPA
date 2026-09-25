@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- References every src project so rules can inspect compiled assemblies (ADR-0007). -->
   <ItemGroup>
+    <!-- Needed to load the MyRPA.Server assembly for inspection. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\MyRPA.Core\MyRPA.Core.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Workflow\MyRPA.Workflow.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Activities\MyRPA.Activities.csproj" />
@@ -11,6 +15,7 @@
     <ProjectReference Include="..\..\src\MyRPA.Contracts\MyRPA.Contracts.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Studio.Core\MyRPA.Studio.Core.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Server\MyRPA.Server.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Cli\MyRPA.Cli.csproj" />
   </ItemGroup>
 </Project>

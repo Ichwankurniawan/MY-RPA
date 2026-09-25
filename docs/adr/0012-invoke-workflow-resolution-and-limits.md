@@ -1,6 +1,6 @@
 # ADR-0012: InvokeWorkflow resolution, confinement and limits
 
-- Status: Accepted
+- Status: Accepted; confinement in server projects discussed in [ADR-0027](0027-invoke-workflow-confinement-in-projects.md)
 - Date: 2026-09-23
 - Phase: 2
 - Extends: ADR-0008

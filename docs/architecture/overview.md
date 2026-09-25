@@ -53,6 +53,7 @@ orchestrator/queues/triggers (10), RBAC/credentials (11), packages/signing (12).
 | `MyRPA.Execution.Hosting` | Execution hosting for the server (and later agents/robots): `ExecutionHost` (start, cancel, concurrency limit, retention), `ExecutionHandle` (state, result, `ReadEventsAsync` replay), per-run observer (ADR-0023) and log routing, `AddMyRpaExecutionHosting` | Core, Workflow, Contracts | DI.Abstractions, Logging.Abstractions |
 | `MyRPA.Studio.Core` | Studio logic, UI-framework neutral: `WorkflowDraft` document model, `DraftJson`, `DraftEdits`, `DocumentHistory` (undo/redo), `DraftClipboard`, `DraftValidator` (diagnostics → blocks), view models, `RunMonitor`, `StudioLogFeed`, UI service interfaces | Core, Workflow | CommunityToolkit.Mvvm, Logging.Abstractions |
 | `MyRPA.Studio` | Composition root and WPF shell (`net10.0-windows`, the only project allowed to use WPF): window, templates, drag-and-drop, dialogs | Core, Workflow, Activities, Runtime, Storage, Plugins, Studio.Core | Hosting, CommunityToolkit.Mvvm |
+| `MyRPA.Server` | Control-plane composition root (ASP.NET Core; local mode, ADR-0022/0024/0025): projects and files with ETags, catalog, plugins, validation, runs through `ExecutionHost`, one multiplexed SSE stream per tab, loopback-only security. See [server.md](server.md) | Core, Workflow, Activities, Runtime, Storage, Plugins, Contracts, Execution.Hosting | none (ASP.NET Core shared framework) |
 | `MyRPA.Cli` (`myrpa`) | Composition root: Generic Host, logging (stderr), plugin loading (`--plugin`, `--plugin-config`), commands `info`, `validate`, `run`, `plugins`, `catalog` | Core … Plugins (not Studio) | Hosting |
 
 Plugins (outside `src`): `plugins/MyRPA.Browser.Playwright` (browser provider; the only project allowed to reference
@@ -65,7 +66,8 @@ runs through the real engine and includes the concurrent-isolation regression te
 activity contract through the real engine), `MyRPA.Plugins.Tests` (manifests, discovery, trust, lifecycle, isolation,
 unloading, the sample plugin), `MyRPA.Browser.Playwright.Tests` (real headless Chromium against a local test site,
 through the real plugin host), `MyRPA.Integration.Tests` (CLI in-process and as a child process, shipped samples,
-`--plugin`, `--plugin-config`, `catalog`), `MyRPA.Execution.Hosting.Tests` (runs, event streams and replay,
+`--plugin`, `--plugin-config`, `catalog`), `MyRPA.Server.Tests` (the real server on loopback: security, files, validation, runs, multiplexed streams),
+`MyRPA.Execution.Hosting.Tests` (runs, event streams and replay,
 logs, cancellation, concurrency and isolation through the real engine), `MyRPA.Studio.Core.Tests` (document model, edits, view models and runs through
 the real engine, headless), `MyRPA.Studio.Tests` (Windows only: the WPF window rendered to PNG screenshots, composition,
 and the code rules on the WPF assembly), `MyRPA.Architecture.Tests` (rules below).
@@ -121,6 +123,7 @@ graph BT
 |---|---|
 | Every `src` project has a rule entry; project references stay in allow-lists; no cycles; nothing references a composition root; `src` never references tests | `ProjectGraphTests.*` |
 | Runtime does not reference Activities | `ProjectGraphTests.Runtime_DoesNotDependOnActivityLibrary` |
+| ASP.NET Core only in `MyRPA.Server` (checked on compiled references) | `PlatformNeutralityTests.AspNetCore_IsAllowedOnlyInTheServer` |
 | The engine and plugin host never reference the control-plane layer (Contracts, Execution.Hosting) | `ProjectGraphTests.Engine_NeverDependsOnTheControlPlane` |
 | The engine and built-in libraries never reference the SDK or the plugin host | `ProjectGraphTests.Engine_NeverDependsOnThePluginSystem` |
 | Plugin projects reference only `MyRPA.Sdk` and set `EnableDynamicLoading`; tests only build plugins (never compile against them) | `ProjectGraphTests.PluginProjects_*`, `TestProjects_BuildOnlyReferencesArePluginProjects` |

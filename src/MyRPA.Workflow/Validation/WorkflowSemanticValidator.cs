@@ -282,7 +282,8 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
         {
             if (!raw.Properties.Any(p => string.Equals(p.Name, required.Name, StringComparison.Ordinal)))
             {
-                Error(DiagnosticCodes.MissingProperty, raw.Path + ".properties", $"Required property '{required.Name}' of '{descriptor.TypeName}' is missing.", nodeId);
+                // ADR-0026: located at the missing property itself (the same path form as present properties).
+                Error(DiagnosticCodes.MissingProperty, $"{raw.Path}.properties.{required.Name}", $"Required property '{required.Name}' of '{descriptor.TypeName}' is missing.", nodeId);
             }
         }
     }

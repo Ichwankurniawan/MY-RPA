@@ -1,6 +1,6 @@
 # ADR-0011: Workflow JSON format v1.0 and the validation pipeline
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0026](0026-missing-property-diagnostic-location.md) (MYRPA1040 location)
 - Date: 2026-09-23
 - Phase: 2
 

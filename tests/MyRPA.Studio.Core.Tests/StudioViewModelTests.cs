@@ -38,8 +38,9 @@ public sealed class StudioEditingTests : IDisposable
         Assert.True(log.IsSelected);
         Assert.Same(log, Vm.SelectedNode);
         Assert.True(log.HasErrors); // "message" is required
-        Assert.Contains(Vm.Errors, e => e.Location == "log-1" && e.Message.Contains("'message'", StringComparison.Ordinal));
-        Assert.NotEmpty(Vm.Properties.NodeErrorText);
+        // ADR-0026: the missing required property is now located at the property itself.
+        Assert.Contains(Vm.Errors, e => e.Location == "log-1.message" && e.Message.Contains("'message'", StringComparison.Ordinal));
+        Assert.NotEmpty(Vm.Properties.Editors.Single(e => e.Name == "message").ErrorText);
         Assert.Equal(["message", "level"], Vm.Properties.Editors.Select(e => e.Name));
         Assert.True(Vm.IsDirty);
         Assert.Equal("Untitled * — MyRPA Studio", Vm.Title);

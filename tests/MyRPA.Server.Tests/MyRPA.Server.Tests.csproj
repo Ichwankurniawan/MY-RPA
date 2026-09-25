@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The real server on a loopback port: security, projects, validation, runs and multiplexed event streams. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Server\MyRPA.Server.csproj" />
+    <!-- Built first, never compiled against: the server loads it through the plugin host. -->
+    <ProjectReference Include="..\..\samples\plugins\MyRPA.Samples.DemoPlugin\MyRPA.Samples.DemoPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SamplePluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\samples\plugins\MyRPA.Samples.DemoPlugin\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

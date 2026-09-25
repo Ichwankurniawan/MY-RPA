@@ -4,8 +4,8 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W1 — Contracts, Execution.Hosting and the
-  execution-event hook (complete, awaiting review).** W2 (MyRPA.Server) and Phase 6 must not start without authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W2 — MyRPA.Server local mode (complete, awaiting
+  review).** W3 (Web Studio frontend) and Phase 6 must not start without authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -16,7 +16,7 @@ Guidance for AI agents and contributors working in this repository.
 1. `MyRPA-PRD.md` — requirements and phases.
 2. `docs/adr/` — accepted decisions (they refine the PRD).
 3. `docs/architecture/overview.md`, `execution-model.md`, `workflow-format.md`, `automation-sdk.md`,
-   `plugin-system.md`, `browser-automation.md`, `studio.md` — current architecture.
+   `plugin-system.md`, `browser-automation.md`, `studio.md`, `server.md` — current architecture.
 4. `docs/research/` — Phase 0 OpenRPA evidence (codes R#/D#/N# in `openrpa-analysis.md`).
 5. `reference/openrpa/` — read-only OpenRPA clone (MPL-2.0). Never modify it; never copy its code into MyRPA.
 
@@ -29,6 +29,7 @@ dotnet run --project src/MyRPA.Cli -- validate samples/control-flow.json
 dotnet run --project src/MyRPA.Cli -- run samples/hello-world.json --arg userName=Ada
 dotnet run --project src/MyRPA.Cli -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Debug/net10.0 run samples/plugins/demo-plugin.json
 dotnet run --project src/MyRPA.Studio -- samples/control-flow.json   # Studio (Windows)
+dotnet run --project src/MyRPA.Server -- --project samples --port 0      # control plane; open the printed link
 dotnet format MyRPA.sln --verify-no-changes   # CI enforces naming rules the build does not
 pwsh plugins/MyRPA.Browser.Playwright/bin/Debug/net10.0/playwright.ps1 install chromium   # once, for browser tests
 ```
@@ -41,7 +42,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 - Dependency direction (ADR-0003, amended by ADR-0010 and ADR-0013): Core ← Workflow; Core, Workflow ← Activities;
   Core, Workflow ← Runtime; Core, Workflow ← Storage; Core, Workflow ← Sdk; Core, Workflow, Sdk, Activities ← Plugins;
   Core, Workflow ← Studio.Core; everything but Cli ← Studio; everything ← Cli (ADR-0018); Contracts has no references;
-  Core, Workflow, Contracts ← Execution.Hosting (ADR-0022). The engine and plugin host never reference Contracts or
+  Core, Workflow, Contracts ← Execution.Hosting (ADR-0022); engine, Plugins, Contracts, Execution.Hosting ← Server. The engine and plugin host never reference Contracts or
   Execution.Hosting. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
   Plugins. Nothing references a composition root.
 - `MyRPA.Core`, `MyRPA.Workflow` and `MyRPA.Sdk`: BCL only, no packages, plain `net10.0` (ADR-0004, ADR-0013).
@@ -54,7 +55,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   access only through `BrowserFilePolicy`, one browser per session, sessions closed when the run ends.
 - Libraries may use only `Microsoft.Extensions.*.Abstractions`; only composition roots use `Microsoft.Extensions.Hosting`.
 - Forbidden in `src`: WPF/WinForms/XAML (except the `MyRPA.Studio` shell, the only `net10.0-windows` project, ADR-0018), Playwright/browser libs, FlaUI/UIA, WF4/CoreWF, DB drivers/ORMs, AI SDKs,
-  MCP SDKs, messaging/ASP.NET Core.
+  MCP SDKs, messaging, ASP.NET Core (except the `MyRPA.Server` composition root, ADR-0022).
 - No `async void`, no mutable static fields, no static service locators, no implicit discovery/assembly scanning (ADR-0005).
 - Banned APIs (IL scan, ADR-0008/0012/0014): `Type.GetType(string)`, `Assembly.Load*`, `Assembly.GetType(string)`,
   `AssemblyLoadContext.LoadFrom*`, `Activator.CreateInstance(string…)`, `BinaryFormatter`, `Process.Start`,

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!--
+    MyRPA.Server (ADR-0022): the control plane. Composition root; the only src project allowed to use ASP.NET Core.
+    Local mode (ADR-0025): loopback only, projects, catalog, validation, runs and multiplexed SSE (ADR-0024).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MyRPA.Server</RootNamespace>
+    <AssemblyName>MyRPA.Server</AssemblyName>
+    <Description>MyRPA control-plane server (local mode).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+    <ProjectReference Include="..\MyRPA.Activities\MyRPA.Activities.csproj" />
+    <ProjectReference Include="..\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\MyRPA.Storage\MyRPA.Storage.csproj" />
+    <ProjectReference Include="..\MyRPA.Plugins\MyRPA.Plugins.csproj" />
+    <ProjectReference Include="..\MyRPA.Contracts\MyRPA.Contracts.csproj" />
+    <ProjectReference Include="..\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyRPA.Server.Tests" />
+    <InternalsVisibleTo Include="MyRPA.Architecture.Tests" />
+  </ItemGroup>
+</Project>

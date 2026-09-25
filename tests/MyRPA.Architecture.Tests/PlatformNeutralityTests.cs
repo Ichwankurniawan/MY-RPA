@@ -82,11 +82,23 @@ public sealed class PlatformNeutralityTests
     [MemberData(nameof(CompiledProjectNames))]
     public void CompiledReferences_ContainNoForbiddenTechnology(string name)
     {
-        var forbidden = Rule(name).Assembly!.GetReferencedAssemblies()
+        var rule = Rule(name);
+        var forbidden = rule.Assembly!.GetReferencedAssemblies()
             .Select(a => a.Name!)
-            .Where(n => ArchitectureRules.MatchForbidden(n) is not null);
+            .Where(n => ArchitectureRules.MatchForbidden(n) is { } prefix && !(rule.AllowsAspNetCore && prefix == "Microsoft.AspNetCore"));
 
         Assert.Empty(forbidden);
+    }
+
+    [Fact]
+    public void AspNetCore_IsAllowedOnlyInTheServer()
+    {
+        // ADR-0022: ASP.NET Core only in server executables. The Web SDK adds it implicitly, so compiled references are checked.
+        Assert.Equal(["MyRPA.Server"], ArchitectureRules.SourceProjects.Where(r => r.AllowsAspNetCore).Select(r => r.Name));
+        Assert.Contains(Rule("MyRPA.Server").Assembly!.GetReferencedAssemblies(), a => a.Name!.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
+        Assert.All(
+            ArchitectureRules.SourceProjects.Where(r => r.Assembly is not null && !r.AllowsAspNetCore),
+            r => Assert.DoesNotContain(r.Assembly!.GetReferencedAssemblies(), a => a.Name!.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal)));
     }
 
     [Theory]

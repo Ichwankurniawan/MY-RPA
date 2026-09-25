@@ -1,6 +1,6 @@
 # ADR-0024: Execution event streaming to browsers (SSE, one stream per tab)
 
-- Status: Accepted
+- Status: Accepted, implemented in W2 (see "Implementation (W2)")
 - Date: 2026-09-25
 - Phase: Web Studio W0
 - Related: ADR-0022, ADR-0023, ADR-0025
@@ -34,6 +34,19 @@ It also demonstrated a limit. **Local mode is plain HTTP, so browsers use HTTP/1
   - `EventSource` can't send custom headers, so the stream is authenticated by the session cookie (ADR-0025).
   - GET stream endpoints must have no side effects.
 - **Machine links** (Agent and Robot to server) are not decided here. They need two-way traffic on outbound connections and will get their own ADR (WebSocket or SignalR).
+
+## Implementation (W2)
+- **Endpoints:**
+  - `POST /api/streams` creates a tab's stream;
+  - `GET /api/streams/{id}` serves it;
+  - `POST/DELETE /api/streams/{id}/subscriptions` add and remove runs.
+- **Cursor format:** the SSE `id` is the stream's position vector, `index=sequence,…`. The index is the subscription's
+  position in the stream. A reconnect's `Last-Event-ID` sets every subscription's position before events are replayed.
+- **Reading runs:** each subscription reads its run through `ExecutionHandle.ReadEventsAsync(after)`, so replay and
+  `stream.gap` reporting come from `MyRPA.Execution.Hosting` unchanged.
+- **Slow clients:** a bounded queue per connection; a slow client is disconnected and resumes by cursor.
+- **Streams outlive connections:** a stream is kept for 2 minutes after a disconnect and belongs to the session that
+  created it.
 
 ## Consequences
 - The client keeps one `EventSource` open and multiplexes by execution id.

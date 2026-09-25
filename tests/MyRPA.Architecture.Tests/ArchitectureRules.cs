@@ -54,6 +54,12 @@ public static class ArchitectureRules
             AllowedPackages: ["Microsoft.Extensions.Hosting", "CommunityToolkit.Mvvm"],
             IsCompositionRoot: true,
             IsDesktopUi: true),
+        // ADR-0022/0025: the control-plane server; a composition root and the only src project allowed to use ASP.NET Core.
+        new("MyRPA.Server", typeof(MyRPA.Server.ServerApplication).Assembly,
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting"],
+            AllowedPackages: [],
+            IsCompositionRoot: true,
+            AllowsAspNetCore: true),
         new("MyRPA.Cli", typeof(MyRPA.Cli.CliApplication).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins"],
             AllowedPackages: ["Microsoft.Extensions.Hosting"],
@@ -154,7 +160,9 @@ public static class ArchitectureRules
         // The browser plugin is tested through the real plugin host (it is only built, never compiled against).
         ["MyRPA.Browser.Playwright.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
-        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Studio.Core", "MyRPA.Cli"],
+        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Studio.Core", "MyRPA.Server", "MyRPA.Cli"],
+        // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.
+        ["MyRPA.Server.Tests"] = ["MyRPA.Server"],
         // Execution hosting runs the real engine with the built-in activities.
         ["MyRPA.Execution.Hosting.Tests"] = ["MyRPA.Execution.Hosting", "MyRPA.Contracts", "MyRPA.Runtime", "MyRPA.Activities"],
         // Studio logic is tested headless, with the real engine and built-in activities.
@@ -173,13 +181,15 @@ public static class ArchitectureRules
     /// <param name="AllowedPackages">Packages it may reference.</param>
     /// <param name="IsCompositionRoot">Whether it is an executable that composes the application.</param>
     /// <param name="IsDesktopUi">Whether it may target net10.0-windows and use WPF (ADR-0018).</param>
+    /// <param name="AllowsAspNetCore">Whether it may reference ASP.NET Core (server executables only, ADR-0022).</param>
     public sealed record ProjectRule(
         string Name,
         Assembly? Assembly,
         string[] AllowedProjects,
         string[] AllowedPackages,
         bool IsCompositionRoot = false,
-        bool IsDesktopUi = false)
+        bool IsDesktopUi = false,
+        bool AllowsAspNetCore = false)
     {
         public override string ToString() => Name;
     }

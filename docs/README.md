@@ -8,6 +8,7 @@
 | [architecture/automation-sdk.md](architecture/automation-sdk.md) | Automation SDK 1.0: activity contract, lifetime, results/failures, cancellation, providers, elements, selectors |
 | [architecture/plugin-system.md](architecture/plugin-system.md) | Plugins: manifest, lifecycle, AssemblyLoadContext loading, trust model, diagnostics, CLI usage |
 | [architecture/browser-automation.md](architecture/browser-automation.md) | Playwright browser plugin: sessions, activities, selectors, errors, security, browser installation |
+| [architecture/server.md](architecture/server.md) | MyRPA.Server (local mode): start, security, HTTP API, multiplexed event stream |
 | [architecture/studio.md](architecture/studio.md) | MyRPA Studio: projects, document model, designer, validation, running, manual test script |
 | [architecture/phase-1-reconciliation.md](architecture/phase-1-reconciliation.md) | How the PRD was reconciled with the Phase 0 findings |
 | [adr/](adr/README.md) | Architecture Decision Records (the PRD's `docs/decisions/` lives here; see ADR-0001) |

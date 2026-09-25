@@ -1,6 +1,6 @@
 # ADR-0025: Local-mode security for MyRPA.Server
 
-- Status: Accepted (design). Implemented and tested in W2.
+- Status: Accepted, implemented and tested in W2 (`MyRPA.Server`, `SecurityTests`)
 - Date: 2026-09-25
 - Phase: Web Studio W0
 - Builds on: ADR-0008 (secure-by-default), ADR-0015 (plugin trust)
@@ -38,6 +38,13 @@ In local mode, `MyRPA.Server` runs on the user's machine and executes workflows 
   - The same limits as the CLI: timeouts, invocation depth, file policies.
   - A configurable limit on concurrent runs (browser sessions are processes).
 - **Hosted mode (later):** OIDC, per-project roles with a separate *Run* permission, and TLS at a reverse proxy. It is designed separately; nothing in local mode may assume "localhost means trusted".
+
+## Implementation notes (W2)
+- **Anti-forgery:** the anti-forgery header is `X-MyRPA-Request: 1`.
+- **Cookie:** the session cookie is `myrpa_session`.
+- **Start link:** the server prints the start link but does not open a browser. Launching one would need `Process.Start`,
+  which is banned (ADR-0012). The user opens the link.
+- **Host check:** compares against the port the connection arrived on, so it also works with `--port 0`.
 
 ## Consequences
 - W2 must include security tests for:
