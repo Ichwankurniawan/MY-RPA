@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Execution hosting through the real engine and built-in activities; contracts serialization. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Contracts\MyRPA.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Activities\MyRPA.Activities.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+</Project>

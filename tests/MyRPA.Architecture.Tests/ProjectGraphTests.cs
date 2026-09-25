@@ -65,6 +65,20 @@ public sealed class ProjectGraphTests
         Assert.Empty(Project(name).ProjectReferences.Intersect(ArchitectureRules.PluginSystemProjects, StringComparer.Ordinal));
     }
 
+    [Theory]
+    [InlineData("MyRPA.Core")]
+    [InlineData("MyRPA.Workflow")]
+    [InlineData("MyRPA.Activities")]
+    [InlineData("MyRPA.Runtime")]
+    [InlineData("MyRPA.Storage")]
+    [InlineData("MyRPA.Sdk")]
+    [InlineData("MyRPA.Plugins")]
+    public void Engine_NeverDependsOnTheControlPlane(string name)
+    {
+        // The engine exposes the per-run observer (ADR-0023); hosting consumes it, never the other way round (ADR-0022).
+        Assert.Empty(Project(name).ProjectReferences.Intersect(ArchitectureRules.ControlPlaneProjects, StringComparer.Ordinal));
+    }
+
     [Fact]
     public void PluginProjects_Exist()
     {

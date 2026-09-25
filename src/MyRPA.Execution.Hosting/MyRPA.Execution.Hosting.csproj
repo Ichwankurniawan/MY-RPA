@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Execution hosting shared by MyRPA.Server now and agents/robots later (ADR-0022, ADR-0023): starts runs, captures each
+    run's events through the per-run engine observer, routes its logs, keeps a bounded replay buffer, cancels, limits
+    concurrency. References engine contracts only (Core, Workflow), never Runtime or Activities; hosts compose those.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Execution.Hosting</RootNamespace>
+    <Description>MyRPA execution hosting: run coordination, per-run events and replay.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+    <ProjectReference Include="..\MyRPA.Contracts\MyRPA.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyRPA.Execution.Hosting.Tests" />
+  </ItemGroup>
+</Project>

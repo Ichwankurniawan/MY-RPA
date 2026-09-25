@@ -35,6 +35,14 @@ public static class ArchitectureRules
         new("MyRPA.Plugins", typeof(MyRPA.Plugins.PluginLoader).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Sdk", "MyRPA.Activities"],
             AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions"]),
+        // ADR-0022: control-plane wire contracts; BCL only, no project references, no packages.
+        new("MyRPA.Contracts", typeof(MyRPA.Contracts.Execution.ExecutionEventMessage).Assembly,
+            AllowedProjects: [],
+            AllowedPackages: []),
+        // ADR-0022/0023: execution hosting shared by the server, agents and robots. Engine contracts only (not Runtime).
+        new("MyRPA.Execution.Hosting", typeof(MyRPA.Execution.Hosting.ExecutionHost).Assembly,
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Contracts"],
+            AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions", "Microsoft.Extensions.Logging.Abstractions"]),
         // ADR-0018: Studio logic is platform-neutral (reusable by a future web Studio); only MyRPA.Studio uses WPF.
         new("MyRPA.Studio.Core", typeof(MyRPA.Studio.Documents.WorkflowDraft).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow"],
@@ -58,6 +66,7 @@ public static class ArchitectureRules
         "MyRPA.Core",
         "MyRPA.Workflow",
         "MyRPA.Sdk",
+        "MyRPA.Contracts",
     };
 
     /// <summary>
@@ -72,6 +81,9 @@ public static class ArchitectureRules
 
     /// <summary>Projects the engine must never depend on (ADR-0013, ADR-0014).</summary>
     public static IReadOnlyList<string> PluginSystemProjects { get; } = ["MyRPA.Sdk", "MyRPA.Plugins"];
+
+    /// <summary>The control-plane layer, which the engine and built-in libraries never depend on (ADR-0022).</summary>
+    public static IReadOnlyList<string> ControlPlaneProjects { get; } = ["MyRPA.Contracts", "MyRPA.Execution.Hosting"];
 
     /// <summary>The src project a plugin project (plugins, samples/plugins, tests/fixtures) may reference (ADR-0014).</summary>
     public static IReadOnlyList<string> PluginProjectAllowedReferences { get; } = ["MyRPA.Sdk"];
@@ -142,7 +154,9 @@ public static class ArchitectureRules
         // The browser plugin is tested through the real plugin host (it is only built, never compiled against).
         ["MyRPA.Browser.Playwright.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
-        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Studio.Core", "MyRPA.Cli"],
+        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Studio.Core", "MyRPA.Cli"],
+        // Execution hosting runs the real engine with the built-in activities.
+        ["MyRPA.Execution.Hosting.Tests"] = ["MyRPA.Execution.Hosting", "MyRPA.Contracts", "MyRPA.Runtime", "MyRPA.Activities"],
         // Studio logic is tested headless, with the real engine and built-in activities.
         ["MyRPA.Studio.Core.Tests"] = ["MyRPA.Studio.Core", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage"],
         // The WPF shell: window smoke tests and the code rules on its compiled assembly.

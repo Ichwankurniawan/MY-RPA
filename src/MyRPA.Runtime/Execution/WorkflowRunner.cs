@@ -60,7 +60,8 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
         var scope = _scopeFactory.CreateAsyncScope();
         await using (scope.ConfigureAwait(false))
         {
-            var frame = new ExecutionFrame(workflow, identity, request.Location, request.Location, Depth: 0, scope.ServiceProvider);
+            var events = new ExecutionEventSink(request.Observer, _logger);
+            var frame = new ExecutionFrame(workflow, identity, request.Location, request.Location, Depth: 0, scope.ServiceProvider, events);
             return await ExecuteAsync(frame, request.Arguments, request.Timeout ?? _options.DefaultTimeout, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -70,6 +71,11 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
         cancellationToken.ThrowIfCancellationRequested();
         var identity = frame.Identity.ForNode(node.Id);
         using var observed = _scopes.Begin(identity, node.Type.Value, [new(DiagnosticNames.ActivityTypeKey, node.Type.Value)]);
+        if (frame.Events.IsActive)
+        {
+            frame.Events.Emit(new NodeStarted(identity.ExecutionId, identity.ParentExecutionId, identity.CorrelationId, _time.GetUtcNow(), node.Id, node.Type));
+        }
+
         try
         {
             // One instance per invocation, owned and disposed here (ADR-0013): nothing retains it for the rest of the run.
@@ -88,16 +94,19 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
             // Disposal failures after a successful invocation fail the node like any other activity exception.
             await DisposeActivityAsync(activity).ConfigureAwait(false);
             observed.Complete(ExecutionStatus.Succeeded);
+            NodeFinished(frame, identity, node, ExecutionStatus.Succeeded, null);
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
             observed.Complete(ExecutionStatus.Cancelled, ex);
+            NodeFinished(frame, identity, node, ExecutionStatus.Cancelled, null);
             throw;
         }
         catch (WorkflowActivityException ex)
         {
             // Already attributed to the node where it originated; mark this ancestor as failed and propagate.
             observed.Complete(ExecutionStatus.Failed, ex);
+            NodeFinished(frame, identity, node, ExecutionStatus.Failed, ex.ToExecutionError());
             throw;
         }
         catch (Exception ex)
@@ -105,7 +114,16 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
             var failure = new WorkflowActivityException(node.Id, node.Type, ex);
             LogNodeFailed(_logger, node.Id.Value, node.Type.Value, ex.Message, ex);
             observed.Complete(ExecutionStatus.Failed, failure);
+            NodeFinished(frame, identity, node, ExecutionStatus.Failed, failure.ToExecutionError());
             throw failure;
+        }
+    }
+
+    private void NodeFinished(ExecutionFrame frame, ExecutionIdentity identity, NodeDefinition node, ExecutionStatus status, ExecutionError? error)
+    {
+        if (frame.Events.IsActive)
+        {
+            frame.Events.Emit(new NodeCompleted(identity.ExecutionId, identity.ParentExecutionId, identity.CorrelationId, _time.GetUtcNow(), node.Id, node.Type, status, error));
         }
     }
 
@@ -172,7 +190,7 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
 
         var childIdentity = parent.Identity.ForChildExecution(_ids.NewExecutionId(), resolution.Workflow.Id);
         var child = new ExecutionFrame(
-            resolution.Workflow, childIdentity, resolution.Location, parent.RootLocation, parent.Depth + 1, parent.Services, parent.Deadline);
+            resolution.Workflow, childIdentity, resolution.Location, parent.RootLocation, parent.Depth + 1, parent.Services, parent.Events, parent.Deadline);
         var result = await ExecuteAsync(child, arguments, timeout, cancellationToken).ConfigureAwait(false);
 
         // The child reports "Cancelled" when our token was cancelled; propagate that as cancellation of this execution.
@@ -196,12 +214,22 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
         frame = frame with { Deadline = EarliestDeadline(frame.Deadline, timeout is { } limit ? startedAt + limit : null) };
         using var observed = _scopes.Begin(frame.Identity, DiagnosticNames.WorkflowExecuteOperation);
         LogStarted(_logger, workflow.Id.Value, workflow.Name, workflow.Version);
+        var identity = frame.Identity;
+        if (frame.Events.IsActive)
+        {
+            frame.Events.Emit(new ExecutionStarted(identity.ExecutionId, identity.ParentExecutionId, identity.CorrelationId, startedAt, workflow.Id));
+        }
 
         WorkflowExecutionResult Finish(ExecutionStatus status, IReadOnlyDictionary<string, object?>? outputs, ExecutionError? error, Exception? exception)
         {
             var duration = _time.GetElapsedTime(startTimestamp);
             observed.Complete(status, exception);
             LogCompleted(_logger, workflow.Id.Value, status, (long)duration.TotalMilliseconds);
+            if (frame.Events.IsActive)
+            {
+                frame.Events.Emit(new ExecutionCompleted(identity.ExecutionId, identity.ParentExecutionId, identity.CorrelationId, _time.GetUtcNow(), workflow.Id, status, error, duration));
+            }
+
             return new WorkflowExecutionResult(
                 frame.Identity.ExecutionId,
                 frame.Identity.CorrelationId,

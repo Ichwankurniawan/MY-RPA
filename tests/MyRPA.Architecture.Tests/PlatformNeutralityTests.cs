@@ -108,6 +108,17 @@ public sealed class PlatformNeutralityTests
     public void CoreAndWorkflow_HaveNoPackages(string name) => Assert.Empty(Project(name).PackageReferences);
 
     [Fact]
+    public void Contracts_ReferenceOnlyTheBcl_WithNoProjectsOrPackages()
+    {
+        // Wire contracts are shared with future agents and robots (ADR-0022): nothing but the BCL.
+        var nonBcl = Rule("MyRPA.Contracts").Assembly!.GetReferencedAssemblies().Select(a => a.Name!).Where(n => !ArchitectureRules.IsBclAssembly(n));
+
+        Assert.Empty(nonBcl);
+        Assert.Empty(Project("MyRPA.Contracts").ProjectReferences);
+        Assert.Empty(Project("MyRPA.Contracts").PackageReferences);
+    }
+
+    [Fact]
     public void OnlyCompositionRoots_ReferenceHosting()
     {
         var offenders = ArchitectureRules.SourceProjects

@@ -69,6 +69,8 @@ All items must pass in the Web Studio. Functional items can only change with the
    - Unique id generation; editable id and display name.
    - Unknown activities shown with editable raw properties.
    - Lossless round-trip of unknown fields and literal forms on the shared corpus.
+   - Toolbox search/filter (added after W0).
+   - Editing the workflow's metadata: id, name, version and description (added after W0).
 2. **Property editing**
    - All six property kinds, with required markers and descriptions.
    - Allowed-value lists, assignment-target suggestions, the key/value map editor, and live expression syntax feedback.
@@ -96,12 +98,14 @@ All items must pass in the Web Studio. Functional items can only change with the
     - Focus-safe shortcuts: Ctrl+S, Z, Y, X, C, V, Del, F5, Shift+F5.
     - ARIA tree semantics and announced run status.
     - An automated accessibility check with no serious or critical violations, plus a screen-reader smoke test.
-11. **Performance**, on the 3,000-node reference fixtures, measured in CI:
+11. **Performance**, on the 3,000-node reference fixtures, measured in CI (targets accepted after W0; revised only if
+    measurements show a legitimate reason):
     - open to interactive ≤ 1 s;
-    - property edit to paint ≤ 100 ms (p95);
-    - undo ≤ 100 ms;
-    - validation result ≤ 500 ms after typing stops (local mode).
-    - W0 recommends tighter targets; see the spike report.
+    - property edit and typing to paint ≤ 50 ms (p95);
+    - undo/redo ≤ 50 ms (p95);
+    - structural edit (insert, delete, move) to paint ≤ 100 ms (p95);
+    - drag activation ≤ 100 ms (p95); drag movement ≤ 50 ms (p95);
+    - validation result ≤ 500 ms after typing stops.
 12. **Automated tests**
     - TypeScript unit tests covering every behavior group of the Studio.Core tests.
     - Corpus conformance against `WorkflowLoader`.

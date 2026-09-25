@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Wire contracts of the MyRPA control plane (ADR-0022): messages exchanged between MyRPA.Server, the Web Studio and,
+    later, agents and robots. Plain data with JSON source generation. BCL only: no project references, no packages.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Contracts</RootNamespace>
+    <Description>MyRPA control-plane wire contracts.</Description>
+  </PropertyGroup>
+</Project>

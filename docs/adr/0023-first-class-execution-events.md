@@ -1,6 +1,6 @@
 # ADR-0023: First-class execution events (engine observer hook)
 
-- Status: **Proposed**. Awaiting owner approval. Not implemented; implementation would be part of W1.
+- Status: Accepted (approved after W0) and implemented in W1. See "Implementation (W1)" below.
 - Date: 2026-09-25
 - Phase: Web Studio W0
 - Amends: ADR-0010 (execution contracts). ADR-0006 (observability) is unchanged.
@@ -47,6 +47,21 @@ Studio currently learns about node progress by listening to the engine's tracing
 - **Logs are not part of the hook.** They stay on `ILogger`. Hosts route them by the execution and correlation ids in the engine's logging scopes, which the W0 spike showed works per execution.
 - Spans and logging scopes stay unchanged for observability (ADR-0006).
 - **SDK impact: none.** Activities don't see the observer, and SDK 1.0 is not changed.
+
+## Implementation (W1)
+- **Contract:** `IExecutionObserver` and the four event records (`ExecutionStarted`, `NodeStarted`, `NodeCompleted`,
+  `ExecutionCompleted`) are in `MyRPA.Workflow/Execution/ExecutionEvents.cs`. `WorkflowRunRequest.Observer` is the only
+  way to attach an observer. The SDK is unchanged.
+- **Engine:** `MyRPA.Runtime/Execution/ExecutionEventSink.cs` is created per run by `WorkflowRunner.RunAsync` and carried
+  in `ExecutionFrame` to invoked workflows.
+  - Events are emitted next to the existing scope begin/complete points.
+  - Events are only allocated when an observer is attached; a run without an observer behaves exactly as before.
+- **Failure isolation:** the sink catches any exception from `OnEvent`, including `OperationCanceledException`. It logs
+  warning 3006 once and stops calling that observer for the run. The run's status, outputs and error are unaffected
+  (tests: `ExecutionEventTests`).
+- **Hosting:** `MyRPA.Execution.Hosting` passes one observer per run (its `ExecutionRecord`) and turns events into
+  sequenced `ExecutionEventMessage`s (`MyRPA.Contracts`) in a bounded replay buffer. Logs are routed by the correlation
+  id in the engine's logging scope; the host generates a fresh correlation id per run, which is also the run id.
 
 ## Alternatives considered
 - **Keep span listeners, with one shared dispatching listener.** Rejected: context points 1–3.

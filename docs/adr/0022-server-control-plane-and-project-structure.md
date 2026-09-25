@@ -1,6 +1,6 @@
 # ADR-0022: MyRPA.Server control plane and project structure
 
-- Status: Accepted (structure). Implementation starts in W1/W2 when authorized.
+- Status: Accepted. W1 built `MyRPA.Contracts` and `MyRPA.Execution.Hosting`; `MyRPA.Server` follows in W2.
 - Date: 2026-09-25
 - Phase: Web Studio W0
 - Amends: ADR-0003 (new projects and dependency direction), ADR-0004 and ADR-0008 (ASP.NET Core allowed in server executables only)
@@ -26,8 +26,8 @@ The W0 spike checked the proposed shape against the repository:
 ### Projects
 | Project | Kind | References | Responsibility |
 |---|---|---|---|
-| `MyRPA.Contracts` | library, base libraries only | Core | API DTOs and, later, agent/robot messages; `System.Text.Json` source generation |
-| `MyRPA.Execution.Hosting` | library | Core, Workflow, Runtime, Contracts | Run coordination, per-execution event capture via ADR-0023, log routing by execution/correlation id, bounded replay buffers, cancellation, concurrency limits. Shared by the Server now and by Agent/Robot later. |
+| `MyRPA.Contracts` | library, base libraries only | none | API DTOs and, later, agent/robot messages; `System.Text.Json` source generation. W1: execution event messages. |
+| `MyRPA.Execution.Hosting` | library | Core, Workflow, Contracts (engine contracts only; the host composes Runtime) | Run coordination, per-execution event capture via ADR-0023, log routing by execution/correlation id, bounded replay buffers, cancellation, concurrency limits. Shared by the Server now and by Agent/Robot later. |
 | `MyRPA.Server` | executable, composition root, ASP.NET Core | Contracts, Execution.Hosting, Runtime, Activities, Storage, Plugins | Projects and files, per-target catalogs, validation, executions, SSE (ADR-0024), security (ADR-0025). Serves the built `web/studio` assets. |
 | `web/studio` | npm/Vite, outside the solution | — | The only Studio UI (ADR-0021). Types are generated from the server's OpenAPI document. |
 | later: `MyRPA.Agent`, `MyRPA.Robot` | executables | Contracts, Execution.Hosting, … | Execution plane. Connects outbound to the server. |

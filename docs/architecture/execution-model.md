@@ -142,6 +142,27 @@ Spans nest: `workflow.execute` → one span per node (named after its activity t
 `workflow.execute` under the `Core.InvokeWorkflow` node span. Workflow `Core.Log` messages use category
 `MyRPA.Workflow.Log`; the CLI shows them at Information level by default.
 
+### Execution events (ADR-0023)
+
+Hosts that display progress attach an `IExecutionObserver` to one run with `WorkflowRunRequest.Observer`. Nothing is
+registered globally, so an observer only sees its own run and the workflows it invokes.
+
+- **Events:** `ExecutionStarted` → (`NodeStarted` … `NodeCompleted`)* → `ExecutionCompleted`, per execution, in execution
+  order. An invoked workflow's events are nested inside the invoking node's events and carry their own execution id plus
+  the parent's.
+- **Node status:** `NodeCompleted` is `Succeeded`, `Failed` (with the error; the error's node is where the failure
+  originated) or `Cancelled` (the run was cancelled or timed out). `ExecutionCompleted` carries the same status as the
+  run's result.
+- **Delivery:** calls are synchronous on the executing flow and never overlap within a run.
+- **No workflow data:** events carry ids, activity types, statuses, errors and timings only; never variable values,
+  arguments or outputs.
+- **Independent of observability:** events are emitted whether or not tracing spans are sampled.
+- **Observer failures:** a throwing observer is logged (warning 3006) and not called again for that run; the run's
+  outcome is unaffected.
+
+`MyRPA.Execution.Hosting` builds on this. Per run it provides a sequenced, bounded replay buffer (a `stream.gap` event
+reports dropped events), routes the run's logs by correlation id, supports cancellation and limits concurrency.
+
 ## 6. Lifetimes and state
 
 | Component | Lifetime | State |

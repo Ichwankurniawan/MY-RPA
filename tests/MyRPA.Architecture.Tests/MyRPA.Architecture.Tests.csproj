@@ -8,6 +8,8 @@
     <ProjectReference Include="..\..\src\MyRPA.Storage\MyRPA.Storage.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Plugins\MyRPA.Plugins.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Contracts\MyRPA.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Studio.Core\MyRPA.Studio.Core.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Cli\MyRPA.Cli.csproj" />
   </ItemGroup>

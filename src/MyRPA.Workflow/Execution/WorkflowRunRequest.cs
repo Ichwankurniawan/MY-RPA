@@ -19,4 +19,10 @@ public sealed class WorkflowRunRequest
     /// and as the confinement root for them (ADR-0012). <see langword="null"/> disables relative invocation.
     /// </summary>
     public string? Location { get; init; }
+
+    /// <summary>
+    /// Receives this run's execution events, including those of workflows it invokes (ADR-0023). Scoped to this run only;
+    /// <see langword="null"/> (the default) emits no events. An observer cannot change the run's outcome.
+    /// </summary>
+    public IExecutionObserver? Observer { get; init; }
 }

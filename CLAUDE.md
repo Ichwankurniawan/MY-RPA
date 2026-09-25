@@ -4,8 +4,8 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W0 — architecture and spike (complete, awaiting review).**
-  Phase 5 (WPF Studio) is merged. W1 and Phase 6 must not start without authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W1 — Contracts, Execution.Hosting and the
+  execution-event hook (complete, awaiting review).** W2 (MyRPA.Server) and Phase 6 must not start without authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -40,7 +40,9 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 
 - Dependency direction (ADR-0003, amended by ADR-0010 and ADR-0013): Core ← Workflow; Core, Workflow ← Activities;
   Core, Workflow ← Runtime; Core, Workflow ← Storage; Core, Workflow ← Sdk; Core, Workflow, Sdk, Activities ← Plugins;
-  Core, Workflow ← Studio.Core; everything but Cli ← Studio; everything ← Cli (ADR-0018). Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
+  Core, Workflow ← Studio.Core; everything but Cli ← Studio; everything ← Cli (ADR-0018); Contracts has no references;
+  Core, Workflow, Contracts ← Execution.Hosting (ADR-0022). The engine and plugin host never reference Contracts or
+  Execution.Hosting. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
   Plugins. Nothing references a composition root.
 - `MyRPA.Core`, `MyRPA.Workflow` and `MyRPA.Sdk`: BCL only, no packages, plain `net10.0` (ADR-0004, ADR-0013).
 - Plugin projects (`plugins/*`, `samples/plugins/*`, `tests/fixtures/*`) reference only `MyRPA.Sdk` (host contract
@@ -96,7 +98,9 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   The v1.0 JSON stays the only workflow format.
 - The WPF Studio (`MyRPA.Studio`, `MyRPA.Studio.Core`, their tests) is a **frozen temporary reference**: no features, no
   refactoring for new layers, and never a design constraint. It is removed when the ADR-0021 exit criteria pass.
-- ADR-0023 (engine execution-event hook) is Proposed: do not implement it without approval.
+- Progress and events come from the per-run observer (`WorkflowRunRequest.Observer`, ADR-0023), never from span
+  listeners; observer failures never change a run's outcome; events carry no workflow data. Hosts use
+  `MyRPA.Execution.Hosting` (`ExecutionHost`) rather than calling the runner and capturing events themselves.
 - `spikes/` holds throwaway measurement code: not in the solution, never referenced from `src`.
 
 ## Studio conventions (Phase 5, ADR-0018; frozen reference, see ADR-0021)
