@@ -1,6 +1,6 @@
 # ADR-0018: Studio architecture (platform-neutral Studio.Core, WPF shell)
 
-- Status: Accepted
+- Status: Superseded by [ADR-0021](0021-web-first-studio-and-wpf-removal.md). The WPF Studio is a frozen, temporary reference that will be removed; Studio.Core is not a shared layer for the Web Studio.
 - Date: 2026-09-25
 - Phase: 5
 - Amends: ADR-0003 (two new projects), ADR-0004 (one project may use WPF)

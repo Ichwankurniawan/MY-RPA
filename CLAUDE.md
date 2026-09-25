@@ -4,8 +4,8 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 5 — MyRPA Studio (complete, awaiting review).**
-  Phase 6 (recorder) must not start without authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W0 — architecture and spike (complete, awaiting review).**
+  Phase 5 (WPF Studio) is merged. W1 and Phase 6 must not start without authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -90,7 +90,16 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 - Public async APIs take a `CancellationToken`; library code uses `ConfigureAwait(false)`.
 - Public APIs in `src` have XML documentation (the build requires it).
 
-## Studio conventions (Phase 5, ADR-0018)
+## Web-first direction (ADR-0021 to ADR-0025)
+
+- The Web Studio (React + TypeScript + Vite, `web/studio`) will be the only Studio UI; `MyRPA.Server` is the control plane.
+  The v1.0 JSON stays the only workflow format.
+- The WPF Studio (`MyRPA.Studio`, `MyRPA.Studio.Core`, their tests) is a **frozen temporary reference**: no features, no
+  refactoring for new layers, and never a design constraint. It is removed when the ADR-0021 exit criteria pass.
+- ADR-0023 (engine execution-event hook) is Proposed: do not implement it without approval.
+- `spikes/` holds throwaway measurement code: not in the solution, never referenced from `src`.
+
+## Studio conventions (Phase 5, ADR-0018; frozen reference, see ADR-0021)
 
 - All Studio logic goes into `MyRPA.Studio.Core` (plain `net10.0`, no UI framework); `MyRPA.Studio` holds only WPF
   views, templates, behaviors and the dialog/clipboard/dispatcher implementations.

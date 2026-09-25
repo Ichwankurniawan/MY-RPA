@@ -1,6 +1,6 @@
 # ADR-0004: Platform-neutral Core with zero package dependencies
 
-- Status: Accepted; amended by [ADR-0018](0018-studio-architecture.md) (the `MyRPA.Studio` shell alone may target `net10.0-windows` and use WPF)
+- Status: Accepted; amended by [ADR-0018](0018-studio-architecture.md) (the `MyRPA.Studio` shell alone may target `net10.0-windows` and use WPF, until it is removed per [ADR-0021](0021-web-first-studio-and-wpf-removal.md)); [ADR-0022](0022-server-control-plane-and-project-structure.md) (ASP.NET Core in server executables only)
 - Date: 2026-09-23
 - Phase: 1
 

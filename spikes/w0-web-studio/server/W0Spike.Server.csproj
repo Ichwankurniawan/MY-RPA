@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!--
+    W0 throwaway spike (not production, not in MyRPA.sln, not scanned by the architecture tests).
+    Prototype of the MyRPA.Server execution API: validation, in-process execution and SSE event streaming,
+    using the real engine. It exists only to measure; delete it once W1 is decided.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>W0Spike.Server</RootNamespace>
+    <!-- A spike: application-level analyzer guidance (ConfigureAwait, LoggerMessage, public docs) does not apply. -->
+    <NoWarn>$(NoWarn);CS1591;CA2007;CA1848;CA1873;CA1812;CA1031;CA1515;CA2000;CA1001;CA1822</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+    <ProjectReference Include="..\..\..\src\MyRPA.Activities\MyRPA.Activities.csproj" />
+    <ProjectReference Include="..\..\..\src\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\src\MyRPA.Storage\MyRPA.Storage.csproj" />
+  </ItemGroup>
+</Project>

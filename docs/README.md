@@ -11,6 +11,7 @@
 | [architecture/studio.md](architecture/studio.md) | MyRPA Studio: projects, document model, designer, validation, running, manual test script |
 | [architecture/phase-1-reconciliation.md](architecture/phase-1-reconciliation.md) | How the PRD was reconciled with the Phase 0 findings |
 | [adr/](adr/README.md) | Architecture Decision Records (the PRD's `docs/decisions/` lives here; see ADR-0001) |
+| [research/w0-web-studio-spike.md](research/w0-web-studio-spike.md) | W0 Web Studio spike: React designer and SSE measurements behind ADR-0021 to ADR-0025 |
 | [research/](research/openrpa-overview.md) | Phase 0 OpenRPA reverse-engineering research and analysis |
 
 Product requirements: [../MyRPA-PRD.md](../MyRPA-PRD.md). Contributor/agent rules: [../CLAUDE.md](../CLAUDE.md).
