@@ -9,7 +9,7 @@ Status: Web Studio W4A (structural editing on the W3 slice). Decisions: [ADR-002
 
 The Web Studio is a React + TypeScript + Vite app in `web/studio`, outside the .NET solution. It talks only to its own
 `MyRPA.Server` origin through the API in [server.md](server.md). It is not at WPF parity yet; the ADR-0021 exit
-criteria are the target.
+criteria are the target; the slices that get there are in [web-studio-roadmap.md](web-studio-roadmap.md).
 
 ## Run
 

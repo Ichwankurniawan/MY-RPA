@@ -9,6 +9,7 @@
 | [architecture/plugin-system.md](architecture/plugin-system.md) | Plugins: manifest, lifecycle, AssemblyLoadContext loading, trust model, diagnostics, CLI usage |
 | [architecture/browser-automation.md](architecture/browser-automation.md) | Playwright browser plugin: sessions, activities, selectors, errors, security, browser installation |
 | [architecture/server.md](architecture/server.md) | MyRPA.Server (local mode): start, security, HTTP API, multiplexed event stream |
+| [architecture/web-studio-roadmap.md](architecture/web-studio-roadmap.md) | Web Studio roadmap W0–W10 to Phase 5 completion, with the ADR-0021 exit criteria mapped onto the slices |
 | [architecture/web-studio.md](architecture/web-studio.md) | Web Studio (W3 slice and W4A structural editing): run, what it does, structure, tests, deferred work |
 | [architecture/studio.md](architecture/studio.md) | MyRPA Studio: projects, document model, designer, validation, running, manual test script |
 | [architecture/phase-1-reconciliation.md](architecture/phase-1-reconciliation.md) | How the PRD was reconciled with the Phase 0 findings |

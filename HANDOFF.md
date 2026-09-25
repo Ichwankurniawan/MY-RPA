@@ -1,12 +1,12 @@
-# HANDOFF — MyRPA (written 2026-09-25, end of Web Studio W4A)
+# HANDOFF — MyRPA (written 2026-09-25, end of Web Studio W4A; updated after W4A approval)
 
 For a fresh Claude Code session with no memory of earlier work. Read this, then `CLAUDE.md`, then the ADRs it names.
 `CLAUDE.md` is the standing rulebook and wins where the two differ on rules. This file covers state, history, and
 things the owner said that are not written down elsewhere.
 
-**Where the work is:** branch `w4a-structural-editing` (pushed to `origin`). It holds W4A, committed but **not yet
-reviewed or merged**. `main` = `origin/main` = `2d15bbc` (W3). Start with
-`git fetch && git checkout w4a-structural-editing`.
+**Where the work is:** `main` (= `origin/main`). W4A was approved by the owner and fast-forward merged. The next
+slice is **W4B (Rich authoring)**, which must not start without the owner's authorization. The roadmap is
+[docs/architecture/web-studio-roadmap.md](docs/architecture/web-studio-roadmap.md).
 
 ---
 
@@ -38,9 +38,10 @@ one control plane. The workflow JSON v1.0 format (`docs/architecture/workflow-fo
 | W1 | `84cc822` | ADR-0023 per-run execution observer in the engine (`WorkflowRunRequest.Observer`); new `src/MyRPA.Contracts` (wire DTOs, BCL only) and `src/MyRPA.Execution.Hosting` (`ExecutionHost`, `ExecutionHandle.ReadEventsAsync(after)`, bounded replay with `stream.gap`, log routing) |
 | W2 | `ba857ba` | `src/MyRPA.Server` local mode (loopback, start-token → cookie, Host/Origin/anti-forgery checks, CSP; projects and files with ETags; catalog; validate; runs; one multiplexed SSE stream per tab); ADR-0026 (MYRPA1040 path now `…properties.<name>`); ADR-0027 (InvokeWorkflow confinement unchanged) |
 | W3 | `2d15bbc` (**main**) | `web/studio` first slice: open, ARIA tree, select, edit string properties, validate, save (If-Match), run with live SSE events/logs/status. Server `--web <dir>` serves the built Studio. ADR-0028. Architecture rule against drag-and-drop libraries. CI job `web-studio` |
-| W4A | branch `w4a-structural-editing` (unreviewed) | Insert, delete, move up/down; snapshot undo/redo (200 steps, typing merged); keyboard commands; ADR-0029; browser smoke test extended; `npm run perf` |
+| W4A | `62f2d05` (approved, on **main**) | Insert, delete, move up/down; snapshot undo/redo (200 steps, typing merged); keyboard commands; ADR-0029; browser smoke test extended; `npm run perf` |
+| Roadmap | on **main** | Owner-defined W-roadmap W4B..W10 with the ADR-0021 exit criteria mapped onto it (`docs/architecture/web-studio-roadmap.md`) |
 
-**Last full validation (W4A working tree, before committing):**
+**Last full validation (W4A, the exact code of `62f2d05`; later commits are docs only):**
 - `dotnet format MyRPA.sln --verify-no-changes`: clean.
 - `dotnet build MyRPA.sln -c Release --no-incremental`: 0 warnings.
 - `dotnet test --solution MyRPA.sln -c Release --no-build`: 955/955.
@@ -134,10 +135,9 @@ Accepted ADRs are in `docs/adr/` (index: `docs/adr/README.md`). The ones that ma
 
 ## 4. In progress
 
-**Nothing is half-implemented.** W4A is feature-complete and verified, but **awaiting the owner's review**. It is
-committed on `w4a-structural-editing` only so it survives the machine switch; `main` does not have it.
+**Nothing is half-implemented.** W4A is complete, approved and on `main`. No W4B work exists yet.
 
-W4A touched:
+For orientation, W4A touched:
 - `web/studio/src/document.ts`: `nodeAt`, `insertionPoint`, `createNode`, `insertNode`, `deleteRefusal`, `removeNode`,
   `selectionAfterDelete`, `moveRefusal`, `moveNode`.
 - `web/studio/src/studio.ts`:
@@ -154,26 +154,22 @@ W4A touched:
 
 ## 5. Next steps (in order)
 
-1. **Wait for the owner's review of W4A.** Do not start anything else. If asked to commit and merge, follow the
-   discipline in §7 ("Commit discipline"):
-   - fast-forward `main` to `w4a-structural-editing`;
-   - push `main`.
-   - Note: `HANDOFF.md` is on that branch too. Ask whether it should stay in the repo or be dropped before merging.
-2. **Do not start W4B/W5 or Phase 6 without an explicit authorization message.** The owner names each slice and its
-   scope. The name "W4A" implies a W4B, but its scope has **not** been defined; do not guess.
-3. Likely candidates when authorized, all listed as deferred in `docs/architecture/web-studio.md` and ADR-0029, and
-   all ADR-0021 exit criteria:
-   - insert into slots and cross-container moves;
-   - cut/copy/paste;
-   - drag-and-drop by pointer hit-testing;
-   - variables/arguments and workflow-metadata editors;
-   - literal and map editors;
-   - CodeMirror expressions;
-   - run arguments, Stop and timeout;
-   - file create/rename/delete and crash recovery;
-   - the accessibility audit;
-   - smoke/perf in CI;
-   - the layout issue from §6.
+1. **Wait for the owner's W4B authorization.** Do not start anything else, including Phase 6.
+2. When authorized, W4B (Rich authoring) starts on a new branch (for example `w4b-rich-authoring`) from `main`.
+   - The owner's brief sets the scope. The proposed contents are in `docs/architecture/web-studio-roadmap.md` §W4B:
+     all six property-kind editors, CodeMirror expressions, the variables/arguments editor, the metadata editor,
+     editable ids, and raw properties of unknown activities.
+   - The roadmap lists the decisions the owner must make for each slice (for W4B: CodeMirror as a runtime dependency,
+     and automatic debounced server validation).
+3. The later slices, in the owner's order:
+   - W5 Execution UX;
+   - W6 Project/file management;
+   - W7 Advanced authoring / parity (slots, cross-container moves, copy/paste, drag-and-drop);
+   - W8 Performance + accessibility + hardening;
+   - W9 WPF exit criteria + migration;
+   - W10 WPF removal / Phase 5 completion.
+   After W10 the PRD continues with Phases 6–12.
+4. The layout issue from §6 is not assigned to a slice yet; raise it when a UI slice is authorized.
 
 ## 6. Known issues and gotchas
 

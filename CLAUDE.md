@@ -5,7 +5,8 @@ Guidance for AI agents and contributors working in this repository.
 ## Phase discipline (most important)
 
 - The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W4A — structural editing and undo/redo (complete,
-  awaiting review).** W4B/W5 and Phase 6 must not start without authorization.
+  approved).** Next is W4B (Rich authoring) per `docs/architecture/web-studio-roadmap.md`; W4B, later slices and
+  Phase 6 must not start without authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -16,7 +17,8 @@ Guidance for AI agents and contributors working in this repository.
 1. `MyRPA-PRD.md` — requirements and phases.
 2. `docs/adr/` — accepted decisions (they refine the PRD).
 3. `docs/architecture/overview.md`, `execution-model.md`, `workflow-format.md`, `automation-sdk.md`,
-   `plugin-system.md`, `browser-automation.md`, `studio.md`, `server.md`, `web-studio.md` — current architecture.
+   `plugin-system.md`, `browser-automation.md`, `studio.md`, `server.md`, `web-studio.md` — current architecture;
+   `web-studio-roadmap.md` — the owner's W-roadmap to Phase 5 completion.
 4. `docs/research/` — Phase 0 OpenRPA evidence (codes R#/D#/N# in `openrpa-analysis.md`).
 5. `reference/openrpa/` — read-only OpenRPA clone (MPL-2.0). Never modify it; never copy its code into MyRPA.
 
