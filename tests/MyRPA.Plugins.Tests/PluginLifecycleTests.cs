@@ -240,6 +240,27 @@ public sealed class PluginLifecycleTests
     }
 
     [Fact]
+    public async Task VerifyProviders_ReportsAProviderWithTheWrongIdAtStartup()
+    {
+        using var wrong = new StagedPlugin(Manifests.Fixture("Tests.Wrong", "MyRPA.Tests.FixturePlugin.WrongProviderIdPlugin", activities: [], providers: ["Fixture.Provider"]));
+        await using var host = PluginTestHost.Start(await PluginTestHost.LoadAsync(wrong.Source()));
+
+        var error = Assert.Throws<InvalidOperationException>(() => host.Plugins.VerifyProviders(host.Services));
+
+        Assert.Contains("Tests.Wrong", error.Message, StringComparison.Ordinal);
+        Assert.Contains("reports id 'Fixture.Other'", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task VerifyProviders_AcceptsCorrectProviders()
+    {
+        using var staged = new StagedPlugin(Manifests.Fixture());
+        await using var host = await PluginTestHost.StartAsync(staged.Source());
+
+        host.Plugins.VerifyProviders(host.Services);
+    }
+
+    [Fact]
     public async Task PluginSet_CanBeAppliedOnlyOnce()
     {
         await using var set = await PluginTestHost.LoadAsync();

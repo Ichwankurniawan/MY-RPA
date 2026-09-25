@@ -11,22 +11,45 @@ public sealed class PlatformNeutralityTests
 {
     public static TheoryData<string> SourceProjectNames() => [.. ArchitectureRules.SourceProjects.Select(r => r.Name)];
 
+    public static TheoryData<string> CompiledProjectNames() => [.. ArchitectureRules.SourceProjects.Where(r => r.Assembly is not null).Select(r => r.Name)];
+
+    public static TheoryData<string> PlatformNeutralProjectNames() => [.. ArchitectureRules.SourceProjects.Where(r => !r.IsDesktopUi).Select(r => r.Name)];
+
     private static ArchitectureRules.ProjectRule Rule(string name) => ArchitectureRules.SourceProjects.Single(r => r.Name == name);
 
     private static ProjectFile Project(string name) => Repository.SourceProjects.Single(p => p.Name == name);
 
+    [Fact]
+    public void OnlyDesktopProjects_AreNotInspectedHere()
+    {
+        // Every platform-neutral project is compiled into this test run; only the WPF shell is checked in MyRPA.Studio.Tests.
+        Assert.All(ArchitectureRules.SourceProjects.Where(r => r.Assembly is null), r => Assert.True(r.IsDesktopUi, r.Name));
+    }
+
+    [Fact]
+    public void DesktopUi_IsOnlyInTheStudioShell()
+    {
+        Assert.Equal(["MyRPA.Studio"], ArchitectureRules.SourceProjects.Where(r => r.IsDesktopUi).Select(r => r.Name));
+
+        var studio = Project("MyRPA.Studio");
+        Assert.Equal("net10.0-windows", studio.TargetFramework);
+        Assert.True(studio.UseWpf, "The Studio shell uses WPF.");
+        Assert.False(studio.UseWindowsForms, "UseWindowsForms is not allowed.");
+        Assert.Empty(studio.FrameworkReferences);
+    }
+
     [Theory]
-    [MemberData(nameof(SourceProjectNames))]
+    [MemberData(nameof(CompiledProjectNames))]
     public void CompiledAssembly_TargetsPlainNet10(string name)
     {
-        var assembly = Rule(name).Assembly;
+        var assembly = Rule(name).Assembly!;
 
         Assert.Equal(".NETCoreApp,Version=v10.0", assembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName);
         Assert.Null(assembly.GetCustomAttribute<TargetPlatformAttribute>()); // e.g. net10.0-windows
     }
 
     [Theory]
-    [MemberData(nameof(SourceProjectNames))]
+    [MemberData(nameof(PlatformNeutralProjectNames))]
     public void ProjectFile_DoesNotOverrideFrameworkOrEnableDesktopUi(string name)
     {
         var project = Project(name);
@@ -56,10 +79,10 @@ public sealed class PlatformNeutralityTests
     }
 
     [Theory]
-    [MemberData(nameof(SourceProjectNames))]
+    [MemberData(nameof(CompiledProjectNames))]
     public void CompiledReferences_ContainNoForbiddenTechnology(string name)
     {
-        var forbidden = Rule(name).Assembly.GetReferencedAssemblies()
+        var forbidden = Rule(name).Assembly!.GetReferencedAssemblies()
             .Select(a => a.Name!)
             .Where(n => ArchitectureRules.MatchForbidden(n) is not null);
 
@@ -72,7 +95,7 @@ public sealed class PlatformNeutralityTests
     public void CoreAndWorkflow_ReferenceOnlyTheBclAndAllowedProjects(string name)
     {
         var rule = Rule(name);
-        var nonBcl = rule.Assembly.GetReferencedAssemblies()
+        var nonBcl = rule.Assembly!.GetReferencedAssemblies()
             .Select(a => a.Name!)
             .Where(n => !ArchitectureRules.IsBclAssembly(n) && !rule.AllowedProjects.Contains(n));
 
@@ -89,7 +112,7 @@ public sealed class PlatformNeutralityTests
     {
         var offenders = ArchitectureRules.SourceProjects
             .Where(r => !r.IsCompositionRoot)
-            .Where(r => r.Assembly.GetReferencedAssemblies().Any(a => a.Name == "Microsoft.Extensions.Hosting"
+            .Where(r => r.Assembly!.GetReferencedAssemblies().Any(a => a.Name == "Microsoft.Extensions.Hosting"
                 || a.Name == "Microsoft.Extensions.Hosting.Abstractions"))
             .Select(r => r.Name);
 
@@ -99,7 +122,9 @@ public sealed class PlatformNeutralityTests
     [Fact]
     public void OnlyCompositionRoots_AreExecutables()
     {
-        var executables = Repository.SourceProjects.Where(p => string.Equals(p.OutputType, "Exe", StringComparison.OrdinalIgnoreCase)).Select(p => p.Name);
+        var executables = Repository.SourceProjects
+            .Where(p => string.Equals(p.OutputType, "Exe", StringComparison.OrdinalIgnoreCase) || string.Equals(p.OutputType, "WinExe", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name);
         var roots = ArchitectureRules.SourceProjects.Where(r => r.IsCompositionRoot).Select(r => r.Name);
 
         Assert.Equal(roots.Order(StringComparer.Ordinal), executables.Order(StringComparer.Ordinal));

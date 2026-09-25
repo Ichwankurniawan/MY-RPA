@@ -1,6 +1,6 @@
 # ADR-0003: Solution structure and dependency direction
 
-- Status: Accepted; amended by [ADR-0010](0010-workflow-execution-model.md) (MyRPA.Activities may reference MyRPA.Workflow and Microsoft.Extensions.Logging.Abstractions)
+- Status: Accepted; amended by [ADR-0010](0010-workflow-execution-model.md) (MyRPA.Activities may reference MyRPA.Workflow and Microsoft.Extensions.Logging.Abstractions), [ADR-0013](0013-automation-sdk-and-activity-contract.md) (MyRPA.Sdk and MyRPA.Plugins) and [ADR-0018](0018-studio-architecture.md) (MyRPA.Studio.Core and MyRPA.Studio)
 - Date: 2026-09-23
 - Phase: 1
 

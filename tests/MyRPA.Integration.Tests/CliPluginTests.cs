@@ -58,12 +58,82 @@ public sealed class CliPluginTests
     }
 
     [Fact]
+    public async Task Catalog_PrintsBuiltInAndPluginActivities_AsAReadableSnapshot()
+    {
+        var result = await Cli.RunAsync("--plugin", SamplePlugin, "catalog");
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        var snapshot = MyRPA.Workflow.Serialization.ActivityCatalogJson.Read(result.Out);
+        Assert.Contains(snapshot.Descriptors, d => d.TypeName.Value == "Core.Log");
+        var echo = Assert.Single(snapshot.Descriptors, d => d.TypeName.Value == "Demo.Echo");
+        Assert.Contains(echo.Properties, p => p.Name == "text" && p.IsRequired);
+    }
+
+    [Fact]
     public async Task PluginOption_WithoutDirectory_IsAUsageError()
     {
         var result = await Cli.RunAsync("info", "--plugin");
 
         Assert.Equal(CliExitCodes.Usage, result.ExitCode);
         Assert.Contains("--plugin needs a plugin directory", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PluginConfig_LoadsPinnedPluginsWithTheirSettings()
+    {
+        using var workspace = new TempWorkspace();
+        var digest = System.Text.RegularExpressions.Regex.Match((await Cli.RunAsync("--plugin", SamplePlugin, "plugins")).Out, "SHA-256: +([0-9a-f]{64})").Groups[1].Value;
+        var config = Path.Combine(workspace.Root, "plugins.json");
+        await File.WriteAllTextAsync(
+            config,
+            $$"""
+            { "pluginConfigVersion": "1.0", "requireIntegrity": true,
+              "plugins": [ { "directory": {{JsonSerializer.Serialize(SamplePlugin)}}, "sha256": "{{digest}}", "settings": { "echoPrefix": "[demo] " } } ] }
+            """,
+            TestContext.Current.CancellationToken);
+
+        var result = await Cli.RunAsync("--plugin-config", config, "run", SampleWorkflow, "--arg", "customer=Lin");
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal("[demo] Hello, Lin", Outputs(result.Out).GetProperty("echoed").GetString());
+    }
+
+    [Fact]
+    public async Task PluginConfig_WithAWrongPin_StopsTheCommand()
+    {
+        using var workspace = new TempWorkspace();
+        var config = Path.Combine(workspace.Root, "plugins.json");
+        await File.WriteAllTextAsync(
+            config,
+            $$"""{ "pluginConfigVersion": "1.0", "plugins": [ { "directory": {{JsonSerializer.Serialize(SamplePlugin)}}, "sha256": "{{new string('0', 64)}}" } ] }""",
+            TestContext.Current.CancellationToken);
+
+        var result = await Cli.RunAsync("--plugin-config", config, "run", SampleWorkflow);
+
+        Assert.Equal(CliExitCodes.PluginFailure, result.ExitCode);
+        Assert.Contains("not the pinned", result.Error, StringComparison.Ordinal);
+        Assert.Empty(result.Out);
+    }
+
+    [Fact]
+    public async Task PluginConfig_Invalid_IsReported()
+    {
+        using var workspace = new TempWorkspace();
+        var config = Path.Combine(workspace.Root, "plugins.json");
+        await File.WriteAllTextAsync(config, """{ "pluginConfigVersion": "1.0", "requireIntegrty": true }""", TestContext.Current.CancellationToken);
+
+        var result = await Cli.RunAsync("--plugin-config", config, "info");
+
+        Assert.Equal(CliExitCodes.PluginFailure, result.ExitCode);
+        Assert.Contains("requireIntegrty is not a known property", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PluginConfigOption_GivenTwice_IsAUsageError()
+    {
+        var result = await Cli.RunAsync("--plugin-config", "a.json", "--plugin-config", "b.json", "info");
+
+        Assert.Equal(CliExitCodes.Usage, result.ExitCode);
     }
 
     [Fact]

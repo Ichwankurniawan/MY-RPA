@@ -1,10 +1,10 @@
 # MyRPA Architecture Overview
 
-Status: current as of **Phase 4 — Browser Automation** (2026-09-24).
+Status: current as of **Phase 5 — MyRPA Studio** (2026-09-25).
 Why it looks like this: [phase-1-reconciliation.md](phase-1-reconciliation.md) and the [ADRs](../adr/README.md).
 Details: [execution-model.md](execution-model.md) (engine), [workflow-format.md](workflow-format.md) (JSON format),
 [automation-sdk.md](automation-sdk.md) (activity/provider contract), [plugin-system.md](plugin-system.md) (plugins),
-[browser-automation.md](browser-automation.md) (Playwright browser plugin).
+[browser-automation.md](browser-automation.md) (Playwright browser plugin), [studio.md](studio.md) (Studio).
 Evidence from the OpenRPA study: [../research/openrpa-analysis.md](../research/openrpa-analysis.md).
 
 ## 1. What exists
@@ -28,10 +28,14 @@ Evidence from the OpenRPA study: [../research/openrpa-analysis.md](../research/o
   activities, run-lifetime browser sessions (one browser process per session, closed when the run ends), a provisional
   selector syntax over the SDK `Selector`, structured browser error types, a confined upload/download file policy, and
   no JavaScript evaluation. Plugin assemblies are now loaded from their verified path (ADR-0016).
-- The `myrpa` CLI: `validate`, `run`, `info`, `plugins`, and the global `--plugin <directory>` option.
+- **MyRPA Studio** (WPF): a structured nested-block designer with toolbox, properties, variables, arguments, output,
+  logs and errors; drag/drop, nesting, undo/redo, copy/paste, save/open and run through the same engine, with the
+  running node highlighted. Its logic lives in the platform-neutral `MyRPA.Studio.Core` (ADR-0018).
+- The `myrpa` CLI: `validate`, `run`, `info`, `plugins`, `catalog`, and the global `--plugin <directory>` and
+  `--plugin-config <file>` options (ADR-0019, ADR-0020).
 - Unit, integration (in-process and child-process) and architecture tests.
 
-Not yet: Studio (5), recorder/selector engine (6), Windows and other enterprise automation (7), AI/MCP (8–9),
+Not yet: recorder/selector engine (6), Windows and other enterprise automation (7), AI/MCP (8–9),
 orchestrator/queues/triggers (10), RBAC/credentials (11), packages/signing (12).
 
 ## 2. Projects and responsibilities
@@ -45,7 +49,9 @@ orchestrator/queues/triggers (10), RBAC/credentials (11), packages/signing (12).
 | `MyRPA.Storage` | `WorkflowFileLoader`, `FileWorkflowResolver` (scoped); no database | Core, Workflow | DI.Abstractions |
 | `MyRPA.Sdk` | Automation SDK: `AutomationSdk`/`SdkVersion`; plugin contract (`IPlugin`, `IPluginRegistrar`, `PluginContext`, `PluginId`, `PluginVersion`, `PluginServiceLifetime`); automation abstractions (`IAutomationProvider`, `IAutomationElement`, `Selector`, `ISelectorResolver`, `SelectorMatch`, `AutomationException`) | Core, Workflow | none |
 | `MyRPA.Plugins` | Plugin host: `PluginManifestReader`, `PluginLoader`, `PluginLoadContext` (the only assembly loader), `PluginSet`/`IPluginRegistry`, `AddMyRpaPlugins` | Core, Workflow, Sdk, Activities | DI.Abstractions |
-| `MyRPA.Cli` (`myrpa`) | Composition root: Generic Host, logging (stderr), plugin loading (`--plugin`), commands `info`, `validate`, `run`, `plugins` | all of the above | Hosting |
+| `MyRPA.Studio.Core` | Studio logic, UI-framework neutral: `WorkflowDraft` document model, `DraftJson`, `DraftEdits`, `DocumentHistory` (undo/redo), `DraftClipboard`, `DraftValidator` (diagnostics → blocks), view models, `RunMonitor`, `StudioLogFeed`, UI service interfaces | Core, Workflow | CommunityToolkit.Mvvm, Logging.Abstractions |
+| `MyRPA.Studio` | Composition root and WPF shell (`net10.0-windows`, the only project allowed to use WPF): window, templates, drag-and-drop, dialogs | Core, Workflow, Activities, Runtime, Storage, Plugins, Studio.Core | Hosting, CommunityToolkit.Mvvm |
+| `MyRPA.Cli` (`myrpa`) | Composition root: Generic Host, logging (stderr), plugin loading (`--plugin`, `--plugin-config`), commands `info`, `validate`, `run`, `plugins`, `catalog` | Core … Plugins (not Studio) | Hosting |
 
 Plugins (outside `src`): `plugins/MyRPA.Browser.Playwright` (browser provider; the only project allowed to reference
 `Microsoft.Playwright`), `samples/plugins/MyRPA.Samples.DemoPlugin` (sample) and `tests/fixtures/*` (test fixtures).
@@ -57,7 +63,9 @@ runs through the real engine and includes the concurrent-isolation regression te
 activity contract through the real engine), `MyRPA.Plugins.Tests` (manifests, discovery, trust, lifecycle, isolation,
 unloading, the sample plugin), `MyRPA.Browser.Playwright.Tests` (real headless Chromium against a local test site,
 through the real plugin host), `MyRPA.Integration.Tests` (CLI in-process and as a child process, shipped samples,
-`--plugin`), `MyRPA.Architecture.Tests` (rules below).
+`--plugin`, `--plugin-config`, `catalog`), `MyRPA.Studio.Core.Tests` (document model, edits, view models and runs through
+the real engine, headless), `MyRPA.Studio.Tests` (Windows only: the WPF window rendered to PNG screenshots, composition,
+and the code rules on the WPF assembly), `MyRPA.Architecture.Tests` (rules below).
 
 ## 3. Dependency direction
 
@@ -80,6 +88,12 @@ graph BT
     Cli --> Storage
     Cli --> Plugins
     Cli --> Sdk
+    StudioCore[MyRPA.Studio.Core<br/>platform-neutral] --> Workflow
+    Studio[MyRPA.Studio<br/>WPF composition root] --> StudioCore
+    Studio --> Runtime
+    Studio --> Activities
+    Studio --> Storage
+    Studio --> Plugins
     PluginAsm[Plugin assemblies<br/>own AssemblyLoadContext] -.->|compile against| Sdk
 ```
 
@@ -91,7 +105,9 @@ graph BT
 - `MyRPA.Sdk` and `MyRPA.Plugins` were added in Phase 3 ([ADR-0013](../adr/0013-automation-sdk-and-activity-contract.md)).
   The engine and built-in libraries (Core, Workflow, Activities, Runtime, Storage) never reference them; plugins
   reference only `MyRPA.Sdk` (which brings Core and Workflow) and are never referenced by anything.
-- Only composition roots see the whole graph and reference `Microsoft.Extensions.Hosting`.
+- `MyRPA.Studio.Core` and `MyRPA.Studio` were added in Phase 5 ([ADR-0018](../adr/0018-studio-architecture.md)). Studio
+  logic depends only on Core and Workflow; only the `MyRPA.Studio` shell uses WPF.
+- Only composition roots (`myrpa`, `MyRPA.Studio`) see the whole graph and reference `Microsoft.Extensions.Hosting`.
 
 ## 4. Architecture rules (enforced by `tests/MyRPA.Architecture.Tests`)
 
@@ -103,7 +119,8 @@ graph BT
 | Plugin projects reference only `MyRPA.Sdk` and set `EnableDynamicLoading`; tests only build plugins (never compile against them) | `ProjectGraphTests.PluginProjects_*`, `TestProjects_BuildOnlyReferencesArePluginProjects` |
 | Technology packages live only in their provider plugin (`Microsoft.Playwright` → `MyRPA.Browser.Playwright`) | `ProjectGraphTests.TechnologyPackages_AreReferencedOnlyByTheirPlugin` |
 | Test projects reference only their subjects | `ProjectGraphTests.TestProjects_ReferenceOnlyTheirSubjects` |
-| Plain `net10.0` (no `-windows`), no `UseWPF`/`UseWindowsForms`/`FrameworkReference` | `PlatformNeutralityTests.*` |
+| Plain `net10.0` (no `-windows`), no `UseWPF`/`UseWindowsForms`/`FrameworkReference`, except the Studio shell | `PlatformNeutralityTests.*` |
+| Only `MyRPA.Studio` is a desktop UI project (`net10.0-windows`, WPF); its compiled code follows the same code rules | `PlatformNeutralityTests.DesktopUi_IsOnlyInTheStudioShell`, `MyRPA.Studio.Tests.StudioCodeRuleTests` |
 | Package allow-lists; Core/Workflow have no packages and reference only the BCL | `PlatformNeutralityTests.*` |
 | No forbidden technology (WPF/WinForms/XAML, Playwright/Selenium/CEF/WebView2, FlaUI/UIA, WF4/CoreWF, DB drivers/ORMs, AI SDKs, MCP, messaging/ASP.NET Core) | `PlatformNeutralityTests.*` |
 | Only composition roots reference Hosting and are executables | `PlatformNeutralityTests.OnlyCompositionRoots_*` |
@@ -117,12 +134,12 @@ Every detector is self-tested against known-bad samples, and rules were verified
 ## 5. Composition (CLI)
 
 ```text
-myrpa [--verbose] [--plugin <dir>]... <args>
+myrpa [--verbose] [--plugin <dir>]... [--plugin-config <file>] <args>
   → CliApplication.RunAsync
-      plugins (only if --plugin given): PluginLoader.LoadAsync → diagnostics to stderr → exit 5 if any failed
+      plugins (only if --plugin/--plugin-config given): PluginConfigurationFile → PluginLoader.LoadAsync → diagnostics to stderr → exit 5 if any failed
   → Host.CreateApplicationBuilder(ApplicationName = "myrpa", ContentRoot = install dir)
       logging: SimpleConsole → stderr; Warning (default) / Debug (--verbose); MyRPA.Workflow.Log at Information
-      services: AddMyRpaRuntime + AddMyRpaActivities + AddMyRpaStorage + commands (info, validate, run, plugins)
+      services: AddMyRpaRuntime + AddMyRpaActivities + AddMyRpaStorage + commands (info, validate, run, plugins, catalog)
                 + AddMyRpaPlugins(plugins)
       container: ValidateOnBuild + ValidateScopes
   → dispatcher → command (token linked to Ctrl+C) → exit code
@@ -152,14 +169,18 @@ before any of their code runs, optionally pinned by SHA-256, and every assembly 
 plugins are **fully trusted**: `AssemblyLoadContext` is not a security boundary, and declared capabilities are not
 enforced. Untrusted plugins need process isolation (future phases).
 
-## 8. Phase 4 outcome and handoff to Phase 5 (not started)
+## 8. Studio composition
 
-- Browser automation was delivered as a plugin exactly as planned, **without SDK changes**. The one host change was
-  verified path-based assembly loading (ADR-0016), because Playwright locates its driver next to its assembly.
-- Sessions are referenced by id strings (`browser-1`, …) held in workflow variables, with an implicit default when
-  exactly one session is open (ADR-0017).
-- For Studio (Phase 5): activity metadata (descriptors with property kinds, allowed values and descriptions) is available
-  from `IActivityCatalog` for built-ins and plugins alike; `IPluginRegistry` lists plugins. Studio must load plugins
-  through the same plugin host and must be a non-AOT host (ADR-0016).
-- Open question for Phase 6: the recorder and Studio will need browser contracts visible outside the plugin (shared
-  technology-contract assemblies, Phase 3 review item I2).
+Studio composes the same services as the CLI (`StudioComposition.BuildHost`): runtime, activities, storage and the plugin
+host, plus a `StudioLogFeed` logging provider, the WPF dialog/clipboard/dispatcher implementations and the view model.
+`MyRPA.Studio [workflow.json] [--plugin <dir>]... [--plugin-config <file>]` loads plugins before the host starts
+(required failures stop startup with exit code 5) and verifies plugin providers after it starts. See [studio.md](studio.md).
+
+## 9. Phase 5 outcome and handoff to Phase 6 (not started)
+
+- The designer consumes the one workflow model: every edit is validated by `WorkflowLoader`, and runs use
+  `IWorkflowRunner` — there is no Studio-specific engine or model (PRD 5.4).
+- Plugin activities (including `Browser.*`) appear in the toolbox and designer from their descriptors, with no Studio
+  change. `myrpa catalog` exports the same metadata (ADR-0020).
+- For Phase 6 (recorder): recorded activities can be inserted with `DraftEdits.Insert` at a `NodePath`; the recorder
+  still needs browser contracts visible outside the plugin (Phase 3 review item I2).

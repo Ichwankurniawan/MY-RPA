@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Studio logic (ADR-0018): the editable workflow document, edits, undo/redo, clipboard, validation mapping, view
+    models and the run session. Platform-neutral plain net10.0 — no WPF, no Windows APIs — so a future web Studio can
+    reuse it (Option A). References MyRPA.Core and MyRPA.Workflow only; it runs workflows through IWorkflowRunner and
+    validates through WorkflowLoader, the same engine and pipeline as the CLI.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Studio</RootNamespace>
+    <Description>MyRPA Studio logic: workflow document model, editing, validation and view models (UI-agnostic).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyRPA.Studio.Core.Tests" />
+  </ItemGroup>
+</Project>

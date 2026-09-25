@@ -3,10 +3,12 @@
 A modern, extensible RPA platform in C#/.NET 10, inspired by OpenRPA and redesigned from the
 [Phase 0 research](docs/research/openrpa-analysis.md). Product requirements: [MyRPA-PRD.md](MyRPA-PRD.md).
 
-**Status:** Phase 4 — Browser Automation. Versioned JSON workflows are validated and executed by a deterministic
-async engine with 12 control-flow activities, via the `myrpa` CLI. Plugins add activities and automation providers
-through the Automation SDK and are loaded into isolated `AssemblyLoadContext`s. The first real provider is the
-Playwright browser plugin (Chromium, 11 `Browser.*` activities). No UI (Studio is Phase 5) and no desktop automation yet.
+**Status:** Phase 5 — MyRPA Studio. Versioned JSON workflows are validated and executed by a deterministic async
+engine with 12 control-flow activities, via the `myrpa` CLI and **MyRPA Studio**, a WPF designer (drag/drop, nesting,
+properties, variables, arguments, undo/redo, copy/paste, save/open, run) that uses the same model and engine. Plugins
+add activities and automation providers through the Automation SDK and are loaded into isolated
+`AssemblyLoadContext`s. The first real provider is the Playwright browser plugin (Chromium, 11 `Browser.*`
+activities). No recorder and no desktop automation yet.
 
 ## Repository layout
 
@@ -21,11 +23,15 @@ src/
   MyRPA.Sdk           Automation SDK: plugin contract, provider/element/selector abstractions
   MyRPA.Plugins       plugin host: manifests, discovery, trust checks, AssemblyLoadContext loading, lifecycle
   MyRPA.Cli           `myrpa` command-line host (composition root)
+  MyRPA.Studio.Core   Studio logic: document model, edits, undo/redo, validation mapping, view models (no UI framework)
+  MyRPA.Studio        MyRPA Studio, the WPF designer (composition root; Windows only)
 plugins/
   MyRPA.Browser.Playwright  browser automation provider (Playwright; the only Playwright reference)
 tests/
   MyRPA.*.Tests       unit tests per library (Sdk: the activity contract; Plugins: loading and lifecycle)
   MyRPA.Integration.Tests   CLI in-process and as a real process
+  MyRPA.Studio.Core.Tests   Studio logic headless, through the real engine
+  MyRPA.Studio.Tests        WPF window smoke tests with screenshots (Windows only)
   MyRPA.Architecture.Tests  dependency, platform and security rules
   fixtures/           plugins used by the plugin tests
 samples/              example workflows
@@ -39,7 +45,8 @@ Engine: [docs/architecture/execution-model.md](docs/architecture/execution-model
 Workflow format: [docs/architecture/workflow-format.md](docs/architecture/workflow-format.md) ·
 SDK: [docs/architecture/automation-sdk.md](docs/architecture/automation-sdk.md) ·
 Plugins: [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) ·
-Browser: [docs/architecture/browser-automation.md](docs/architecture/browser-automation.md).
+Browser: [docs/architecture/browser-automation.md](docs/architecture/browser-automation.md) ·
+Studio: [docs/architecture/studio.md](docs/architecture/studio.md).
 
 ## Development setup
 
@@ -78,8 +85,8 @@ dotnet run --project src/MyRPA.Cli -- run samples/hello-world.json --arg userNam
 ```text
 myrpa validate <workflow.json>
 myrpa run <workflow.json> [--arg name=value]... [--timeout seconds] [--correlation-id id]
-myrpa plugins | info | help | version
-global options (anywhere): --verbose, --plugin <directory> (repeatable)
+myrpa plugins | catalog | info | help | version
+global options (anywhere): --verbose, --plugin <directory> (repeatable), --plugin-config <file>
 ```
 
 `run` prints the execution result (status, ids, outputs, error) as JSON on stdout; workflow `Core.Log` messages and
@@ -96,7 +103,8 @@ dotnet build samples/plugins/MyRPA.Samples.DemoPlugin
 dotnet run --project src/MyRPA.Cli -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Debug/net10.0 run samples/plugins/demo-plugin.json --arg customer=Grace
 ```
 
-A plugin is a directory with a `myrpa-plugin.json` manifest; only directories you name are loaded. Plugins run with
+A plugin is a directory with a `myrpa-plugin.json` manifest; only directories you name are loaded (with `--plugin`,
+or in a plugin configuration file with SHA-256 pins and settings: `--plugin-config`, ADR-0019). Plugins run with
 full trust inside the process — `AssemblyLoadContext` isolates loading, it is not a security boundary. See
 [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md).
 
@@ -112,6 +120,16 @@ A minimal workflow:
   "root": { "id": "say", "type": "Core.Log", "properties": { "message": "'Hello, ' + who" } }
 }
 ```
+
+## Use Studio
+
+```bash
+dotnet run --project src/MyRPA.Studio -- samples/control-flow.json
+```
+
+Drag activities from the left onto the designer, edit their properties on the right, and press F5 to run. Studio
+accepts the same `--plugin` / `--plugin-config` options as the CLI. See
+[docs/architecture/studio.md](docs/architecture/studio.md) (includes a manual test script).
 
 ## Contributing
 

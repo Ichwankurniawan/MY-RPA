@@ -22,7 +22,7 @@ public sealed class CliHostTests
         Assert.NotNull(host.Services.GetRequiredService<CliCommandDispatcher>());
         Assert.NotNull(host.Services.GetRequiredService<IWorkflowRunner>());
         Assert.NotNull(host.Services.GetRequiredService<IExecutionScopeFactory>());
-        Assert.Equal(["info", "plugins", "run", "validate"], host.Services.GetServices<ICliCommand>().Select(c => c.Name).Order());
+        Assert.Equal(["catalog", "info", "plugins", "run", "validate"], host.Services.GetServices<ICliCommand>().Select(c => c.Name).Order());
         using var scope = host.Services.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowResolver>());
     }

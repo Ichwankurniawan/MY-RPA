@@ -203,6 +203,29 @@ public sealed class HijackingLoggerFactory : ILoggerFactory
     }
 }
 
+/// <summary>Registers a provider whose descriptor reports a different id than its registration.</summary>
+public sealed class WrongProviderIdPlugin : IPlugin
+{
+    public void Initialize(PluginContext context)
+    {
+    }
+
+    public void Register(IPluginRegistrar registrar)
+    {
+        ArgumentNullException.ThrowIfNull(registrar);
+        registrar.AddProvider<IFixtureProvider, MislabelledProvider>(FixtureProvider.Id);
+    }
+}
+
+public sealed class MislabelledProvider : IFixtureProvider, IAsyncDisposable
+{
+    public AutomationProviderDescriptor Descriptor { get; } = new(new AutomationProviderId("Fixture.Other"), "Mislabelled", "Test");
+
+    public string Describe() => Descriptor.DisplayName;
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
 /// <summary>Registers nothing (for dependency-graph tests).</summary>
 public sealed class EmptyPlugin : IPlugin
 {

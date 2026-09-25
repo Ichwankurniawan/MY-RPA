@@ -70,7 +70,7 @@ public sealed class CliCommandDispatcher
 
     private async Task WriteHelpAsync(TextWriter writer)
     {
-        await writer.WriteLineAsync("Usage: myrpa [--verbose] [--plugin <directory>]... <command> [arguments]").ConfigureAwait(false);
+        await writer.WriteLineAsync("Usage: myrpa [--verbose] [--plugin <directory>]... [--plugin-config <file>] <command> [arguments]").ConfigureAwait(false);
         await writer.WriteLineAsync().ConfigureAwait(false);
         await writer.WriteLineAsync("Commands:").ConfigureAwait(false);
         foreach (var command in _commands.Values)
@@ -88,6 +88,7 @@ public sealed class CliCommandDispatcher
         await writer.WriteLineAsync("Options:").ConfigureAwait(false);
         await writer.WriteLineAsync("  --verbose           Write debug logs to standard error (workflow Log messages are always shown).").ConfigureAwait(false);
         await writer.WriteLineAsync("  --plugin <directory> Load the plugin in <directory> (contains myrpa-plugin.json). Repeatable.").ConfigureAwait(false);
+        await writer.WriteLineAsync("  --plugin-config <file> Load the plugins listed in a plugin configuration file (pins, settings).").ConfigureAwait(false);
         await writer.WriteLineAsync("                      Plugins run with full trust: only load plugins you trust.").ConfigureAwait(false);
         await writer.WriteLineAsync().ConfigureAwait(false);
         await writer.WriteLineAsync("Exit codes: 0 success, 1 failure, 2 usage, 3 invalid workflow, 4 timed out, 5 plugin failure, 130 cancelled.").ConfigureAwait(false);

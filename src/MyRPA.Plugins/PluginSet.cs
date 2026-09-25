@@ -107,6 +107,31 @@ public sealed class PluginSet : IPluginRegistry, IAsyncDisposable
     }
 
     /// <summary>
+    /// Creates every plugin provider once, at host startup, so a provider whose <c>Descriptor.Id</c> does not match its
+    /// registration (or whose constructor fails) is reported before any workflow runs rather than at first use.
+    /// </summary>
+    /// <param name="services">The host's service provider built from the collection passed to <see cref="AddTo"/>.</param>
+    /// <exception cref="InvalidOperationException">A provider could not be created or reports the wrong id.</exception>
+    public void VerifyProviders(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        foreach (var plugin in _plugins)
+        {
+            foreach (var serviceType in plugin.Registrar.ProviderServiceTypes)
+            {
+                try
+                {
+                    _ = services.GetRequiredService(serviceType);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    throw new InvalidOperationException($"Plugin '{plugin.Manifest.Id}': provider {serviceType.Name} could not be created: {ex.Message}", ex);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Disposes every plugin entry object (in reverse load order) and unloads the plugin contexts. Unloading completes
     /// when nothing references plugin code any more; a plugin that keeps threads or static roots alive cannot be
     /// unloaded (ADR-0014). Disposal failures are added to <see cref="Diagnostics"/> as warnings, never thrown.

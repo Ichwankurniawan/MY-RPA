@@ -18,7 +18,7 @@ public static class CliExitCodes
     /// <summary>The workflow timed out.</summary>
     public const int TimedOut = 4;
 
-    /// <summary>A plugin given with <c>--plugin</c> could not be loaded (see the diagnostics on standard error).</summary>
+    /// <summary>A plugin given with <c>--plugin</c> or <c>--plugin-config</c> could not be loaded, or the configuration is invalid (see standard error).</summary>
     public const int PluginFailure = 5;
 
     /// <summary>The command was cancelled (for example Ctrl+C).</summary>

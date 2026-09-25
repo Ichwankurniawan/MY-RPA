@@ -1,6 +1,6 @@
 # ADR-0004: Platform-neutral Core with zero package dependencies
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0018](0018-studio-architecture.md) (the `MyRPA.Studio` shell alone may target `net10.0-windows` and use WPF)
 - Date: 2026-09-23
 - Phase: 1
 

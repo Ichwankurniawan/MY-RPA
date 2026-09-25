@@ -11,6 +11,10 @@
     <!-- ADR-0017: the browser provider plugin. Browsers: Chromium 153.0.8010.12 (Playwright revision 1243). -->
     <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
   </ItemGroup>
+  <ItemGroup Label="Studio only (ADR-0018)">
+    <!-- MVVM source generators (Microsoft, MIT, platform-neutral) for MyRPA.Studio.Core view models. -->
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
   <ItemGroup Label="Composition roots only">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
   </ItemGroup>

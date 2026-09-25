@@ -24,6 +24,9 @@ internal sealed class PluginRegistrar(PluginInfo plugin, PluginManifest manifest
 
     public IReadOnlyList<ActivityRegistration> Activities => _activities;
 
+    /// <summary>The service types under which the plugin's providers are registered.</summary>
+    public IReadOnlyList<Type> ProviderServiceTypes => [.. _providers.Select(p => p.Service)];
+
     public IPluginRegistrar AddActivity<TActivity>(ActivityDescriptor descriptor)
         where TActivity : class, IActivity
     {
@@ -133,7 +136,17 @@ internal sealed class PluginRegistrar(PluginInfo plugin, PluginManifest manifest
         var provider = (IAutomationProvider)ActivatorUtilities.CreateInstance(services, implementation);
         if (!Equals(provider.Descriptor?.Id, id))
         {
-            (provider as IDisposable)?.Dispose();
+            switch (provider)
+            {
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+                case IAsyncDisposable asyncDisposable:
+                    // Factories are synchronous; observe the disposal so a failure is not lost as an unobserved exception.
+                    _ = asyncDisposable.DisposeAsync().AsTask().ContinueWith(t => t.Exception, TaskScheduler.Default);
+                    break;
+            }
+
             throw new InvalidOperationException($"Provider registered as '{id}' reports id '{provider.Descriptor?.Id}'.");
         }
 

@@ -185,7 +185,7 @@ flowchart LR
     activity.
   - How selectors are written in workflow files, and how alternatives are ranked, is decided in Phase 6.
 
-## Writing an activity (from the sample plugin)
+## Writing an activity (abridged from the sample plugin)
 
 ```csharp
 public sealed class GetFieldActivity(IDemoTextProvider provider) : IActivity
@@ -200,7 +200,12 @@ public sealed class GetFieldActivity(IDemoTextProvider provider) : IActivity
 
     public async ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
     {
-        var root = provider.OpenDocument((IReadOnlyDictionary<string, object?>)context.Evaluate("document")!);
+        if (context.Evaluate("document") is not IReadOnlyDictionary<string, object?> fields)
+        {
+            throw new ActivityFailedException("InvalidArgument", "'document' must evaluate to a Dictionary.");
+        }
+
+        var root = provider.OpenDocument(fields);
         var selector = new Selector(DemoTextProvider.Id, [new SelectorStep("Demo.Field", context.GetText("field"))]);
         var match = await provider.ResolveAsync(selector, root, context.CancellationToken);
         var text = await match.RequireSingle().GetTextAsync(context.CancellationToken); // ElementNotFound if missing

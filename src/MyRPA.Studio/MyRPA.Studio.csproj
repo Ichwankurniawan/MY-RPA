@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    MyRPA Studio (ADR-0018): the desktop workflow designer. A composition root and the only project allowed to target
+    net10.0-windows and use WPF. All Studio logic lives in the platform-neutral MyRPA.Studio.Core; this project is the
+    WPF shell (windows, templates, drag and drop, dialogs) and composes the same engine the CLI uses.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>MyRPA.Studio</RootNamespace>
+    <AssemblyName>MyRPA.Studio</AssemblyName>
+    <Description>MyRPA Studio, the desktop workflow designer.</Description>
+    <!-- Lets Linux CI compile the shell; it runs only on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />
+    <ProjectReference Include="..\MyRPA.Workflow\MyRPA.Workflow.csproj" />
+    <ProjectReference Include="..\MyRPA.Activities\MyRPA.Activities.csproj" />
+    <ProjectReference Include="..\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\MyRPA.Storage\MyRPA.Storage.csproj" />
+    <ProjectReference Include="..\MyRPA.Plugins\MyRPA.Plugins.csproj" />
+    <ProjectReference Include="..\MyRPA.Studio.Core\MyRPA.Studio.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyRPA.Studio.Tests" />
+  </ItemGroup>
+</Project>

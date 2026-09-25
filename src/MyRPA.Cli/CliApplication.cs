@@ -17,6 +17,8 @@ public static partial class CliApplication
 
     private const string PluginOption = "--plugin";
 
+    private const string PluginConfigOption = "--plugin-config";
+
     /// <summary>Runs the CLI.</summary>
     /// <param name="args">Command-line arguments.</param>
     /// <param name="standardOutput">Destination for command results.</param>
@@ -31,7 +33,7 @@ public static partial class CliApplication
     {
         ArgumentNullException.ThrowIfNull(args);
         var output = new CliOutput(standardOutput, standardError);
-        if (!TryParseGlobalOptions(args, out var verbose, out var pluginDirectories, out var commandArgs, out var usageError))
+        if (!TryParseGlobalOptions(args, out var verbose, out var pluginDirectories, out var pluginConfig, out var commandArgs, out var usageError))
         {
             await output.Error.WriteLineAsync($"Error: {usageError}").ConfigureAwait(false);
             return CliExitCodes.Usage;
@@ -40,9 +42,22 @@ public static partial class CliApplication
         PluginSet? plugins = null;
         try
         {
-            if (pluginDirectories.Count > 0)
+            if (pluginDirectories.Count > 0 || pluginConfig is not null)
             {
-                plugins = await LoadPluginsAsync(pluginDirectories, cancellationToken).ConfigureAwait(false);
+                PluginHostOptions options;
+                try
+                {
+                    // The configuration file (pins, settings, denied capabilities) and plugins named on the command line
+                    // together form the operator's explicit allow-list.
+                    options = await PluginConfigurationFile.CreateHostOptionsAsync(pluginDirectories, pluginConfig, cancellationToken).ConfigureAwait(false);
+                }
+                catch (PluginConfigurationException ex)
+                {
+                    await output.Error.WriteLineAsync($"Error: {ex.Message}").ConfigureAwait(false);
+                    return CliExitCodes.PluginFailure;
+                }
+
+                plugins = await PluginLoader.LoadAsync(options, cancellationToken).ConfigureAwait(false);
                 foreach (var diagnostic in plugins.Diagnostics)
                 {
                     await output.Error.WriteLineAsync(diagnostic.ToString()).ConfigureAwait(false);
@@ -126,6 +141,19 @@ public static partial class CliApplication
         try
         {
             await host.StartAsync(cancellationToken).ConfigureAwait(false);
+            if (plugins is not null)
+            {
+                try
+                {
+                    plugins.VerifyProviders(host.Services);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    await output.Error.WriteLineAsync($"Error: {ex.Message}").ConfigureAwait(false);
+                    return CliExitCodes.PluginFailure;
+                }
+            }
+
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, lifetime.ApplicationStopping);
             var dispatcher = host.Services.GetRequiredService<CliCommandDispatcher>();
@@ -150,27 +178,17 @@ public static partial class CliApplication
         }
     }
 
-    private static Task<PluginSet> LoadPluginsAsync(IReadOnlyList<string> directories, CancellationToken cancellationToken)
-    {
-        // Plugins named on the command line are the operator's explicit allow-list; each one is required.
-        var options = new PluginHostOptions();
-        foreach (var directory in directories)
-        {
-            options.Sources.Add(new PluginSource { Directory = Path.GetFullPath(directory), Required = true });
-        }
-
-        return PluginLoader.LoadAsync(options, cancellationToken);
-    }
-
     private static bool TryParseGlobalOptions(
         string[] args,
         out bool verbose,
         out List<string> pluginDirectories,
+        out string? pluginConfig,
         out string[] commandArgs,
         out string? error)
     {
         verbose = false;
         pluginDirectories = [];
+        pluginConfig = null;
         error = null;
         var rest = new List<string>();
         for (var i = 0; i < args.Length; i++)
@@ -189,6 +207,17 @@ public static partial class CliApplication
                 }
 
                 pluginDirectories.Add(args[++i]);
+            }
+            else if (string.Equals(args[i], PluginConfigOption, StringComparison.Ordinal))
+            {
+                if (i + 1 >= args.Length || string.IsNullOrWhiteSpace(args[i + 1]) || pluginConfig is not null)
+                {
+                    error = "--plugin-config needs one plugin configuration file (given once).";
+                    commandArgs = [];
+                    return false;
+                }
+
+                pluginConfig = args[++i];
             }
             else
             {

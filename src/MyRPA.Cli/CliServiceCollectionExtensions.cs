@@ -34,6 +34,7 @@ public static class CliServiceCollectionExtensions
         services.AddSingleton<ICliCommand, ValidateCommand>();
         services.AddSingleton<ICliCommand, RunCommand>();
         services.AddSingleton<ICliCommand, PluginsCommand>();
+        services.AddSingleton<ICliCommand, CatalogCommand>();
         return services;
     }
 }

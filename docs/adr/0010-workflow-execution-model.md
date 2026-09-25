@@ -1,6 +1,6 @@
 # ADR-0010: Workflow execution model, contracts and lifetimes
 
-- Status: Accepted
+- Status: Accepted; activity lifetime (transient from the run scope) superseded by [ADR-0013](0013-automation-sdk-and-activity-contract.md) (one instance per invocation, disposed by the engine)
 - Date: 2026-09-23
 - Phase: 2
 - Amends: ADR-0003 (Activities may reference Workflow; Activities may use Logging.Abstractions)

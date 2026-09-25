@@ -1,4 +1,4 @@
-# Execution Model (Phase 2)
+# Execution Model
 
 Decisions: [ADR-0010](../adr/0010-workflow-execution-model.md) (execution model), [ADR-0011](../adr/0011-workflow-json-format-and-validation-pipeline.md)
 (loading/validation), [ADR-0012](../adr/0012-invoke-workflow-resolution-and-limits.md) (InvokeWorkflow),

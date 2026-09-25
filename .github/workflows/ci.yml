@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Linux proves the platform-neutral projects stay platform-neutral (ADR-0004).
+        # Linux proves the platform-neutral projects stay platform-neutral (ADR-0004). The WPF Studio (ADR-0018) is
+        # compiled on Linux (EnableWindowsTargeting) and tested on Windows only.
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
@@ -48,7 +49,7 @@ jobs:
         shell: pwsh
         run: ./plugins/MyRPA.Browser.Playwright/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
 
-      - name: Test (unit, integration, architecture, browser)
+      - name: Test (unit, integration, architecture, browser; Studio window tests on Windows)
         run: dotnet test --solution MyRPA.sln --configuration Release --no-build
 
       - name: CLI smoke test
@@ -57,4 +58,5 @@ jobs:
           dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- validate samples/control-flow.json
           dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- run samples/hello-world.json --arg userName=CI
           dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Release/net10.0 plugins
+          dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Release/net10.0 catalog
           dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Release/net10.0 run samples/plugins/demo-plugin.json

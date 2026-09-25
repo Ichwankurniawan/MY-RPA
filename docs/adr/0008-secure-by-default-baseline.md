@@ -1,6 +1,6 @@
 # ADR-0008: Secure-by-default baseline
 
-- Status: Accepted; extended by [ADR-0012](0012-invoke-workflow-resolution-and-limits.md) (process and network APIs banned; file confinement)
+- Status: Accepted; extended by [ADR-0012](0012-invoke-workflow-resolution-and-limits.md) (process and network APIs banned; file confinement), [ADR-0014](0014-plugin-manifest-lifecycle-and-loading.md) (the only assembly-loading exemption), [ADR-0015](0015-plugin-trust-model.md) (plugin trust model) and [ADR-0016](0016-verified-path-based-plugin-loading.md) (verified path loading)
 - Date: 2026-09-23
 - Phase: 1 (baseline); Phase 11 extends
 
