@@ -60,3 +60,31 @@ jobs:
           dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Release/net10.0 plugins
           dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Release/net10.0 catalog
           dotnet run --project src/MyRPA.Cli --configuration Release --no-build -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Release/net10.0 run samples/plugins/demo-plugin.json
+
+  web-studio:
+    # ADR-0028: the Web Studio (web/studio) is an npm project outside the .NET solution.
+    name: Web Studio (typecheck, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/studio
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/studio/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit and component tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 
 namespace MyRPA.Architecture.Tests;
 
@@ -102,6 +103,42 @@ public static class ArchitectureRules
     {
         ["Microsoft.Playwright"] = "MyRPA.Browser.Playwright",
     };
+
+    /// <summary>
+    /// npm packages the Web Studio (<c>web/studio</c>) must not use. ADR-0021 rejected dnd-kit; the designer uses plain
+    /// pointer hit-testing and keyboard commands, so no drag-and-drop framework replaces it.
+    /// </summary>
+    public static IReadOnlyList<string> RejectedWebPackagePrefixes { get; } =
+        ["@dnd-kit/", "react-dnd", "react-beautiful-dnd", "@hello-pangea/dnd", "@atlaskit/pragmatic-drag-and-drop", "react-draggable", "react-sortable", "sortablejs"];
+
+    /// <summary>Rejected packages named by an npm <c>package.json</c> (dependency sections) or <c>package-lock.json</c> (<c>packages</c>).</summary>
+    public static IReadOnlyList<string> FindRejectedWebPackages(string npmJson)
+    {
+        using var document = JsonDocument.Parse(npmJson);
+        var root = document.RootElement;
+        var names = new List<string>();
+        foreach (var section in new[] { "dependencies", "devDependencies", "peerDependencies", "optionalDependencies" })
+        {
+            if (root.TryGetProperty(section, out var dependencies) && dependencies.ValueKind == JsonValueKind.Object)
+            {
+                names.AddRange(dependencies.EnumerateObject().Select(p => p.Name));
+            }
+        }
+
+        if (root.TryGetProperty("packages", out var packages) && packages.ValueKind == JsonValueKind.Object)
+        {
+            const string marker = "node_modules/";
+            names.AddRange(packages.EnumerateObject()
+                .Select(p => p.Name)
+                .Where(n => n.Contains(marker, StringComparison.Ordinal))
+                .Select(n => n[(n.LastIndexOf(marker, StringComparison.Ordinal) + marker.Length)..]));
+        }
+
+        return [.. names
+            .Where(n => RejectedWebPackagePrefixes.Any(prefix => n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+    }
 
     /// <summary>Returns <see langword="true"/> when <paramref name="violation"/> (from the IL scan) is exempted.</summary>
     public static bool IsExempt(string violation) =>

@@ -1,6 +1,6 @@
 # MyRPA.Server (local mode)
 
-Status: Web Studio W2. Decisions:
+Status: Web Studio W2; `--web` added in W3 ([ADR-0028](../adr/0028-web-studio-first-slice.md)). Decisions:
 - [ADR-0022](../adr/0022-server-control-plane-and-project-structure.md): control plane;
 - [ADR-0023](../adr/0023-first-class-execution-events.md): execution events;
 - [ADR-0024](../adr/0024-execution-event-streaming-sse.md): streaming;
@@ -8,17 +8,21 @@ Status: Web Studio W2. Decisions:
 - [ADR-0026](../adr/0026-missing-property-diagnostic-location.md): diagnostic location;
 - [ADR-0027](../adr/0027-invoke-workflow-confinement-in-projects.md): InvokeWorkflow confinement.
 
-The server is the control plane the Web Studio (W3) will talk to. It composes the same engine, activities, storage and
-plugin host as the CLI, plus `MyRPA.Execution.Hosting`, and runs workflows in-process. It has no UI of its own.
+The server is the control plane the Web Studio ([web-studio.md](web-studio.md)) talks to. It composes the same engine,
+activities, storage and plugin host as the CLI, plus `MyRPA.Execution.Hosting`, and runs workflows in-process. With
+`--web` it also serves the built Web Studio from its own origin.
 
 ## Start
 
 ```bash
 dotnet run --project src/MyRPA.Server -- --project samples --port 0
+dotnet run --project src/MyRPA.Server -- --project samples --web web/studio/dist --port 0   # with the Web Studio
 ```
 
-Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>]... [--plugin-config <file>] [--port <n>]`.
+Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]`.
 - **Port:** the default is 5310; `0` picks a free port.
+- **Web Studio:** `--web <dir>` serves the built Studio (`web/studio/dist`, must contain `index.html`). Without it,
+  `GET /` returns a short text and no UI is served.
 - **Plugins:** loaded exactly as in the CLI (ADR-0014, ADR-0019). A plugin that fails to load stops startup with exit code 5.
 - **Start link:** the server prints a one-time link, `http://127.0.0.1:<port>/?token=…`. Opening it creates the browser
   session. The server does not open a browser itself: starting a process is a banned API (ADR-0012).
@@ -38,6 +42,8 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>
 - **Every response** carries a Content Security Policy (`default-src 'self'`, `frame-ancestors 'none'`), `nosniff`,
   `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`. API responses are `no-store`.
 - **Request bodies:** at most 5 MB.
+- **Web Studio assets** (`--web`) pass through the same checks. The CSP needs no exception: the Vite build has no
+  inline script or style.
 - **Files:** only `.json` files inside registered projects.
   - Paths are relative with `/`.
   - `..`, empty, hidden (`.name`) and absolute segments are rejected.
@@ -48,6 +54,8 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>
 
 | Method and path | Purpose |
 |---|---|
+| `GET /` | With a `token`: the start link (session cookie, redirect to `/`). Otherwise the Web Studio's `index.html` (`--web`), or a short text |
+| `GET /<file>` | With `--web`: the Studio's static assets. No session needed; hidden and unknown file types are not served |
 | `GET /api/info` | Server name, version, `mode: "local"`, supported workflow schema versions, project names |
 | `GET /api/activities` | The activity catalog snapshot (ADR-0020 format), built-in and plugin activities |
 | `GET /api/plugins` | Loaded plugins (id, name, version, SHA-256, activities) and their load diagnostics |

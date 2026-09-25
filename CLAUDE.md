@@ -4,8 +4,8 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W2 — MyRPA.Server local mode (complete, awaiting
-  review).** W3 (Web Studio frontend) and Phase 6 must not start without authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W3 — first Web Studio vertical slice (complete,
+  awaiting review).** W4 and Phase 6 must not start without authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -16,7 +16,7 @@ Guidance for AI agents and contributors working in this repository.
 1. `MyRPA-PRD.md` — requirements and phases.
 2. `docs/adr/` — accepted decisions (they refine the PRD).
 3. `docs/architecture/overview.md`, `execution-model.md`, `workflow-format.md`, `automation-sdk.md`,
-   `plugin-system.md`, `browser-automation.md`, `studio.md`, `server.md` — current architecture.
+   `plugin-system.md`, `browser-automation.md`, `studio.md`, `server.md`, `web-studio.md` — current architecture.
 4. `docs/research/` — Phase 0 OpenRPA evidence (codes R#/D#/N# in `openrpa-analysis.md`).
 5. `reference/openrpa/` — read-only OpenRPA clone (MPL-2.0). Never modify it; never copy its code into MyRPA.
 
@@ -30,6 +30,8 @@ dotnet run --project src/MyRPA.Cli -- run samples/hello-world.json --arg userNam
 dotnet run --project src/MyRPA.Cli -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Debug/net10.0 run samples/plugins/demo-plugin.json
 dotnet run --project src/MyRPA.Studio -- samples/control-flow.json   # Studio (Windows)
 dotnet run --project src/MyRPA.Server -- --project samples --port 0      # control plane; open the printed link
+dotnet run --project src/MyRPA.Server -- --project samples --web web/studio/dist --port 0   # with the Web Studio
+cd web/studio && npm ci && npm test && npm run build   # Web Studio; `npm run smoke` = end-to-end (needs Release build)
 dotnet format MyRPA.sln --verify-no-changes   # CI enforces naming rules the build does not
 pwsh plugins/MyRPA.Browser.Playwright/bin/Debug/net10.0/playwright.ps1 install chromium   # once, for browser tests
 ```
@@ -103,6 +105,9 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   listeners; observer failures never change a run's outcome; events carry no workflow data. Hosts use
   `MyRPA.Execution.Hosting` (`ExecutionHost`) rather than calling the runner and capturing events themselves.
 - `spikes/` holds throwaway measurement code: not in the solution, never referenced from `src`.
+- Web Studio (`web/studio`, ADR-0028): the document model is the v1.0 JSON itself (immutable, client keys in a
+  `WeakMap`, never saved); files that cannot be written back unchanged open read-only; one `EventSource` per tab; no
+  state, UI, editor or drag-and-drop library (dnd-kit and other DnD frameworks fail `WebStudioRulesTests`).
 
 ## Studio conventions (Phase 5, ADR-0018; frozen reference, see ADR-0021)
 

@@ -1,6 +1,8 @@
 # ADR-0022: MyRPA.Server control plane and project structure
 
-- Status: Accepted. W1 built `MyRPA.Contracts` and `MyRPA.Execution.Hosting`. W2 built `MyRPA.Server` in local mode; see [server.md](../architecture/server.md).
+- Status: Accepted. W1 built `MyRPA.Contracts` and `MyRPA.Execution.Hosting`. W2 built `MyRPA.Server` in local mode; see [server.md](../architecture/server.md). W3 added serving the built
+  `web/studio` (`--web`) and the first Web Studio slice (ADR-0028); its wire types are hand-written for now (ADR-0028
+  decision 6).
 - Date: 2026-09-25
 - Phase: Web Studio W0
 - Amends: ADR-0003 (new projects and dependency direction), ADR-0004 and ADR-0008 (ASP.NET Core allowed in server executables only)

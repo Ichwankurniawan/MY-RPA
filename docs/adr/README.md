@@ -25,9 +25,10 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0019](0019-plugin-configuration-file.md) | Plugin configuration file | Accepted | 5 |
 | [0020](0020-activity-catalog-snapshot.md) | Activity catalog snapshot | Accepted | 5 |
 | [0021](0021-web-first-studio-and-wpf-removal.md) | Web-first Studio; WPF temporary and removed at exit (with exit criteria) | Accepted | W0 |
-| [0022](0022-server-control-plane-and-project-structure.md) | MyRPA.Server control plane and project structure | Accepted | W0 |
+| [0022](0022-server-control-plane-and-project-structure.md) | MyRPA.Server control plane and project structure | Accepted; Studio serving added in W3 | W0 |
 | [0023](0023-first-class-execution-events.md) | First-class execution events (engine observer hook) | Accepted, implemented in W1 | W0 |
 | [0024](0024-execution-event-streaming-sse.md) | Execution event streaming to browsers (SSE, one stream per tab) | Accepted, implemented in W2 | W0 |
 | [0025](0025-local-mode-security.md) | Local-mode security for MyRPA.Server | Accepted, implemented in W2 | W0 |
 | [0026](0026-missing-property-diagnostic-location.md) | Missing-property diagnostics point at the property | Accepted, implemented in W2 | W2 |
 | [0027](0027-invoke-workflow-confinement-in-projects.md) | InvokeWorkflow confinement in server projects | Keep ADR-0012 in W2; project-root resolver **Proposed, deferred** | W2 |
+| [0028](0028-web-studio-first-slice.md) | Web Studio first slice (W3) | Accepted for W3; hand-written wire types **need approval** | W3 |

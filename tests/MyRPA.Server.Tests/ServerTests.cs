@@ -174,13 +174,19 @@ public sealed class ProjectAndCatalogTests
             Assert.Null(ServerCommandLine.Parse(["--port", "70000", "--project", folder.FullName], out _));
             Assert.Null(ServerCommandLine.Parse(["--project", folder.FullName, "--project", folder.FullName], out _));
 
-            var options = ServerCommandLine.Parse(["--project", folder.FullName, "--port", "0", "--plugin", "p", "--plugin-config", "c.json"], out var error);
+            Assert.Null(ServerCommandLine.Parse(["--project", folder.FullName, "--web", folder.FullName], out var noIndex));
+            Assert.Contains("index.html", noIndex, StringComparison.Ordinal);
+            File.WriteAllText(Path.Combine(folder.FullName, "index.html"), "<!doctype html>");
+
+            var options = ServerCommandLine.Parse(["--project", folder.FullName, "--port", "0", "--plugin", "p", "--plugin-config", "c.json", "--web", folder.FullName], out var error);
 
             Assert.Null(error);
             Assert.Equal(folder.Name, Assert.Single(options!.Projects).Name);
             Assert.Equal(0, options.Port);
             Assert.Equal(["p"], options.PluginDirectories);
             Assert.Equal("c.json", options.PluginConfiguration);
+            Assert.Equal(folder.FullName, options.WebRoot);
+            Assert.Null(ServerCommandLine.Parse(["--project", folder.FullName, "--web", folder.FullName, "--web", folder.FullName], out _));
         }
         finally
         {
@@ -517,5 +523,89 @@ public sealed class RunAndStreamTests
         {
             Assert.Equal(message, Assert.Single(events, e => e.RunId == run && e.Kind == "log").Data.GetProperty("message").GetString());
         }
+    }
+}
+
+/// <summary>The built Web Studio served from the server's own origin (ADR-0022, ADR-0025).</summary>
+public sealed class WebStudioHostingTests : IDisposable
+{
+    private readonly DirectoryInfo _web = Directory.CreateTempSubdirectory("myrpa-web-");
+
+    public WebStudioHostingTests()
+    {
+        File.WriteAllText(Path.Combine(_web.FullName, "index.html"), "<!doctype html><title>MyRPA Studio</title>");
+        Directory.CreateDirectory(Path.Combine(_web.FullName, "assets"));
+        File.WriteAllText(Path.Combine(_web.FullName, "assets", "app.js"), "export {};");
+        File.WriteAllText(Path.Combine(_web.FullName, ".env"), "SECRET=1");
+        File.WriteAllText(Path.Combine(_web.FullName, "notes.unknownext"), "x");
+        File.WriteAllText(Path.Combine(_web.Parent!.FullName, _web.Name + "-outside.json"), "{}");
+    }
+
+    private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    public void Dispose()
+    {
+        File.Delete(Path.Combine(_web.Parent!.FullName, _web.Name + "-outside.json"));
+        _web.Delete(recursive: true);
+    }
+
+    [Fact]
+    public async Task StartLink_OpensTheStudio_WithTheSecurityHeaders()
+    {
+        await using var h = await ServerHarness.StartAsync(o => o with { WebRoot = _web.FullName }, signIn: false);
+        await h.SignInAsync(h.Client);
+
+        using var response = await h.Client.GetAsync("/", Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("MyRPA Studio", await response.Content.ReadAsStringAsync(Token), StringComparison.Ordinal);
+        Assert.StartsWith("default-src 'self'", response.Headers.GetValues("Content-Security-Policy").Single(), StringComparison.Ordinal);
+        Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
+        Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task Assets_AreServed_WithTheSameGuard_ButApiStillNeedsASession()
+    {
+        await using var h = await ServerHarness.StartAsync(o => o with { WebRoot = _web.FullName }, signIn: false);
+
+        using var asset = await h.Client.GetAsync("/assets/app.js", Token);
+        using var api = await h.Client.GetAsync("/api/info", Token);
+        using var foreignHost = new HttpRequestMessage(HttpMethod.Get, "/assets/app.js");
+        foreignHost.Headers.Host = "attacker.example";
+        using var rebound = await h.Client.SendAsync(foreignHost, Token);
+
+        Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
+        Assert.Equal("text/javascript", asset.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", asset.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal(HttpStatusCode.Unauthorized, api.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, rebound.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/.env")]
+    [InlineData("/notes.unknownext")]
+    [InlineData("/%2e%2e/outside.json")]
+    [InlineData("/assets/%2e%2e/%2e%2e/outside.json")]
+    public async Task HiddenUnknownOrOutsideFiles_AreNotServed(string path)
+    {
+        await using var h = await ServerHarness.StartAsync(o => o with { WebRoot = _web.FullName });
+
+        using var response = await h.Client.GetAsync(path.Replace("outside.json", _web.Name + "-outside.json", StringComparison.Ordinal), Token);
+
+        Assert.NotEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WithoutAWebRoot_TheRootServesNoUi()
+    {
+        await using var h = await ServerHarness.StartAsync();
+
+        using var root = await h.Client.GetAsync("/", Token);
+        using var asset = await h.Client.GetAsync("/assets/app.js", Token);
+
+        Assert.Equal("text/plain", root.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.NotFound, asset.StatusCode);
     }
 }

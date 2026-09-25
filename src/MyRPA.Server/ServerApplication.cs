@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.FileProviders.Physical;
 using MyRPA.Activities;
 using MyRPA.Core.Activities;
 using MyRPA.Core.Diagnostics;
@@ -134,9 +136,21 @@ internal static class ServerApplication
         services.AddSingleton<ProjectStore>();
         services.AddSingleton<LocalSessions>();
         services.AddSingleton<EventStreams>();
+        if (options.WebRoot is { } webRoot)
+        {
+            // Factory-created, so the container disposes it. Hidden, dot-prefixed and system files are never served.
+            services.AddSingleton(_ => new PhysicalFileProvider(webRoot, ExclusionFilters.Sensitive));
+        }
 
         var app = builder.Build();
         app.UseLocalSecurity();
+        if (options.WebRoot is not null)
+        {
+            // ADR-0022: the server serves the built Web Studio from its own origin, behind the same guard (Host check,
+            // CSP, nosniff); the assets hold no data, so they need no session. Unknown file types are not served.
+            app.UseStaticFiles(new StaticFileOptions { FileProvider = app.Services.GetRequiredService<PhysicalFileProvider>() });
+        }
+
         MapEndpoints(app);
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -148,7 +162,7 @@ internal static class ServerApplication
     private static void MapEndpoints(WebApplication app)
     {
         // Start link: exchange the one-time token for a session cookie, then drop the token from the address bar.
-        app.MapGet("/", (HttpContext context, LocalSessions sessions) =>
+        app.MapGet("/", (HttpContext context, LocalSessions sessions, ServerOptions options) =>
         {
             if (context.Request.Query["token"].FirstOrDefault() is { } token)
             {
@@ -161,7 +175,13 @@ internal static class ServerApplication
                 return Results.Redirect("/", permanent: false, preserveMethod: false);
             }
 
-            return Results.Text("MyRPA Server is running. The Web Studio is not part of this build yet.", "text/plain");
+            if (options.WebRoot is { } webRoot)
+            {
+                context.Response.Headers.CacheControl = "no-cache";
+                return Results.File(Path.Combine(webRoot, "index.html"), "text/html; charset=utf-8");
+            }
+
+            return Results.Text("MyRPA Server is running. Start it with --web <dir> to serve the Web Studio.", "text/plain");
         });
 
         var api = app.MapGroup("/api");

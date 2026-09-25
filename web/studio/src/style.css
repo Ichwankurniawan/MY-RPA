@@ -1,0 +1,85 @@
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --border: #d5d9e0;
+  --text: #1d2330;
+  --muted: #5b6475;
+  --accent: #2458d6;
+  --selected: #dce6fb;
+  --error: #b42318;
+  --ok: #1a7f37;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1 { font-size: 16px; margin: 0 12px 0 0; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 8px; }
+button, select, input { font: inherit; }
+button { padding: 4px 12px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.studio {
+  display: grid;
+  grid-template-columns: 220px 1fr 320px;
+  grid-template-rows: auto 1fr 240px auto;
+  grid-template-areas: 'toolbar toolbar toolbar' 'toolbox designer properties' 'output output output' 'status status status';
+  height: 100vh;
+}
+
+.toolbar { grid-area: toolbar; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.toolbar label { display: flex; gap: 4px; align-items: center; color: var(--muted); }
+.document-title { flex: 1; font-weight: 600; min-width: 120px; }
+.toolbox, .designer, .properties, .output, .connection { padding: 12px; overflow: auto; background: var(--panel); }
+.toolbox { grid-area: toolbox; border-right: 1px solid var(--border); }
+.toolbox input { width: 100%; margin-bottom: 8px; }
+.toolbox ul { list-style: none; margin: 0; padding: 0; }
+.toolbox li { padding: 3px 0; }
+.toolbox small { color: var(--muted); }
+.designer { grid-area: designer; background: var(--bg); }
+.properties { grid-area: properties; border-left: 1px solid var(--border); }
+.output { grid-area: output; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.connection { grid-area: designer / toolbox / output / properties; }
+.statusbar { grid-area: status; margin: 0; padding: 4px 12px; border-top: 1px solid var(--border); color: var(--muted); min-height: 1.8em; }
+.hint { color: var(--muted); }
+
+[role='tree'], [role='group'] { list-style: none; margin: 0; padding: 0; }
+[role='group'] { padding-left: 20px; border-left: 1px dashed var(--border); margin-left: 8px; }
+[role='treeitem'] { outline: none; }
+[role='treeitem']:focus-visible > .node { outline: 2px solid var(--accent); }
+.node { display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; margin: 2px 0; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); cursor: pointer; }
+.node.selected { background: var(--selected); border-color: var(--accent); }
+.node.has-error { border-color: var(--error); }
+.node .slot { color: var(--accent); font-weight: 600; }
+.node .label { font-weight: 600; }
+.node .type, .node .id { color: var(--muted); font-size: 12px; }
+.badge { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--border); }
+.badge.error, .badge.status-failed { background: #fde2df; color: var(--error); }
+.badge.status-succeeded { background: #dcf3e2; color: var(--ok); }
+.badge.status-running { background: #e3ebff; color: var(--accent); }
+
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-family: ui-monospace, Consolas, monospace; }
+.field { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.field-label { font-weight: 600; }
+.field-label small { color: var(--muted); font-weight: normal; }
+.field small { color: var(--muted); }
+.field input, .field select { width: 100%; padding: 4px 6px; }
+.field input.code { font-family: ui-monospace, Consolas, monospace; }
+.field.invalid input { border-color: var(--error); }
+.field-error, .error { color: var(--error); }
+.readonly { font-family: ui-monospace, Consolas, monospace; color: var(--muted); }
+.node-problems { padding-left: 16px; }
+
+.problems ul { list-style: none; margin: 0; padding: 0; }
+.problems button { background: none; border: none; padding: 2px 0; text-align: left; cursor: pointer; color: inherit; }
+.problems .error button { color: var(--error); }
+.events { font-family: ui-monospace, Consolas, monospace; font-size: 12px; margin: 0; padding-left: 0; list-style: none; }
+.events .seq { color: var(--muted); display: inline-block; min-width: 2.5em; }
+.events .kind { font-weight: 600; }
+.events .event-node { color: var(--accent); }
+.events .log { color: var(--ok); }

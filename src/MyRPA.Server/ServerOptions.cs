@@ -17,6 +17,9 @@ internal sealed record ServerOptions
     /// <summary>Plugin configuration file (ADR-0019).</summary>
     public string? PluginConfiguration { get; init; }
 
+    /// <summary>The built Web Studio (<c>web/studio/dist</c>), served at <c>/</c> (ADR-0022); null serves no UI.</summary>
+    public string? WebRoot { get; init; }
+
     /// <summary>Loopback port; 0 picks a free one.</summary>
     public int Port { get; init; } = 5310;
 
@@ -46,22 +49,23 @@ internal sealed record ServerOptions
 }
 
 /// <summary>
-/// <c>MyRPA.Server --project &lt;dir&gt; [--project &lt;dir&gt;]... [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--port &lt;n&gt;]</c>.
+/// <c>MyRPA.Server --project &lt;dir&gt; [--project &lt;dir&gt;]... [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--web &lt;dir&gt;] [--port &lt;n&gt;]</c>.
 /// </summary>
 internal static class ServerCommandLine
 {
-    public const string Usage = "MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>]... [--plugin-config <file>] [--port <n>]";
+    public const string Usage = "MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]";
 
     public static ServerOptions? Parse(IReadOnlyList<string> args, out string? error)
     {
         var projects = new List<ProjectRoot>();
         var plugins = new List<string>();
         string? config = null;
+        string? web = null;
         var port = 5310;
         for (var i = 0; i < args.Count; i++)
         {
             var name = args[i];
-            if (name is not ("--project" or "--plugin" or "--plugin-config" or "--port"))
+            if (name is not ("--project" or "--plugin" or "--plugin-config" or "--web" or "--port"))
             {
                 error = $"Unexpected argument '{name}'.";
                 return null;
@@ -102,6 +106,18 @@ internal static class ServerCommandLine
                 case "--plugin-config":
                     error = "--plugin-config may be given once.";
                     return null;
+                case "--web" when web is null:
+                    web = Path.TrimEndingDirectorySeparator(Path.GetFullPath(value));
+                    if (!File.Exists(Path.Combine(web, "index.html")))
+                    {
+                        error = $"Web Studio folder '{web}' has no index.html (build it with 'npm run build' in web/studio).";
+                        return null;
+                    }
+
+                    break;
+                case "--web":
+                    error = "--web may be given once.";
+                    return null;
                 case "--port" when int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var p) && p is >= 0 and <= 65535:
                     port = p;
                     break;
@@ -118,6 +134,6 @@ internal static class ServerCommandLine
         }
 
         error = null;
-        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, Port = port };
+        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port };
     }
 }
