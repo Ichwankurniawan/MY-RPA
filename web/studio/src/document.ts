@@ -240,6 +240,161 @@ export function setDisplayName(document: JsonObject, path: readonly Step[], text
   });
 }
 
+// Structural edits (W4A). Each query returns the reason an edit is not possible (undefined when it is), so commands can
+// be disabled and explained; each edit assumes its query passed and throws otherwise. A refused edit never changes the
+// document. The rules follow the activity catalog: only activities that allow children hold a list, slots hold one node.
+
+/** Where an inserted node goes: position `index` in the `children` list of the node at `parentPath`. */
+export interface Placement {
+  readonly parentPath: readonly Step[];
+  readonly index: number;
+}
+
+/** The node at `path` (from the document's `root` node). */
+export function nodeAt(document: JsonObject, path: readonly Step[]): JsonObject {
+  let node = document.root;
+  for (const step of path) {
+    const next: Json | undefined = !isObject(node)
+      ? undefined
+      : 'children' in step
+        ? (Array.isArray(node.children) ? node.children[step.children] : undefined)
+        : (isObject(node.slots) ? node.slots[step.slot] : undefined);
+    node = next as Json;
+  }
+
+  if (!isObject(node)) {
+    throw new Error('There is no node at this path.');
+  }
+
+  return node;
+}
+
+function activityOf(node: JsonObject, catalog: ReadonlyMap<string, ActivityDescriptor>): ActivityDescriptor | undefined {
+  return typeof node.type === 'string' ? catalog.get(node.type) : undefined;
+}
+
+function describe(node: JsonObject, catalog: ReadonlyMap<string, ActivityDescriptor>): string {
+  return activityOf(node, catalog)?.displayName ?? (typeof node.type === 'string' ? node.type : 'This node');
+}
+
+/**
+ * Where a new activity goes for the selection at `path`: at the end of the selected node's list when its activity holds
+ * children, otherwise right after the selected node in its parent's list. Returns the reason when neither applies.
+ */
+export function insertionPoint(document: JsonObject, path: readonly Step[], catalog: ReadonlyMap<string, ActivityDescriptor>): Placement | string {
+  const node = nodeAt(document, path);
+  if (activityOf(node, catalog)?.allowsChildren) {
+    return { parentPath: path, index: Array.isArray(node.children) ? node.children.length : 0 };
+  }
+
+  const last = path.at(-1);
+  if (last === undefined) {
+    return `${describe(node, catalog)} does not contain a list of activities.`;
+  }
+
+  if (!('children' in last)) {
+    return `The selected activity fills the slot '${last.slot}'. Select an activity in a list, or a Sequence, to insert.`;
+  }
+
+  const parentPath = path.slice(0, -1);
+  const parent = nodeAt(document, parentPath);
+  return activityOf(parent, catalog)?.allowsChildren
+    ? { parentPath, index: last.children + 1 }
+    : `${describe(parent, catalog)} is not a registered activity that holds a list, so nothing can be inserted into it.`;
+}
+
+/** A new node for an activity: its type and a unique id (`<type name>-N`), nothing else. Properties start unset. */
+export function createNode(document: JsonObject, activity: ActivityDescriptor): JsonObject {
+  const used = new Set(indexDocument(document).entries.map((entry) => entry.node.id));
+  const base = activity.type.slice(activity.type.lastIndexOf('.') + 1).toLowerCase() || 'node';
+  let n = 1;
+  while (used.has(`${base}-${n}`)) {
+    n++;
+  }
+
+  return { id: `${base}-${n}`, type: activity.type };
+}
+
+/** Inserts `node` at `placement`; returns the new document and the node's path. */
+export function insertNode(document: JsonObject, placement: Placement, node: JsonObject): { document: JsonObject; path: Step[] } {
+  const updated = updateNode(document, placement.parentPath, (parent) => {
+    const children = Array.isArray(parent.children) ? parent.children : [];
+    if (placement.index < 0 || placement.index > children.length) {
+      throw new Error('The position is outside the list.');
+    }
+
+    return { ...parent, children: [...children.slice(0, placement.index), node, ...children.slice(placement.index)] };
+  });
+  return { document: updated, path: [...placement.parentPath, { children: placement.index }] };
+}
+
+/** Why the node at `path` cannot be deleted, if it cannot. */
+export function deleteRefusal(path: readonly Step[]): string | undefined {
+  return path.length === 0 ? 'The root activity cannot be deleted; delete or replace its contents instead.' : undefined;
+}
+
+/** Removes the node at `path` (with its subtree); only that node, its siblings keep their order. */
+export function removeNode(document: JsonObject, path: readonly Step[]): JsonObject {
+  const refusal = deleteRefusal(path);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
+
+  const last = path[path.length - 1];
+  return updateNode(document, path.slice(0, -1), (parent) => {
+    if ('children' in last) {
+      const children = parent.children as Json[];
+      return { ...parent, children: children.filter((_, i) => i !== last.children) };
+    }
+
+    const { [last.slot]: _removed, ...slots } = parent.slots as JsonObject;
+    return { ...parent, slots };
+  });
+}
+
+/** The node to select after deleting the one at `path`: the next sibling, else the previous one, else the parent. */
+export function selectionAfterDelete(document: JsonObject, path: readonly Step[]): JsonObject {
+  const parent = nodeAt(document, path.slice(0, -1));
+  const removed = nodeAt(document, path);
+  const siblings = childSteps(parent).map((child) => child.node);
+  const at = siblings.indexOf(removed);
+  return siblings[at + 1] ?? siblings[at - 1] ?? parent;
+}
+
+/** Why the node at `path` cannot move by `delta` (-1 up, +1 down) within its list, if it cannot. */
+export function moveRefusal(document: JsonObject, path: readonly Step[], delta: -1 | 1): string | undefined {
+  const last = path.at(-1);
+  if (last === undefined) {
+    return 'The root activity cannot be moved.';
+  }
+
+  if (!('children' in last)) {
+    return `The activity in the slot '${last.slot}' cannot move up or down; moving between slots is not available yet.`;
+  }
+
+  const count = (nodeAt(document, path.slice(0, -1)).children as Json[]).length;
+  const target = last.children + delta;
+  return target < 0 ? 'The activity is already first in its list.' : target >= count ? 'The activity is already last in its list.' : undefined;
+}
+
+/** Swaps the node at `path` with its neighbour in the same list. The node object (and its client key) is kept. */
+export function moveNode(document: JsonObject, path: readonly Step[], delta: -1 | 1): { document: JsonObject; path: Step[] } {
+  const refusal = moveRefusal(document, path, delta);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
+
+  const parentPath = path.slice(0, -1);
+  const from = (path[path.length - 1] as { children: number }).children;
+  const to = from + delta;
+  const updated = updateNode(document, parentPath, (parent) => {
+    const children = (parent.children as Json[]).slice();
+    [children[from], children[to]] = [children[to], children[from]];
+    return { ...parent, children };
+  });
+  return { document: updated, path: [...parentPath, { children: to }] };
+}
+
 export type Editability = { readonly editable: true; readonly text: string } | { readonly editable: false; readonly reason: string };
 
 /**

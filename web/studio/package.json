@@ -12,7 +12,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "perf": "node scripts/perf.mjs"
   },
   "dependencies": {
     "react": "19.2.8",

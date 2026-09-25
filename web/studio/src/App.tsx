@@ -1,7 +1,7 @@
 import { createContext, memo, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { childSteps, editability, indexDocument, isObject, keyOf, nodeLabel } from './document';
 import { useStore } from './store';
-import { isDirty, type Studio, type StudioState } from './studio';
+import { deleteRefusalOf, insertRefusal, isDirty, moveRefusalOf, type Studio, type StudioState } from './studio';
 import type { Diagnostic, Json, JsonObject, PropertyDescriptor } from './types';
 
 const StudioContext = createContext<Studio | null>(null);
@@ -43,9 +43,17 @@ function Shell() {
 
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      const command = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      if (command && key === 's') {
         event.preventDefault();
         void studio.save();
+      } else if (command && ((key === 'z' && event.shiftKey) || key === 'y')) {
+        event.preventDefault();
+        studio.redo();
+      } else if (command && key === 'z') {
+        event.preventDefault();
+        studio.undo();
       } else if (event.key === 'F5' && !event.ctrlKey) {
         event.preventDefault();
         void studio.run();
@@ -173,7 +181,9 @@ function Toolbar() {
 }
 
 function Toolbox() {
+  const studio = useStudio();
   const activities = useStudioState((s) => s.activities);
+  const refusal = useStudioState(insertRefusal);
   const [query, setQuery] = useState('');
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -184,10 +194,23 @@ function Toolbox() {
     <aside className="toolbox" aria-labelledby="toolbox-heading">
       <h2 id="toolbox-heading">Activities</h2>
       <input type="search" placeholder="Search" aria-label="Search activities" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <p className="hint" id="toolbox-hint">
+        {refusal ?? 'Inserts after the selected activity, or at the end of a selected Sequence.'}
+      </p>
       <ul aria-label="Activity catalog">
         {shown.map((a) => (
-          <li key={a.type} title={a.description}>
-            <span>{a.displayName}</span> <small>{a.type}</small>
+          <li key={a.type}>
+            <button
+              type="button"
+              className="insert"
+              title={a.description}
+              aria-label={`Insert ${a.displayName} (${a.type})`}
+              aria-describedby="toolbox-hint"
+              disabled={refusal !== undefined}
+              onClick={() => studio.insertActivity(a.type)}
+            >
+              <span>{a.displayName}</span> <small>{a.type}</small>
+            </button>
           </li>
         ))}
       </ul>
@@ -200,14 +223,18 @@ function WorkflowTree() {
   const document = useStudioState((s) => s.document);
   const selectedKey = useStudioState((s) => s.selectedKey);
   const tree = useRef<HTMLUListElement>(null);
+  const refocus = useRef(false);
 
-  // Keep keyboard focus on the selected item while the user navigates the tree.
+  // Keep keyboard focus on the selected item while the user works in the tree, also when a command removed or moved
+  // the focused item.
   useEffect(() => {
     const root = tree.current;
-    if (root && selectedKey && root.contains(window.document.activeElement)) {
+    if (root && selectedKey && (refocus.current || root.contains(window.document.activeElement))) {
       root.querySelector<HTMLElement>(`[data-key="${selectedKey}"]`)?.focus();
     }
-  }, [selectedKey]);
+
+    refocus.current = false;
+  }, [selectedKey, document]);
 
   if (document === undefined) {
     return (
@@ -219,6 +246,18 @@ function WorkflowTree() {
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+    if (event.key === 'Delete' || (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown'))) {
+      event.preventDefault();
+      refocus.current = true;
+      if (event.key === 'Delete') {
+        studio.deleteSelected();
+      } else {
+        studio.moveSelected(event.key === 'ArrowUp' ? -1 : 1);
+      }
+
+      return;
+    }
+
     const entries = indexDocument(document).entries;
     const at = entries.findIndex((e) => e.key === selectedKey);
     const target =
@@ -237,10 +276,41 @@ function WorkflowTree() {
   return (
     <section className="designer" aria-labelledby="designer-heading">
       <h2 id="designer-heading">Workflow</h2>
+      <EditBar />
       <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown}>
         {isObject(root) && <TreeNode node={root} depth={1} />}
       </ul>
     </section>
+  );
+}
+
+/** Structural commands and history. A disabled command's tooltip says why it is not available. */
+function EditBar() {
+  const studio = useStudio();
+  const undo = useStudioState((s) => s.undo.at(-1)?.label);
+  const redo = useStudioState((s) => s.redo.at(-1)?.label);
+  const moveUp = useStudioState((s) => moveRefusalOf(s, -1));
+  const moveDown = useStudioState((s) => moveRefusalOf(s, 1));
+  const remove = useStudioState(deleteRefusalOf);
+
+  return (
+    <div className="editbar" role="toolbar" aria-label="Edit">
+      <button type="button" onClick={() => studio.undo()} disabled={undo === undefined} title={undo ? `Undo: ${undo} (Ctrl+Z)` : 'Nothing to undo'}>
+        Undo
+      </button>
+      <button type="button" onClick={() => studio.redo()} disabled={redo === undefined} title={redo ? `Redo: ${redo} (Ctrl+Y)` : 'Nothing to redo'}>
+        Redo
+      </button>
+      <button type="button" onClick={() => studio.moveSelected(-1)} disabled={moveUp !== undefined} title={moveUp ?? 'Move the selected activity up (Alt+Up)'}>
+        Move up
+      </button>
+      <button type="button" onClick={() => studio.moveSelected(1)} disabled={moveDown !== undefined} title={moveDown ?? 'Move the selected activity down (Alt+Down)'}>
+        Move down
+      </button>
+      <button type="button" onClick={() => studio.deleteSelected()} disabled={remove !== undefined} title={remove ?? 'Delete the selected activity (Delete)'}>
+        Delete
+      </button>
+    </div>
   );
 }
 

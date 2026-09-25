@@ -32,3 +32,4 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0026](0026-missing-property-diagnostic-location.md) | Missing-property diagnostics point at the property | Accepted, implemented in W2 | W2 |
 | [0027](0027-invoke-workflow-confinement-in-projects.md) | InvokeWorkflow confinement in server projects | Keep ADR-0012 in W2; project-root resolver **Proposed, deferred** | W2 |
 | [0028](0028-web-studio-first-slice.md) | Web Studio first slice (W3) | Accepted for W3; hand-written wire types **need approval** | W3 |
+| [0029](0029-web-studio-structural-editing.md) | Web Studio structural editing and undo/redo (W4A) | Accepted for W4A | W4A |

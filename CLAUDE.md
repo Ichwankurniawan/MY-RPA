@@ -4,8 +4,8 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W3 — first Web Studio vertical slice (complete,
-  awaiting review).** W4 and Phase 6 must not start without authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio W4A — structural editing and undo/redo (complete,
+  awaiting review).** W4B/W5 and Phase 6 must not start without authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -108,6 +108,8 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 - Web Studio (`web/studio`, ADR-0028): the document model is the v1.0 JSON itself (immutable, client keys in a
   `WeakMap`, never saved); files that cannot be written back unchanged open read-only; one `EventSource` per tab; no
   state, UI, editor or drag-and-drop library (dnd-kit and other DnD frameworks fail `WebStudioRulesTests`).
+  Structural edits and undo/redo follow ADR-0029: pure edits with refusal reasons, snapshot history (200 steps, typing
+  merged), dirty = not the saved object.
 
 ## Studio conventions (Phase 5, ADR-0018; frozen reference, see ADR-0021)
 

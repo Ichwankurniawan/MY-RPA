@@ -1,70 +1,22 @@
-// End-to-end smoke test of the W3 slice: Web Studio → MyRPA.Server → WorkflowLoader/ProjectStore → Execution.Hosting →
-// engine → execution events and logs → SSE → Web Studio. Real server, real engine, real browser (headless Chromium).
-//
-// Needs: the server built (`dotnet build MyRPA.sln -c Release`), the Studio built (`npm run build`), `dotnet` on PATH,
-// and Playwright's Chromium (installed once with the browser plugin's playwright.ps1; this script never downloads).
-// It works on a throwaway copy of samples/hello-world.json, so it never edits the repository and can run repeatedly.
+// End-to-end smoke test: Web Studio → MyRPA.Server → WorkflowLoader/ProjectStore → Execution.Hosting → engine →
+// execution events and logs → SSE → Web Studio, with the W4A structural editing flow. Real server, real engine, real
+// browser (headless Chromium). It works on a throwaway copy of samples/hello-world.json, so it never edits the repository
+// and can run repeatedly. Checks use roles, labels and data attributes, never pixels. See harness.mjs for prerequisites.
 
-import { spawn } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright-core';
+import { copyFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { check, repo, results, withStudio } from './harness.mjs';
 
-const studioDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const repo = resolve(studioDir, '..', '..');
-const configuration = process.env.MYRPA_CONFIGURATION ?? 'Release';
-const serverDll = join(repo, 'src', 'MyRPA.Server', 'bin', configuration, 'net10.0', 'MyRPA.Server.dll');
-const results = join(studioDir, 'test-results');
-mkdirSync(results, { recursive: true });
-
-const workspace = mkdtempSync(join(tmpdir(), 'myrpa-smoke-'));
-const project = join(workspace, 'demo');
-mkdirSync(project);
-copyFileSync(join(repo, 'samples', 'hello-world.json'), join(project, 'hello-world.json'));
-const original = JSON.parse(readFileSync(join(project, 'hello-world.json'), 'utf8'));
-
-const check = (condition, message) => {
-  if (!condition) {
-    throw new Error(`Check failed: ${message}`);
-  }
-};
 const step = (text) => console.log(`  ✓ ${text}`);
 
-const server = spawn(process.env.MYRPA_DOTNET ?? 'dotnet', [serverDll, '--project', project, '--web', join(studioDir, 'dist'), '--port', '0'], {
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-let serverOutput = '';
-let browser;
-let failed = false;
-try {
-  const startLink = await new Promise((resolveLink, reject) => {
-    const timer = setTimeout(() => reject(new Error(`The server printed no start link:\n${serverOutput}`)), 30_000);
-    server.stdout.on('data', (data) => {
-      serverOutput += data;
-      const match = /valid once\): (\S+)/.exec(serverOutput);
-      if (match) {
-        clearTimeout(timer);
-        resolveLink(match[1]);
-      }
-    });
-    server.stderr.on('data', (data) => (serverOutput += data));
-    server.on('exit', (code) => reject(new Error(`The server exited (${code}):\n${serverOutput}`)));
-  });
+await withStudio(async ({ project, page, startServer, problems }) => {
+  const file = join(project, 'hello-world.json');
+  copyFileSync(join(repo, 'samples', 'hello-world.json'), file);
+  const original = JSON.parse(readFileSync(file, 'utf8'));
+  const startLink = await startServer();
   console.log(`MyRPA.Server: ${startLink.replace(/token=.*/, 'token=…')}`);
 
-  browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  const problems = [];
-  page.on('pageerror', (error) => problems.push(error.message));
-  page.on('console', (message) => {
-    // A refused run answers 422, which the browser logs as a failed resource; anything else is a real problem.
-    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource')) {
-      problems.push(message.text());
-    }
-  });
-  const streamConnections = [];
+  let streamConnections = [];
   page.on('request', (request) => {
     if (request.method() === 'GET' && /^\/api\/streams\/[^/]+$/.test(new URL(request.url()).pathname)) {
       streamConnections.push(request.url());
@@ -75,88 +27,117 @@ try {
   const runStatus = page.getByTestId('run-status');
   const message = page.getByLabel(/^message/);
   const click = (name) => page.getByRole('button', { name, exact: true }).click();
+  const edit = (name) => page.getByRole('toolbar', { name: 'Edit' }).getByRole('button', { name, exact: true });
+  const item = (id) => page.locator(`[role=treeitem][data-node-id="${id}"]`);
+  const row = (id) => page.locator(`[role=treeitem][data-node-id="${id}"] > .node`);
+  const treeIds = () => page.locator('[role=treeitem]').evaluateAll((items) => items.map((i) => i.dataset.nodeId).join(','));
+  const selected = () => page.locator('[role=treeitem][aria-selected=true]').getAttribute('data-node-id');
+  const expectTree = async (expected, what) => check((await treeIds()) === expected, `${what}: tree ${await treeIds()}`);
+  const openHelloWorld = async () => {
+    await page.getByText('Connected to MyRPA.Server').waitFor();
+    await page.getByRole('combobox', { name: 'Workflow' }).selectOption('hello-world.json');
+    await click('Open');
+    await title.filter({ hasText: /^hello-world\.json$/ }).waitFor();
+  };
 
+  // W3: session, open, tree, selection, properties.
   await page.goto(startLink);
-  await page.getByText('Connected to MyRPA.Server').waitFor();
-  step('1-2. Server running; the Web Studio is served by it and signed in through the one-time start link');
-
-  await page.getByRole('combobox', { name: 'Workflow' }).selectOption('hello-world.json');
-  await click('Open');
-  await title.filter({ hasText: /^hello-world\.json$/ }).waitFor();
-  const items = page.getByRole('treeitem');
-  const ids = [];
-  for (let i = 0; i < (await items.count()); i++) {
-    ids.push(await items.nth(i).getAttribute('data-node-id'));
-  }
-  check(ids.join(',') === 'main,build-greeting,log-greeting', `tree nodes ${ids}`);
-  step(`3-4. Opened hello-world.json; the tree shows ${ids.join(', ')}`);
-
-  await page.locator('[role=treeitem][data-node-id="log-greeting"] > .node').click();
+  await openHelloWorld();
+  await expectTree('main,build-greeting,log-greeting', 'opened');
+  step('1. Signed in through the start link; opened hello-world.json (main, build-greeting, log-greeting)');
+  await row('log-greeting').click();
   check((await page.getByTestId('node-type').textContent()) === 'Core.Log', 'selected node type');
-  check((await message.inputValue()) === 'greeting', 'message property value');
-  step('5. Selected log-greeting; Properties shows Core.Log and message = greeting');
+  check((await edit('Delete').isEnabled()) && !(await edit('Move down').isEnabled()), 'commands for the last child');
 
-  const edited = "greeting + ' (from the Web Studio)'";
-  await message.fill(edited);
+  // W4A: insert, move (keyboard), edit, undo, redo, delete, undo the delete.
+  await page.getByRole('button', { name: 'Insert Log (Core.Log)' }).click();
+  await expectTree('main,build-greeting,log-greeting,log-1', 'insert');
+  check((await selected()) === 'log-1', 'the inserted node is selected');
+  check((await message.inputValue()) === '', 'a new node has no property values');
+  step('2. Inserted a Log (log-1) after log-greeting from the activity catalog; it is selected');
+
+  await row('log-1').click();
+  await page.keyboard.press('Alt+ArrowUp');
+  await expectTree('main,build-greeting,log-1,log-greeting', 'move');
+  check((await selected()) === 'log-1', 'the moved node stays selected');
+  step('3. Moved log-1 up with Alt+Up (keyboard)');
+
+  const inserted = "'Inserted by the Web Studio: ' + greeting";
+  await message.fill(inserted);
   await title.filter({ hasText: /•$/ }).waitFor();
-  step(`6. Edited message to ${edited}; the document is dirty`);
+  step(`4. Edited log-1 message to ${inserted}`);
+
+  await page.keyboard.press('Control+z');
+  check((await message.inputValue()) === '', `undo the edit: ${await message.inputValue()}`);
+  await expectTree('main,build-greeting,log-1,log-greeting', 'undo keeps the structure');
+  step('5. Undo (Ctrl+Z) removed the property edit');
+
+  await edit('Redo').click();
+  check((await message.inputValue()) === inserted, 'redo the edit');
+  step('6. Redo restored the property edit');
+
+  await edit('Delete').click();
+  await expectTree('main,build-greeting,log-greeting', 'delete');
+  check((await selected()) === 'log-greeting', 'after delete the next sibling is selected');
+  step('7. Deleted log-1; log-greeting is selected');
+
+  await edit('Undo').click();
+  await expectTree('main,build-greeting,log-1,log-greeting', 'undo delete');
+  check((await selected()) === 'log-1' && (await message.inputValue()) === inserted, 'the restored node and its property');
+  await page.screenshot({ path: join(results, 'studio-structural-edit.png') });
+  step('8. Undo restored log-1 with its message and selection');
 
   await click('Validate');
   await page.getByTestId('no-problems').waitFor();
-  step('7. Validated by the server (WorkflowLoader): no problems');
+  step('9. Validated by the server (WorkflowLoader): no problems');
 
   await click('Save');
   await title.filter({ hasText: /^hello-world\.json$/ }).waitFor();
-  const savedText = readFileSync(join(project, 'hello-world.json'), 'utf8');
+  const savedText = readFileSync(file, 'utf8');
   const saved = JSON.parse(savedText);
-  check(saved.root.children[1].properties.message === edited, 'saved message');
+  check(saved.root.children.map((c) => c.id).join(',') === 'build-greeting,log-1,log-greeting', 'saved structure');
+  check(JSON.stringify(saved.root.children[1]) === JSON.stringify({ id: 'log-1', type: 'Core.Log', properties: { message: inserted } }), 'saved node');
   check(JSON.stringify({ ...saved, root: undefined }) === JSON.stringify({ ...original, root: undefined }), 'other fields unchanged');
   check(!/"(key|_key|__key|clientKey)"/.test(savedText), 'no client keys in the file');
-  step('8. Saved through the server with If-Match; the file has the edit, nothing else changed, no client keys');
+  step('10. Saved with If-Match; the file has the new node in place, nothing else changed, no client keys');
+
+  await page.reload();
+  streamConnections = [];
+  await openHelloWorld();
+  await expectTree('main,build-greeting,log-1,log-greeting', 'after reload');
+  await row('log-1').click();
+  check((await message.inputValue()) === inserted, 'reloaded property');
+  check(!(await edit('Undo').isEnabled()), 'a reopened file starts a new history');
+  step('11-12. Reloaded the page and reopened the file: same structure and property');
 
   await click('Run');
   await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
   const kinds = await page.locator('.events .kind').allTextContents();
-  const logs = await page.locator('.events .log').allTextContents();
+  const logs = (await page.locator('.events .log').allTextContents()).map((l) => l.trim());
   check(kinds[0] === 'execution.started' && kinds.at(-1) === 'execution.completed', `event order ${kinds}`);
-  check(kinds.includes('node.started') && kinds.includes('node.completed') && kinds.includes('log'), `event kinds ${kinds}`);
-  check(logs.some((line) => line.includes('Hello, World! (from the Web Studio)')), `logs ${logs}`);
-  await page.getByTestId('run-outputs').filter({ hasText: '"greeting":"Hello, World!"' }).waitFor();
+  check(kinds.includes('node.started') && kinds.includes('node.completed'), `event kinds ${kinds}`);
+  check(logs.join('|') === '[Information] Inserted by the Web Studio: Hello, World!|[Information] Hello, World!', `logs ${logs}`);
+  check((await item('log-1').textContent()).includes('Succeeded'), 'per-node run state');
   console.log(`    events: ${kinds.join(' → ')}`);
-  console.log(`    log: ${logs.join(' | ').trim()}`);
-  step('9-11. Ran through Execution.Hosting; SSE delivered execution.started, node events, the log and execution.completed; status Succeeded');
+  console.log(`    logs: ${logs.join(' | ')}`);
   await page.screenshot({ path: join(results, 'studio-run-succeeded.png') });
+  step('13-14. Ran through Execution.Hosting; SSE delivered the events and both logs in order; status Succeeded');
 
-  // Error case: an expression syntax error. The server's WorkflowLoader finds it; the server refuses to run it.
+  // Error case (W3): an expression syntax error found by the server; Run refuses; undo fixes it; runs again.
   await message.fill('greeting +');
   await click('Validate');
   await page.locator('.field-error').filter({ hasText: 'MYRPA1043' }).waitFor();
-  step('Error case: validation reports MYRPA1043 on the message property');
   await click('Run');
   await runStatus.filter({ hasText: 'NotStarted' }).waitFor();
-  step('Error case: Run is refused (422) with the diagnostics; nothing started');
   await page.screenshot({ path: join(results, 'studio-validation-error.png') });
-
-  // Back to a valid document, saved and run again: still the tab's single event stream.
-  await message.fill('greeting');
-  await click('Save');
-  await title.filter({ hasText: /^hello-world\.json$/ }).waitFor();
+  await page.keyboard.press('Control+z');
+  check((await message.inputValue()) === inserted, 'undo the broken edit');
   await click('Run');
   await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
-  check(streamConnections.length === 1, `SSE connections: ${streamConnections.length}`);
-  step('Two successful runs used one SSE connection (one per tab, ADR-0024)');
+  check(streamConnections.length === 1, `SSE connections after reload: ${streamConnections.length}`);
+  step('Error case: MYRPA1043 on the property, Run refused (422); undo restored the saved version, which ran again; one SSE connection');
 
   check(problems.length === 0, `browser errors: ${problems.join('; ')}`);
   step('No script errors or CSP violations in the browser');
   console.log(`Smoke test passed. Screenshots: ${results}`);
-} catch (error) {
-  failed = true;
-  console.error(error);
-} finally {
-  await browser?.close();
-  server.kill();
-  await new Promise((done) => (server.exitCode !== null ? done() : server.once('exit', done)));
-  rmSync(workspace, { recursive: true, force: true });
-}
-
-process.exit(failed ? 1 : 0);
+});
