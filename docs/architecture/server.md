@@ -114,7 +114,8 @@ data: {"sequence":3,"kind":"node.started","runId":"…","time":"…","executionI
   - keep-alive comments every 15 s;
   - at most 32 streams and 64 runs per stream;
   - a disconnected stream is kept for 2 minutes;
-  - a client too slow for the 4,096-event queue is disconnected and resumes by cursor.
+  - each connection has a 4,096-event queue; when it is full, the run's events wait for the client. A client that
+    takes no event for `SlowClientTimeout` (10 s) is disconnected and resumes by cursor (ADR-0024, amended).
 - **Ownership:** streams belong to the session that created them.
 - **Logs:** workflow log messages reach runs through the engine's logging scope. The server's logging filters let
   `MyRPA.Workflow.Log` through at Information for that purpose, and keep it off the console.

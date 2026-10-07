@@ -515,6 +515,49 @@ public sealed class RunAndStreamTests
     }
 
     [Fact]
+    public async Task AReplayLargerThanTheQueue_ArrivesOnOneConnection_InOrder()
+    {
+        // The run's retained events outnumber the connection queue: the pump waits for room instead of dropping the
+        // connection (which made large runs arrive in retry-sized steps).
+        await using var h = await ServerHarness.StartAsync(o => o with { StreamQueueCapacity = 16 });
+        h.WriteWorkflow("a.json", ServerHarness.Logs(200, "a"));
+        var a = await h.StartRunAsync("a.json");
+        await h.WaitForRunAsync(a);
+        var streamId = await h.OpenStreamAsync();
+        await h.SubscribeAsync(streamId, a);
+
+        await using var sse = await SseReader.OpenAsync(h.Client, streamId);
+        var events = await sse.ReadUntilAsync(e => e.Any(x => x.IsRunCompletion(a)));
+
+        var sequences = events.Where(e => e.RunId == a).Select(e => e.Sequence).ToList();
+        Assert.True(sequences.Count > 400, $"{sequences.Count} events");
+        Assert.Equal(Enumerable.Range(1, sequences.Count).Select(i => (long)i), sequences);
+        Assert.Single(events, e => e.Kind == "stream.opened");
+    }
+
+    [Fact]
+    public async Task AClientThatTakesNothing_IsStillDisconnected_AfterTheSlowClientTimeout()
+    {
+        await using var h = await ServerHarness.StartAsync(o => o with
+        {
+            StreamQueueCapacity = 8,
+            SlowClientTimeout = TimeSpan.FromMilliseconds(300),
+            ConfigureHosting = x => x.EventBufferCapacity = 50_000,
+        });
+        h.WriteWorkflow("big.json", ServerHarness.Logs(15_000, "big"));
+        var run = await h.StartRunAsync("big.json");
+        await h.WaitForRunAsync(run);
+        var streamId = await h.OpenStreamAsync();
+        await h.SubscribeAsync(streamId, run);
+
+        await using var sse = await SseReader.OpenAsync(h.Client, streamId);
+        await Task.Delay(TimeSpan.FromSeconds(3), Token); // read nothing: the socket buffers fill, then the queue
+
+        // Dropped with data still unsent: the client sees the end of the stream or a reset connection.
+        await Assert.ThrowsAnyAsync<IOException>(() => sse.ReadUntilAsync(e => e.Any(x => x.IsRunCompletion(run))));
+    }
+
+    [Fact]
     public async Task Cancel_EndsARunningRun_AndTheStreamReportsIt()
     {
         await using var h = await ServerHarness.StartAsync();

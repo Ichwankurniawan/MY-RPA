@@ -58,13 +58,13 @@ and replay already existed.
   frames at about 19 ms while the run's events arrived. A one-off main-thread task of 0.7–0.9 s at the start of the
   run came from dimming not-executed nodes with `opacity` (3,000 nodes restyled at once); with a muted text color
   instead, the longest task was 194 ms.
-- **Found, not changed (server, W2):** the run's whole event stream reached the Studio only after about 40 s, although
+- **Found in W5, fixed right after it** (owner decision; ADR-0024 amended): the pump now waits for queue room and only
+  a client that takes no event for 10 s is dropped. The 8,700-event run then reached the Studio in 2.6 s instead of
+  40.8 s. The original finding: the run's whole event stream reached the Studio only after about 40 s, although
   the engine finished in about 0.1 s. When a stream subscribes to a run, its pump replays every retained event into the
   connection queue with `TryWrite`. The queue holds 4,096 events (`StreamQueueCapacity`) and a run retains up to
   10,000 (`EventBufferCapacity`). A run with more retained events therefore overflows the queue at once, whatever the
   client's speed: the server drops the connection, the browser waits `retry: 2000` and resumes by cursor, and the cycle
-  repeats. Nothing is lost or duplicated, but large runs arrive in 2-second steps. Possible fixes, for the owner to
-  choose (server code, outside this brief): the pump awaits queue space (`WriteAsync`) and slow clients are detected
-  by time instead of count, or the queue holds at least a run's retained events.
+  repeats. Nothing was lost or duplicated, but large runs arrived in 2-second steps.
 - Deferred: persistent run history, plugin load diagnostics in the Studio, visible (headful) browser runs, clearing
   the log, execution and correlation ids in the panel.

@@ -115,7 +115,7 @@ internal sealed class EventStream(string id, string session, ServerOptions optio
     public async Task ServeAsync(HttpResponse response, string? lastEventId, CancellationToken aborted)
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(aborted);
-        var connection = new Connection(options.StreamQueueCapacity, lifetime);
+        var connection = new Connection(options.StreamQueueCapacity, options.SlowClientTimeout, time, lifetime);
         lock (_gate)
         {
             _connection?.Lifetime.Cancel();
@@ -234,7 +234,7 @@ internal sealed class EventStream(string id, string session, ServerOptions optio
     }
 
     /// <summary>One live connection: a bounded queue fed by one pump per subscription.</summary>
-    private sealed class Connection(int capacity, CancellationTokenSource lifetime)
+    private sealed class Connection(int capacity, TimeSpan slowClientTimeout, TimeProvider time, CancellationTokenSource lifetime)
     {
         private readonly List<Task> _pumps = [];
 
@@ -256,15 +256,33 @@ internal sealed class EventStream(string id, string session, ServerOptions optio
             await Task.WhenAll(_pumps).ConfigureAwait(false);
         }
 
+        // A full queue is normal while a large run is replayed (its retained events can outnumber the queue), so the
+        // pump waits for the writer to make room. Only a client that takes no event for the timeout counts as slow.
+        private async Task<bool> WaitForRoomAsync((Subscription, ExecutionEventMessage) item, CancellationToken cancellationToken)
+        {
+            using var timeout = new CancellationTokenSource(slowClientTimeout, time);
+            using var patience = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+            try
+            {
+                await Queue.Writer.WriteAsync(item, patience.Token).ConfigureAwait(false);
+                return true;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+        }
+
         private async Task PumpAsync(Subscription subscription, long after, CancellationToken cancellationToken)
         {
             try
             {
                 await foreach (var message in subscription.Run.ReadEventsAsync(after, cancellationToken).ConfigureAwait(false))
                 {
-                    if (!Queue.Writer.TryWrite((subscription, message)))
+                    if (!Queue.Writer.TryWrite((subscription, message)) && !await WaitForRoomAsync((subscription, message), cancellationToken).ConfigureAwait(false))
                     {
-                        // The client is too slow: drop the connection rather than buffer without bound (ADR-0024).
+                        // The client read nothing for the whole timeout: drop the connection rather than buffer without
+                        // bound (ADR-0024). It resumes by cursor.
                         await Lifetime.CancelAsync().ConfigureAwait(false);
                         return;
                     }

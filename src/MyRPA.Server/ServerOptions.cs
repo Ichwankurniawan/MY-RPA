@@ -35,8 +35,14 @@ internal sealed record ServerOptions
     /// <summary>Runs one stream may subscribe to.</summary>
     public int MaxSubscriptionsPerStream { get; init; } = 64;
 
-    /// <summary>Events queued for one stream connection; a slower client is disconnected and resumes by cursor.</summary>
+    /// <summary>Events queued for one stream connection; when it is full, the run's events wait for the client.</summary>
     public int StreamQueueCapacity { get; init; } = 4096;
+
+    /// <summary>
+    /// How long the queue may stay full without the client taking an event; then the client counts as slow, is
+    /// disconnected and resumes by cursor (ADR-0024).
+    /// </summary>
+    public TimeSpan SlowClientTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>How long a disconnected stream is kept for reconnection.</summary>
     public TimeSpan StreamRetention { get; init; } = TimeSpan.FromMinutes(2);

@@ -45,6 +45,10 @@ It also demonstrated a limit. **Local mode is plain HTTP, so browsers use HTTP/1
 - **Reading runs:** each subscription reads its run through `ExecutionHandle.ReadEventsAsync(after)`, so replay and
   `stream.gap` reporting come from `MyRPA.Execution.Hosting` unchanged.
 - **Slow clients:** a bounded queue per connection; a slow client is disconnected and resumes by cursor.
+  - Amended 2026-10-07 (after W5): a full queue alone no longer counts as slow. Replaying a large run (its retained
+    events can outnumber the 4,096-event queue) filled it at once and dropped even fast clients, so large runs arrived
+    in `retry`-sized steps (about 40 s for 8,700 events). The run's pump now waits for room; a client is disconnected
+    only when it takes no event for `SlowClientTimeout` (10 s). The queue stays bounded.
 - **Streams outlive connections:** a stream is kept for 2 minutes after a disconnect and belongs to the session that
   created it.
 
