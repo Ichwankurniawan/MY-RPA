@@ -1,0 +1,208 @@
+{
+  "schemaVersion": "1.0",
+  "id": "roundtrip-valid",
+  "name": "roundtrip-valid",
+  "version": "1.0.0",
+  "description": "Round-trip corpus: literals, maps, slots (also with dots), unknown fields.",
+  "x-top-note": "unknown fields are kept",
+  "arguments": [
+    {
+      "name": "items",
+      "direction": "In",
+      "type": "List",
+      "default": [
+        1,
+        "two",
+        {
+          "three": 3
+        }
+      ]
+    },
+    {
+      "name": "result",
+      "direction": "Out",
+      "type": "String"
+    },
+    {
+      "name": "flag",
+      "direction": "InOut",
+      "type": "Boolean",
+      "required": true,
+      "x-arg-note": 1
+    }
+  ],
+  "variables": [
+    {
+      "name": "count",
+      "type": "Int",
+      "default": 0
+    },
+    {
+      "name": "text",
+      "type": "String"
+    },
+    {
+      "name": "amount",
+      "type": "Decimal",
+      "default": 0.5
+    },
+    {
+      "name": "when",
+      "type": "DateTime",
+      "default": "2026-01-02T03:04:05Z"
+    },
+    {
+      "name": "bag",
+      "type": "Dictionary",
+      "default": {
+        "a": 1
+      }
+    },
+    {
+      "name": "anything",
+      "type": "Object",
+      "default": null
+    }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "x-node-note": {
+      "kept": [
+        1,
+        2,
+        {
+          "deep": true
+        }
+      ]
+    },
+    "children": [
+      {
+        "id": "set-count",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "count",
+          "value": 41
+        }
+      },
+      {
+        "id": "set-flag",
+        "type": "Core.Assign",
+        "displayName": "Flag",
+        "properties": {
+          "to": "flag",
+          "value": true
+        }
+      },
+      {
+        "id": "set-none",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "text",
+          "value": null
+        }
+      },
+      {
+        "id": "set-neg",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "amount",
+          "value": -2.5
+        }
+      },
+      {
+        "id": "log-level",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'a ' + text",
+          "level": "Warning"
+        }
+      },
+      {
+        "id": "loop",
+        "type": "Core.ForEach",
+        "properties": {
+          "items": "items",
+          "itemVariable": "item",
+          "indexVariable": "i"
+        },
+        "slots": {
+          "body": {
+            "id": "say",
+            "type": "Core.Log",
+            "properties": {
+              "message": "item"
+            }
+          }
+        }
+      },
+      {
+        "id": "choose",
+        "type": "Core.Switch",
+        "properties": {
+          "expression": "count"
+        },
+        "slots": {
+          "case:41": {
+            "id": "c41",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'41'"
+            }
+          },
+          "case:1.5": {
+            "id": "c15",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'1.5'"
+            }
+          },
+          "default": {
+            "id": "cdef",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'other'"
+            }
+          }
+        }
+      },
+      {
+        "id": "guard",
+        "type": "Core.TryCatch",
+        "properties": {
+          "exceptionVariable": "error"
+        },
+        "slots": {
+          "try": {
+            "id": "boom",
+            "type": "Core.Throw",
+            "properties": {
+              "message": "'x'"
+            }
+          },
+          "catch": {
+            "id": "caught",
+            "type": "Core.Log",
+            "properties": {
+              "message": "error.message"
+            }
+          }
+        }
+      },
+      {
+        "id": "call",
+        "type": "Core.InvokeWorkflow",
+        "properties": {
+          "workflow": "child.json",
+          "arguments": {
+            "who": "'Ada'",
+            "n": "1"
+          },
+          "outputs": {
+            "result": "text"
+          }
+        }
+      }
+    ]
+  }
+}

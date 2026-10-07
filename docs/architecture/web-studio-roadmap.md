@@ -20,7 +20,7 @@ backend work may start in parallel once authorized; see ADR-0021 "Consequences")
 | **W6** | Project/file management | ✅ Done (2026-10-07; ADR-0031) |
 | **W7** | Advanced authoring / parity | ✅ Done (2026-10-08; ADR-0033) |
 | **W8** | Performance + accessibility + hardening | ✅ Done (2026-10-08; ADR-0034) |
-| **W9** | WPF exit criteria + migration | ⬜ |
+| **W9** | WPF exit criteria + migration | 🟡 Automated evidence done (2026-10-08; ADR-0035, [parity](web-studio-parity.md)); awaiting the manual run, CI on GitHub and the owner's sign-off |
 | **W10** | WPF removal / Phase 5 completion | ⬜ |
 
 ## Exit criteria status
@@ -29,20 +29,20 @@ Numbers refer to ADR-0021 "Exit criteria for deleting WPF". Updated as slices co
 
 | # | Criterion | Done | Open | Planned in |
 |---|---|---|---|---|
-| 1 | Authoring | Open, save; create, save-as (W6); insert catalog activities by keyboard and by drag-and-drop into lists and slots incl. `case:`; move within a list and across containers; delete; unique ids; editable id, display name, metadata editor, raw properties of unknown activities (W4B); toolbox search and categories; W7 | Lossless round-trip corpus | W9 |
+| 1 | Authoring | Open, save; create, save-as (W6); insert catalog activities by keyboard and by drag-and-drop into lists and slots incl. `case:`; move within a list and across containers; delete; unique ids; editable id, display name, metadata editor, raw properties of unknown activities (W4B); toolbox search and categories; W7; lossless round trip of the shared corpus (W9) | — | — |
 | 2 | Property editing | All six kinds (W4B): maps, literals, assignment-target suggestions, live syntax feedback (server validation); required markers, descriptions, allowed-value lists; no "typed but not committed" state (invalid JSON or a duplicate map name is refused in place) | — | — |
 | 3 | Variables and arguments | Add, remove, rename; type, direction, required; defaults as JSON with inline errors (W4B) | — | — |
-| 4 | Validation | Diagnostics on node, property, argument/variable row and workflow; Problems list navigates to each; MYRPA1040 on the property; live validation 300 ms after typing stops, never blocking (W4B) | Corpus parity with Phase 5 `DraftValidator` | W9 |
+| 4 | Validation | Diagnostics on node, property, argument/variable row and workflow; Problems list navigates to each; MYRPA1040 on the property; live validation 300 ms after typing stops, never blocking (W4B); corpus parity with the WPF `DraftValidator` for every reachable code, located by tree position (W9) | — | — |
 | 5 | Undo/redo | 200 steps; typing merged; every current edit kind; dirty state incl. undo to saved | New edit kinds must join the history as they are added | each slice |
 | 6 | Copy/paste | Cut/copy/paste within and across documents and tabs with id renaming; Ctrl+X/C/V without a permission prompt (W7) | — | — |
 | 7 | Execution | Run; status, outputs; error with failing node; per-node states; unsaved buffer; stream re-creation; W5: validate before run, typed argument input (`argumentText`), timeout, Stop with Cancelling…, concurrent runs, reconnect proven end to end (smoke) | — | W5 |
 | 8 | Logs, output, errors | Level and node id; bounded (1,000); run id; no internals; W5: per-run logs with times, Select failed node, not-started reasons, Clear log, execution and correlation ids, failing activity type and error kind | — | — |
 | 9 | Projects and files | Open project (server `--project`); file list; save conflict (412); `beforeunload`; W6: file tree; create, rename (server `move`), delete, save-as; in-app unsaved prompt; conflict resolution (reload, overwrite, save as); crash recovery (local drafts); `--open <file>` | — | W6 |
-| 10 | Keyboard and accessibility | Tree and commands by keyboard; Ctrl+S/Z/Y, Del, F5; ARIA tree; announced status | Ctrl+X/C/V, Shift+F5; every operation without a mouse; automated accessibility check; screen-reader smoke test | W5, W7, W8 |
-| 11 | Performance | Open, edit, undo/redo, insert/delete/move within targets on the flat 3,000-node fixture (`npm run perf`, local) | Nested fixture; drag activation/move; validation ≤ 500 ms; measured in CI | W4B, W7, W8 |
-| 12 | Automated tests | 74 Vitest tests; server API/security/SSE tests; browser smoke test; Linux web job (unit tests, build) | TS coverage of every Studio.Core behavior group; corpus conformance against `WorkflowLoader`; e2e for PRD 5.5 and the manual script; CI green on Linux and Windows incl. smoke | W8, W9 |
+| 10 | Keyboard and accessibility | Tree and commands by keyboard; Ctrl+S/Z/Y, Del, F5; ARIA tree; announced status; Ctrl+X/C/V, Shift+F5, every operation without a mouse, automated check (W5, W7, W8) | Screen-reader smoke test by a person (manual script step 12) | W9 |
+| 11 | Performance | Open, edit, undo/redo, insert/delete/move, drag activation and movement within targets on the 3,001-node fixture; measured in CI with a tolerance (W8) | — | — |
+| 12 | Automated tests | 198 Vitest tests covering every Studio.Core behavior group (parity matrix); corpus conformance; server API/security/SSE tests; smoke covers PRD 5.5 and every manual-script step; CI jobs defined for Linux and Windows incl. smoke, a11y, perf | CI green on GitHub (needs a push) | W9 |
 | 13 | Former WPF-only capabilities | Title and dirty marker; status line; W6: single-command local start (the server bundles the Studio; `--open <file>` alone is enough); W5: plugin load failures shown in the Studio; visible browser runs through the existing plugin setting (`headless: false` via `--plugin-config`) or `Browser.Open`'s `headless` property | — | — |
-| 14 | Process | — | Docs; a human runs the manual script; owner signs off the exit review | W9 |
+| 14 | Process | Docs migrated; manual script and sign-off checklist ([parity](web-studio-parity.md)) (W9) | A person runs the manual script; owner signs off the exit review | W9 |
 
 ## Slices (proposed contents)
 

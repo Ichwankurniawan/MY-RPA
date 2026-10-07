@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "id": "dotted",
+  "name": "dotted",
+  "version": "1.0.0",
+  "root": {
+    "id": "s",
+    "type": "Core.Switch",
+    "properties": {
+      "expression": "1.5"
+    },
+    "slots": {
+      "case:1.5": {
+        "id": "a",
+        "type": "Core.Log",
+        "properties": {
+          "message": "1 +"
+        }
+      },
+      "case:1.5.properties": {
+        "id": "b",
+        "type": "Core.Log",
+        "properties": {
+          "message": "nobody"
+        }
+      }
+    }
+  }
+}

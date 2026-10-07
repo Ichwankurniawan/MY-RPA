@@ -1,6 +1,6 @@
 # Web Studio
 
-Status: Web Studio W4B (rich authoring; on W3, W4A, W5 and W6). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
+Status: Web Studio W9 (parity evidence for the WPF exit review; W3–W8 done). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
 [ADR-0022](../adr/0022-server-control-plane-and-project-structure.md) (server serves the Studio),
 [ADR-0024](../adr/0024-execution-event-streaming-sse.md) (one event stream per tab),
 [ADR-0025](../adr/0025-local-mode-security.md) (local-mode security),
@@ -8,11 +8,15 @@ Status: Web Studio W4B (rich authoring; on W3, W4A, W5 and W6). Decisions: [ADR-
 [ADR-0029](../adr/0029-web-studio-structural-editing.md) (structural editing and undo/redo),
 [ADR-0030](../adr/0030-web-studio-execution-ux.md) (execution UX),
 [ADR-0031](../adr/0031-web-studio-project-and-file-management.md) (project and file management),
-[ADR-0032](../adr/0032-web-studio-rich-authoring.md) (rich authoring).
+[ADR-0032](../adr/0032-web-studio-rich-authoring.md) (rich authoring),
+[ADR-0033](../adr/0033-web-studio-parity-authoring.md) (slots, moves, clipboard, drag-and-drop),
+[ADR-0034](../adr/0034-web-studio-quality-review.md) (performance, accessibility, security),
+[ADR-0035](../adr/0035-web-studio-wpf-exit-review.md) (corpus parity and the WPF exit review).
 
 The Web Studio is a React + TypeScript + Vite app in `web/studio`, outside the .NET solution. It talks only to its own
-`MyRPA.Server` origin through the API in [server.md](server.md). It is not at WPF parity yet; the ADR-0021 exit
-criteria are the target; the slices that get there are in [web-studio-roadmap.md](web-studio-roadmap.md).
+`MyRPA.Server` origin through the API in [server.md](server.md). The parity evidence, the known
+differences, the manual test script and the exit sign-off are in [web-studio-parity.md](web-studio-parity.md); the
+slices are in [web-studio-roadmap.md](web-studio-roadmap.md).
 
 ## Run
 
@@ -205,6 +209,10 @@ nothing about the client.
   identical drafts dropped, removal on save, write after a pause), and `--open` on connect.
 - `FilesUi.test.tsx` (W6): the Files tree (folders, double-click, keyboard, F2, Delete), New with a refused name, the
   in-app unsaved prompt (never `window.confirm`), the conflict dialog, the recovery dialog.
+- `corpus.test.ts` (W9): every diagnostic of the shared corpus (`tests/corpus`) is placed where the WPF
+  `DraftValidator` places it (`tests/corpus/expected/locations.json`, written by the .NET `CorpusParityTests`), and
+  every editable corpus file round-trips unchanged (ADR-0035).
+- `App.test.tsx` also covers Ctrl+S, F5 and leaving the page with focus still in an edited field (W9).
 - `src/test-setup.ts` clears local storage before every test.
 - `scripts/smoke.mjs`: the full demo against the real server and engine (W6 scenarios: New, rename with F2, the
   unsaved prompt, a save conflict made on disk and overwritten, Save as, recovery after a page reload, delete with the
@@ -221,17 +229,14 @@ nothing about the client.
 
 ## Deferred
 
-- **Editing:** inserting into slots; moving between containers or slots; drag-and-drop (pointer hit-testing,
-  ADR-0021); cut/copy/paste; id editing; multi-selection.
-- **Editors:** syntax highlighting and completion in expressions (ADR-0032 decided against CodeMirror for now);
-  renaming a variable does not rewrite the expressions that use it.
-- **Running:** persistent run history (only recent runs of this tab are kept); plugin load diagnostics in the Studio;
-  visible (non-headless) browser runs; searching by execution or correlation id.
+- **Editing:** multi-selection; renaming a variable does not rewrite the expressions that use it; syntax highlighting
+  and completion in expressions (ADR-0032 decided against CodeMirror for now).
+- **Running:** persistent run history (only recent runs of this tab are kept); searching by execution or correlation
+  id.
 - **Files:** folder operations; moving files between projects; noticing outside changes before saving; recovery across
   browsers or machines.
-- **Round-trip:** files with comments or trailing commas; formatting preservation; every number form; duplicate JSON
-  keys.
-- **Tooling:** OpenAPI-generated types (ADR-0028 decision 6); the smoke test in CI, and the web job on Windows; the
-  accessibility audit and screen-reader test; performance measurements in CI and on the nested fixture.
+- **Round-trip:** files with comments or trailing commas (they do not open); formatting preservation; number forms
+  JavaScript would rewrite (they open read-only); duplicate JSON keys. See the parity document, §3.
+- **Tooling:** OpenAPI-generated types (ADR-0028 decision 6).
 - **Out of scope:** the recorder, agents and robots, remote execution, hosted mode and authentication beyond local
   mode, plugin management UI.

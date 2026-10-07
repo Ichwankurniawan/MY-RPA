@@ -82,13 +82,37 @@ describe('Workflow data edits', () => {
 
   it('locates diagnostics like the WPF DraftValidator: rows, properties (also map entries) and the workflow', () => {
     const d = (path: string, nodeId?: string) => ({ code: 'X', severity: 'Error', message: '', path, nodeId });
-    expect(diagnosticTarget(d('$.arguments[1].default'))).toEqual({ kind: 'row', list: 'arguments', index: 1 });
-    expect(diagnosticTarget(d('$.variables[0]'))).toEqual({ kind: 'row', list: 'variables', index: 0 });
-    expect(diagnosticTarget(d('$.root.children[0].properties.message', 'log-1'))).toEqual({ kind: 'node', nodeId: 'log-1', property: 'message' });
-    expect(diagnosticTarget(d('$.root.properties.arguments.who', 'call'))).toEqual({ kind: 'node', nodeId: 'call', property: 'arguments' });
-    expect(diagnosticTarget(d('$.root.children[0]', 'log-1'))).toEqual({ kind: 'node', nodeId: 'log-1', property: undefined });
-    expect(diagnosticTarget(d('$.id'))).toEqual({ kind: 'workflow', field: 'id' });
-    expect(diagnosticTarget(d('$'))).toEqual({ kind: 'workflow', field: undefined });
+    expect(diagnosticTarget(d('$.arguments[1].default'), undefined)).toEqual({ kind: 'row', list: 'arguments', index: 1 });
+    expect(diagnosticTarget(d('$.variables[0]'), undefined)).toEqual({ kind: 'row', list: 'variables', index: 0 });
+    expect(diagnosticTarget(d('$.root.children[0].properties.message', 'log-1'), undefined)).toEqual({ kind: 'node', nodeId: 'log-1', property: 'message' });
+    expect(diagnosticTarget(d('$.root.properties.arguments.who', 'call'), undefined)).toEqual({ kind: 'node', nodeId: 'call', property: 'arguments' });
+    expect(diagnosticTarget(d('$.root.children[0]', 'log-1'), undefined)).toEqual({ kind: 'node', nodeId: 'log-1', property: undefined });
+    expect(diagnosticTarget(d('$.id'), undefined)).toEqual({ kind: 'workflow', field: 'id' });
+    expect(diagnosticTarget(d('$'), undefined)).toEqual({ kind: 'workflow', field: undefined });
+  });
+
+  it('locates node diagnostics through the validated document: invalid and duplicate ids, unknown slots, dotted slot names', () => {
+    const d = (path: string, nodeId?: string) => ({ code: 'X', severity: 'Error', message: '', path, nodeId });
+    const document: JsonObject = {
+      schemaVersion: '1.0',
+      root: {
+        id: 'main',
+        type: 'Core.Sequence',
+        children: [
+          { id: 'bad id', type: 'Core.Log' },
+          { id: 'twice', type: 'Core.Log' },
+          { id: 'twice', type: 'Core.Log' },
+          { id: 's', type: 'Core.Switch', slots: { 'case:1.5': { id: 'a', type: 'Core.Log' }, 'case:1.5.properties': { id: 'b', type: 'Core.Log' } } },
+        ],
+      },
+    };
+    const keys = indexDocument(document).entries.map((entry) => entry.key);
+    expect(diagnosticTarget(d('$.root.children[0].id'), document)).toEqual({ kind: 'node', key: keys[1], nodeId: 'bad id', property: undefined });
+    expect(diagnosticTarget(d('$.root.children[2].id', 'twice'), document)).toMatchObject({ key: keys[3] });
+    expect(diagnosticTarget(d('$.root.children[3].slots.case:1.5.properties.message', 'a'), document)).toMatchObject({ key: keys[5], property: 'message' });
+    expect(diagnosticTarget(d('$.root.children[3].slots.case:1.5.properties.properties.message', 'b'), document)).toMatchObject({ key: keys[6], nodeId: 'b', property: 'message' });
+    expect(diagnosticTarget(d('$.root.x-note'), document)).toMatchObject({ kind: 'node', key: keys[0] });
+    expect(diagnosticTarget(d('$.x-note'), document)).toEqual({ kind: 'workflow', field: undefined });
   });
 });
 

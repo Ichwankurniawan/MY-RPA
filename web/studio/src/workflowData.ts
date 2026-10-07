@@ -3,7 +3,7 @@
 // copies only what changes and keeps unknown fields. Validation stays on the server (WorkflowLoader); the checks here
 // only keep the editors honest (for example a default must be JSON before it can be stored).
 
-import { isObject, updateNode, type Step } from './document';
+import { indexDocument, isObject, updateNode, type NodeEntry, type Step } from './document';
 import type { Diagnostic, Json, JsonObject } from './types';
 
 /** The workflow's identity fields (format §1). */
@@ -155,25 +155,101 @@ export function assignableNames(document: JsonObject): string[] {
   return names;
 }
 
-/** Where a diagnostic belongs: a node (and property), an argument or variable row, or the workflow (and field). */
+/**
+ * Where a diagnostic belongs: a node (and property), an argument or variable row, or the workflow (and field). A node is
+ * named by its client key (exact even when ids are missing, invalid or duplicated) and by its id when it has one.
+ */
 export type DiagnosticTarget =
-  | { readonly kind: 'node'; readonly nodeId: string; readonly property?: string }
+  | { readonly kind: 'node'; readonly key?: string; readonly nodeId?: string; readonly property?: string }
   | { readonly kind: 'row'; readonly list: DataList; readonly index: number }
   | { readonly kind: 'workflow'; readonly field?: string };
 
-/** Locates a diagnostic, like the WPF `DraftValidator`: rows by `$.arguments[i]`, properties by `.properties.<name>`. */
-export function diagnosticTarget(diagnostic: Diagnostic): DiagnosticTarget {
-  const row = /^\$\.(arguments|variables)\[(\d+)\]/.exec(diagnostic.path);
+/** The JSON path of a node, as the loader writes it in diagnostics (`$.root.children[2].slots.case:1.5`). */
+export function nodeJsonPath(path: readonly Step[]): string {
+  return '$.root' + path.map((step) => ('children' in step ? `.children[${step.children}]` : `.slots.${step.slot}`)).join('');
+}
+
+const nodeRemainder = (rest: string) =>
+  rest === '' ||
+  ['.id', '.type', '.displayName', '.properties', '.children', '.slots'].includes(rest) ||
+  rest.startsWith('.properties.') ||
+  rest.startsWith('.children[') ||
+  rest.startsWith('.slots.');
+
+const located = new WeakMap<JsonObject, WeakMap<Diagnostic, DiagnosticTarget>>();
+const pathMaps = new WeakMap<JsonObject, ReadonlyMap<string, NodeEntry>>();
+
+/** Every node of the document by its JSON path (computed once per document version). */
+function nodePaths(document: JsonObject): ReadonlyMap<string, NodeEntry> {
+  let map = pathMaps.get(document);
+  if (map === undefined) {
+    map = new Map(indexDocument(document).entries.map((entry) => [nodeJsonPath(entry.path), entry]));
+    pathMaps.set(document, map);
+  }
+
+  return map;
+}
+
+/**
+ * Locates a diagnostic of `document` (the document that was validated) exactly like the WPF `DraftValidator` (W9 corpus
+ * parity): rows by `$.arguments[i]` / `$.variables[i]`; otherwise the longest node path that prefixes the diagnostic's
+ * path and leaves a remainder a node can have (so slot names containing dots stay exact), falling back to the longest
+ * prefix; the property is the name after that node's `.properties.`. Without a document it falls back to the node id.
+ */
+export function diagnosticTarget(diagnostic: Diagnostic, document: JsonObject | undefined): DiagnosticTarget {
+  const cache = document === undefined ? undefined : (located.get(document) ?? new WeakMap<Diagnostic, DiagnosticTarget>());
+  const cached = cache?.get(diagnostic);
+  if (cached) {
+    return cached;
+  }
+
+  const target = locate(diagnostic, document);
+  if (document !== undefined && cache !== undefined) {
+    cache.set(diagnostic, target);
+    located.set(document, cache);
+  }
+
+  return target;
+}
+
+function locate(diagnostic: Diagnostic, document: JsonObject | undefined): DiagnosticTarget {
+  const path = diagnostic.path;
+  const row = /^\$\.(arguments|variables)\[(\d+)\]/.exec(path);
   if (row) {
     return { kind: 'row', list: row[1] as DataList, index: Number(row[2]) };
   }
 
-  if (diagnostic.nodeId) {
-    const at = diagnostic.path.indexOf('.properties.');
-    const property = at < 0 ? undefined : diagnostic.path.slice(at + '.properties.'.length).split('.')[0];
+  if (document !== undefined) {
+    // Candidates are the prefixes of the path that end where a dot follows (or at its end): longest first.
+    const nodes = nodePaths(document);
+    let best: string | undefined;
+    let fallback: string | undefined;
+    for (let end = path.length; end > 0; end = path.lastIndexOf('.', end - 1)) {
+      const candidate = path.slice(0, end);
+      if (!nodes.has(candidate)) {
+        continue;
+      }
+
+      fallback ??= candidate;
+      if (nodeRemainder(path.slice(end))) {
+        best = candidate;
+        break;
+      }
+    }
+
+    best ??= fallback;
+    const entry = best === undefined ? undefined : nodes.get(best);
+    if (best !== undefined && entry !== undefined) {
+      const rest = path.slice(best.length);
+      const property = rest.startsWith('.properties.') ? rest.slice('.properties.'.length).split('.')[0] : undefined;
+      return { kind: 'node', key: entry.key, nodeId: typeof entry.node.id === 'string' ? entry.node.id : undefined, property: property || undefined };
+    }
+  } else if (diagnostic.nodeId) {
+    const at = path.lastIndexOf('.properties.');
+    const property = at < 0 ? undefined : path.slice(at + '.properties.'.length).split('.')[0];
     return { kind: 'node', nodeId: diagnostic.nodeId, property: property || undefined };
   }
 
-  const field = /^\$\.(\w+)$/.exec(diagnostic.path)?.[1];
+  const field = /^\$\.(\w+)$/.exec(path)?.[1];
   return { kind: 'workflow', field };
 }

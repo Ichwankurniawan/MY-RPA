@@ -122,3 +122,62 @@ describe('App', () => {
     expect(screen.getByText(/Open the start link/)).toBeTruthy();
   });
 });
+
+// W9: the WPF shell tests "CtrlS/F5/Close with focus still in an edited field" (PendingEditTests). In the Web Studio a
+// keystroke is already an edit of the document, so there is no typed-but-uncommitted value to lose.
+describe('Shortcuts and leaving with focus still in an edited field', () => {
+  it('Ctrl+S saves the value just typed', async () => {
+    const { api } = await renderStudio();
+    fireEvent.click(treeItem('log-greeting'));
+    const field = screen.getByLabelText(/^message/);
+    field.focus();
+
+    fireEvent.change(field, { target: { value: "'typed'" } });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 's', ctrlKey: true });
+      await settle();
+    });
+
+    expect(document.activeElement).toBe(field);
+    expect(api.saves).toHaveLength(1);
+    expect(api.saves[0].text).toContain("'typed'");
+  });
+
+  it('F5 runs the value just typed (as the unsaved buffer)', async () => {
+    const { api } = await renderStudio();
+    fireEvent.click(treeItem('log-greeting'));
+    const field = screen.getByLabelText(/^message/);
+    field.focus();
+
+    fireEvent.change(field, { target: { value: "'typed'" } });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'F5' });
+      await settle();
+    });
+    // hello-world declares an In argument, so F5 asks for it first (the WPF argument prompt).
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+      await settle();
+    });
+
+    expect(api.runs).toHaveLength(1);
+    expect(JSON.stringify(api.runs[0].document)).toContain("'typed'");
+  });
+
+  it('asks before leaving the page only when there are unsaved changes, including the value just typed', async () => {
+    await renderStudio();
+    const leave = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    expect(leave()).toBe(false);
+    fireEvent.click(treeItem('log-greeting'));
+    const field = screen.getByLabelText(/^message/);
+    field.focus();
+    fireEvent.change(field, { target: { value: "'typed'" } });
+
+    expect(leave()).toBe(true);
+  });
+});

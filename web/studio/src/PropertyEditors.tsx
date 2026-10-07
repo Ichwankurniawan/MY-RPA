@@ -12,10 +12,10 @@ import { assignableNames, diagnosticTarget, jsonText, parseJsonText, setMetadata
 const problemText = (diagnostics: readonly Diagnostic[]) => diagnostics.map((d) => `${d.code}: ${d.message}`).join(' ');
 
 /** Diagnostics of a node's property (including entries of a map property). */
-function propertyDiagnostics(diagnostics: readonly Diagnostic[] | undefined, nodeId: Json | undefined, name: string): Diagnostic[] {
+function propertyDiagnostics(diagnostics: readonly Diagnostic[] | undefined, validated: JsonObject | undefined, key: string, name: string): Diagnostic[] {
   return (diagnostics ?? []).filter((d) => {
-    const target = diagnosticTarget(d);
-    return target.kind === 'node' && target.nodeId === nodeId && target.property === name;
+    const target = diagnosticTarget(d, validated);
+    return target.kind === 'node' && target.key === key && target.property === name;
   });
 }
 
@@ -33,13 +33,14 @@ function WorkflowProperties() {
   const studio = useStudio();
   const document = useStudioState((s) => s.document);
   const diagnostics = useStudioState((s) => s.diagnostics);
+  const validated = useStudioState((s) => s.validated);
   const disabled = useStudioState((s) => s.file?.readOnlyReason !== undefined);
   if (document === undefined) {
     return <p className="hint">Open a workflow.</p>;
   }
 
   const located = (diagnostics ?? []).flatMap((d) => {
-    const target = diagnosticTarget(d);
+    const target = diagnosticTarget(d, validated);
     return target.kind === 'workflow' ? [{ d, field: target.field }] : [];
   });
   const forField = (field: string) => located.filter((x) => x.field === field).map((x) => x.d);
@@ -90,6 +91,7 @@ function NodeProperties() {
   const selectedKey = useStudioState((s) => s.selectedKey);
   const readOnlyReason = useStudioState((s) => s.file?.readOnlyReason);
   const diagnostics = useStudioState((s) => s.diagnostics);
+  const validated = useStudioState((s) => s.validated);
   const catalog = useStudioState((s) => s.catalog);
   const entry = document && selectedKey ? indexDocument(document).byKey.get(selectedKey) : undefined;
 
@@ -111,10 +113,13 @@ function NodeProperties() {
   const properties = isObject(node.properties) ? node.properties : {};
   const known = new Set(activity?.properties.map((p) => p.name));
   const others = Object.entries(properties).filter(([name]) => !known.has(name));
-  const nodeDiagnostics = (diagnostics ?? []).filter((d) => d.nodeId === node.id);
+  const nodeDiagnostics = (diagnostics ?? []).filter((d) => {
+    const target = diagnosticTarget(d, validated);
+    return target.kind === 'node' && target.key === entry.key;
+  });
   const idErrors = nodeDiagnostics.filter((d) => d.path.endsWith('.id'));
   const general = nodeDiagnostics.filter((d) => {
-    const target = diagnosticTarget(d);
+    const target = diagnosticTarget(d, validated);
     return target.kind === 'node' && target.property === undefined && !d.path.endsWith('.id');
   });
   const disabled = readOnlyReason !== undefined;
@@ -153,7 +158,7 @@ function NodeProperties() {
           value={properties[descriptor.name]}
           disabled={disabled}
           names={names}
-          errors={propertyDiagnostics(diagnostics, node.id, descriptor.name)}
+          errors={propertyDiagnostics(diagnostics, validated, entry.key, descriptor.name)}
         />
       ))}
       {others.map(([name, value]) => (
@@ -164,7 +169,7 @@ function NodeProperties() {
           value={value}
           disabled={disabled}
           note={activity ? 'Not a property of this activity.' : 'Raw JSON.'}
-          errors={propertyDiagnostics(diagnostics, node.id, name)}
+          errors={propertyDiagnostics(diagnostics, validated, entry.key, name)}
         />
       ))}
       {activity === undefined && !disabled && <AddRawProperty nodeKey={entry.key} existing={properties} />}

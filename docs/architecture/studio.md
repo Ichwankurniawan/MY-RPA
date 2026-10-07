@@ -103,6 +103,9 @@ Stop (Shift+F5) cancels the run cooperatively.
 
 ## 8. Manual test script (PRD 5.5)
 
+> The exit review uses the Web Studio version of this script: [web-studio-parity.md](web-studio-parity.md) §4
+> (W9). This WPF script is kept until the WPF Studio is removed (W10).
+
 1. Start Studio. The title is *Untitled — MyRPA Studio*, and the Errors tab shows *(0)*.
 2. **Create:** in Properties set Name to `Greeter`, then press Enter. The title gains `*`.
 3. **Add activities:** drag *Assign* from Activities onto the *Drop activities here* zone. Then drag *If* below it,

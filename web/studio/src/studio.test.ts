@@ -89,7 +89,7 @@ describe('Studio', () => {
     await studio.validate();
 
     expect(state().diagnostics).toHaveLength(1);
-    expect(state().errorNodeIds.has('log-greeting')).toBe(true);
+    expect(state().errorNodeKeys.has(indexDocument(state().document as JsonObject).byNodeId.get('log-greeting') as string)).toBe(true);
     expect(state().message).toBe('1 error(s) found.');
   });
 

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "id": "lossy",
+  "name": "Lossy literals",
+  "version": "1.0.0",
+  "variables": [ { "name": "big", "type": "Int", "default": 12345678901234567890 } ],
+  "root": { "id": "main", "type": "Core.Sequence", "children": [
+    { "id": "a", "type": "Core.Delay", "properties": { "milliseconds": 1.0 } },
+    { "id": "b", "type": "Core.Delay", "properties": { "milliseconds": 1e3 } }
+  ] }
+}

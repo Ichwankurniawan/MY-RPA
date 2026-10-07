@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0",
+  "id": "diag-data",
+  "name": "diag-data",
+  "version": "1.0.0",
+  "arguments": [
+    {
+      "name": "1bad",
+      "direction": "In",
+      "type": "String"
+    },
+    {
+      "name": "dup",
+      "direction": "In",
+      "type": "String"
+    },
+    {
+      "name": "sideways",
+      "direction": "Sideways",
+      "type": "String"
+    },
+    {
+      "name": "out-default",
+      "direction": "Out",
+      "type": "String",
+      "default": "x"
+    }
+  ],
+  "variables": [
+    {
+      "name": "dup",
+      "type": "String"
+    },
+    {
+      "name": "shapeless",
+      "type": "Shape"
+    },
+    {
+      "name": "count",
+      "type": "Int",
+      "default": "zero"
+    }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence"
+  }
+}

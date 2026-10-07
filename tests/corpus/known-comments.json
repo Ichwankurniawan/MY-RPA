@@ -1,0 +1,8 @@
+{
+  // The engine accepts comments and trailing commas (ADR-0011).
+  "schemaVersion": "1.0",
+  "id": "comments",
+  "name": "Comments",
+  "version": "1.0.0",
+  "root": { "id": "main", "type": "Core.Log", "properties": { "message": "nobody" }, },
+}

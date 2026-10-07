@@ -802,7 +802,7 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
   // store's identity check stays exact. Fields are separated by NUL (never in ids, statuses or slot names).
   const view = useStudioState(
     (s) =>
-      `${s.selectedKey === key ? 1 : 0}\0${id !== undefined && s.errorNodeIds.has(id) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}`,
+      `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}`,
   );
   const [selectedFlag, errorFlag, statusText, pickedText] = view.split('\0');
   const selected = selectedFlag === '1';

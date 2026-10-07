@@ -133,7 +133,8 @@ export interface StudioState {
   readonly diagnostics?: readonly Diagnostic[];
   /** The document version the diagnostics describe. */
   readonly validated?: JsonObject;
-  readonly errorNodeIds: ReadonlySet<string>;
+  /** Client keys of the nodes with error diagnostics (located like WPF; exact even for duplicate or invalid ids). */
+  readonly errorNodeKeys: ReadonlySet<string>;
   readonly busy?: 'opening' | 'saving' | 'validating' | 'starting';
   /** Recent runs, newest first (at most `maxRuns`, unfinished ones are never dropped). */
   readonly runs: readonly RunView[];
@@ -434,7 +435,7 @@ export class Studio {
       files: [],
       undo: [],
       redo: [],
-      errorNodeIds: new Set(),
+      errorNodeKeys: new Set(),
       runs: [],
       nodeStatus: noStatus,
       treeShowsRun: false,
@@ -567,7 +568,7 @@ export class Studio {
         selectedKey: isObject(root) ? keyOf(root) : undefined,
         diagnostics: undefined,
         validated: undefined,
-        errorNodeIds: new Set(),
+        errorNodeKeys: new Set(),
         dialog: draft ? { kind: 'recover', path, savedAt: draft.savedAt, stale: draft.etag !== etag } : undefined,
         message: opened.readOnlyReason ? `Opened ${path} read-only: ${opened.readOnlyReason}` : `Opened ${path}.`,
       });
@@ -630,9 +631,15 @@ export class Studio {
 
   /** Goes to where a diagnostic belongs: its node (and property), its argument or variable row, or the workflow. */
   goToDiagnostic(diagnostic: Diagnostic): void {
-    const target = diagnosticTarget(diagnostic);
+    const target = diagnosticTarget(diagnostic, this.state.validated);
     if (target.kind === 'node') {
-      this.selectNodeId(target.nodeId);
+      // Keys survive edits, so the node is found even after the document changed since validation.
+      const document = this.state.document;
+      if (target.key !== undefined && document !== undefined && indexDocument(document).byKey.has(target.key)) {
+        this.select(target.key);
+      } else if (target.nodeId !== undefined) {
+        this.selectNodeId(target.nodeId);
+      }
     } else if (target.kind === 'row') {
       this.store.set((state) => ({ rowFocus: { list: target.list, index: target.index, seq: (state.rowFocus?.seq ?? 0) + 1 } }));
     } else {
@@ -892,8 +899,15 @@ export class Studio {
   }
 
   private showDiagnostics(diagnostics: readonly Diagnostic[], document: JsonObject): void {
-    const errorNodeIds = new Set(diagnostics.filter((d) => d.severity === 'Error' && d.nodeId).map((d) => d.nodeId as string));
-    this.store.set({ diagnostics, validated: document, errorNodeIds });
+    const errorNodeKeys = new Set<string>();
+    for (const diagnostic of diagnostics) {
+      const target = diagnosticTarget(diagnostic, document);
+      if (diagnostic.severity === 'Error' && target.kind === 'node' && target.key !== undefined) {
+        errorNodeKeys.add(target.key);
+      }
+    }
+
+    this.store.set({ diagnostics, validated: document, errorNodeKeys });
   }
 
   /** Saves over the version that was opened (ETag/If-Match). A 412 means the file changed on disk meanwhile. */
@@ -1092,7 +1106,7 @@ export class Studio {
     const file = this.state.file;
     if (file?.project === project && file.path === dialog.path) {
       this.mergeKey = undefined;
-      this.store.set({ file: undefined, document: undefined, saved: undefined, selectedKey: undefined, undo: [], redo: [], diagnostics: undefined, validated: undefined, errorNodeIds: new Set() });
+      this.store.set({ file: undefined, document: undefined, saved: undefined, selectedKey: undefined, undo: [], redo: [], diagnostics: undefined, validated: undefined, errorNodeKeys: new Set() });
       this.store.set(treeView);
     }
 

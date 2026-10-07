@@ -74,6 +74,7 @@ export function DataPanel() {
 function ProblemsList() {
   const studio = useStudio();
   const diagnostics = useStudioState((s) => s.diagnostics);
+  const validated = useStudioState((s) => s.validated);
   const stale = useStudioState((s) => s.diagnostics !== undefined && s.validated !== s.document);
   return (
     <div className="problems">
@@ -88,7 +89,7 @@ function ProblemsList() {
             <li key={i} className={d.severity.toLowerCase()}>
               <button type="button" onClick={() => studio.goToDiagnostic(d)}>
                 {d.severity} {d.code}
-                {where(d)}: {d.message}
+                {where(d, validated)}: {d.message}
               </button>
             </li>
           ))}
@@ -98,9 +99,9 @@ function ProblemsList() {
   );
 }
 
-function where(diagnostic: Diagnostic): string {
-  const target = diagnosticTarget(diagnostic);
-  return target.kind === 'node' ? ` (${target.nodeId}${target.property ? `.${target.property}` : ''})`
+function where(diagnostic: Diagnostic, validated: JsonObject | undefined): string {
+  const target = diagnosticTarget(diagnostic, validated);
+  return target.kind === 'node' ? ` (${target.nodeId ?? 'activity'}${target.property ? `.${target.property}` : ''})`
     : target.kind === 'row' ? ` (${target.list === 'arguments' ? 'argument' : 'variable'} ${target.index + 1})`
     : ' (workflow)';
 }
@@ -110,6 +111,7 @@ function RowsEditor({ list }: { list: DataList }) {
   const studio = useStudio();
   const document = useStudioState((s) => s.document);
   const diagnostics = useStudioState((s) => s.diagnostics);
+  const validated = useStudioState((s) => s.validated);
   const disabled = useStudioState((s) => s.file?.readOnlyReason !== undefined);
   const rowFocus = useStudioState((s) => s.rowFocus);
   const table = useRef<HTMLTableElement>(null);
@@ -128,7 +130,7 @@ function RowsEditor({ list }: { list: DataList }) {
   const data = rows(document, list);
   const rowErrors = (index: number) =>
     (diagnostics ?? []).filter((d) => {
-      const target = diagnosticTarget(d);
+      const target = diagnosticTarget(d, validated);
       return target.kind === 'row' && target.list === list && target.index === index;
     });
   const edit = (label: string, mergeKey: string | undefined, apply: (d: JsonObject) => JsonObject) => studio.editWorkflow(label, mergeKey, apply);

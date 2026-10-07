@@ -1,0 +1,509 @@
+[
+  {
+    "file": "diag-data.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1060",
+        "severity": "Error",
+        "message": "\u00271bad\u0027 is not a valid name (letters, digits, \u0027_\u0027; must not start with a digit).",
+        "path": "$.arguments[0].name",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "arguments",
+          "index": 0
+        }
+      },
+      {
+        "code": "MYRPA1062",
+        "severity": "Error",
+        "message": "\u0027Sideways\u0027 is not a direction. Use In, Out or InOut.",
+        "path": "$.arguments[2].direction",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "arguments",
+          "index": 2
+        }
+      },
+      {
+        "code": "MYRPA1060",
+        "severity": "Error",
+        "message": "\u0027out-default\u0027 is not a valid name (letters, digits, \u0027_\u0027; must not start with a digit).",
+        "path": "$.arguments[3].name",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "arguments",
+          "index": 3
+        }
+      },
+      {
+        "code": "MYRPA1065",
+        "severity": "Error",
+        "message": "Out arguments cannot be required or have a default value.",
+        "path": "$.arguments[3]",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "arguments",
+          "index": 3
+        }
+      },
+      {
+        "code": "MYRPA1061",
+        "severity": "Error",
+        "message": "Name \u0027dup\u0027 is declared more than once.",
+        "path": "$.variables[0].name",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "variables",
+          "index": 0
+        }
+      },
+      {
+        "code": "MYRPA1063",
+        "severity": "Error",
+        "message": "\u0027Shape\u0027 is not a data type. Use String, Int, Decimal, Boolean, DateTime, Object, List, Dictionary.",
+        "path": "$.variables[1].type",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "variables",
+          "index": 1
+        }
+      },
+      {
+        "code": "MYRPA1064",
+        "severity": "Error",
+        "message": "Default value does not match type Int: A JSON String is not a valid Int value.",
+        "path": "$.variables[2].default",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "variables",
+          "index": 2
+        }
+      }
+    ]
+  },
+  {
+    "file": "diag-dotted-slots.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1043",
+        "severity": "Error",
+        "message": "Unexpected \u0027end of expression\u0027 (in expression \u00221 \u002B\u0022 at position 3)",
+        "path": "$.root.slots.case:1.5.properties.message",
+        "nodeId": "a",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.slots.case:1.5",
+          "nodeId": "a",
+          "property": "message"
+        }
+      },
+      {
+        "code": "MYRPA1044",
+        "severity": "Error",
+        "message": "Unknown name \u0027nobody\u0027 in expression \u0022nobody\u0022.",
+        "path": "$.root.slots.case:1.5.properties.properties.message",
+        "nodeId": "b",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.slots.case:1.5.properties",
+          "nodeId": "b",
+          "property": "message"
+        }
+      }
+    ]
+  },
+  {
+    "file": "diag-fields.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1020",
+        "severity": "Error",
+        "message": "\u0027bad id!\u0027 is not a valid workflow id (1-128 characters from [A-Za-z0-9-_.:]).",
+        "path": "$.id",
+        "nodeId": null,
+        "wpf": {
+          "kind": "workflow"
+        }
+      },
+      {
+        "code": "MYRPA1021",
+        "severity": "Error",
+        "message": "Workflow name must not be blank.",
+        "path": "$.name",
+        "nodeId": null,
+        "wpf": {
+          "kind": "workflow"
+        }
+      },
+      {
+        "code": "MYRPA1030",
+        "severity": "Error",
+        "message": "\u0027\u0027 is not a valid node id (1-128 characters from [A-Za-z0-9-_.:]).",
+        "path": "$.root.children[0].id",
+        "nodeId": null,
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[0]",
+          "nodeId": "",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1032",
+        "severity": "Error",
+        "message": "\u0027\u0027 is not a valid activity type name (expected \u0027Namespace.Name\u0027).",
+        "path": "$.root.children[1].type",
+        "nodeId": "no-type",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[1]",
+          "nodeId": "no-type",
+          "property": null
+        }
+      }
+    ]
+  },
+  {
+    "file": "diag-metadata.json",
+    "readable": false,
+    "reason": "$.version: expected a string."
+  },
+  {
+    "file": "diag-missing-version.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1021",
+        "severity": "Error",
+        "message": "Workflow version must not be blank.",
+        "path": "$.version",
+        "nodeId": null,
+        "wpf": {
+          "kind": "workflow"
+        }
+      }
+    ]
+  },
+  {
+    "file": "diag-nodes.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1030",
+        "severity": "Error",
+        "message": "\u0027bad id\u0027 is not a valid node id (1-128 characters from [A-Za-z0-9-_.:]).",
+        "path": "$.root.children[0].id",
+        "nodeId": null,
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[0]",
+          "nodeId": "bad id",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1031",
+        "severity": "Error",
+        "message": "Node id \u0027twice\u0027 is used more than once.",
+        "path": "$.root.children[2].id",
+        "nodeId": "twice",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[2]",
+          "nodeId": "twice",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1032",
+        "severity": "Error",
+        "message": "\u0027nodots\u0027 is not a valid activity type name (expected \u0027Namespace.Name\u0027).",
+        "path": "$.root.children[3].type",
+        "nodeId": "malformed",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[3]",
+          "nodeId": "malformed",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1033",
+        "severity": "Error",
+        "message": "Activity type \u0027Vendor.Missing\u0027 is not registered.",
+        "path": "$.root.children[4].type",
+        "nodeId": "unregistered",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[4]",
+          "nodeId": "unregistered",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1040",
+        "severity": "Error",
+        "message": "Required property \u0027message\u0027 of \u0027Core.Log\u0027 is missing.",
+        "path": "$.root.children[5].properties.message",
+        "nodeId": "no-message",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[5]",
+          "nodeId": "no-message",
+          "property": "message"
+        }
+      },
+      {
+        "code": "MYRPA1041",
+        "severity": "Error",
+        "message": "Activity \u0027Core.Log\u0027 has no property \u0027colour\u0027 (known: message, level).",
+        "path": "$.root.children[6].properties.colour",
+        "nodeId": "extra-prop",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[6]",
+          "nodeId": "extra-prop",
+          "property": "colour"
+        }
+      },
+      {
+        "code": "MYRPA1042",
+        "severity": "Error",
+        "message": "Expected an expression (JSON string) or a literal number, boolean or null.",
+        "path": "$.root.children[7].properties.message",
+        "nodeId": "shape",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[7]",
+          "nodeId": "shape",
+          "property": "message"
+        }
+      },
+      {
+        "code": "MYRPA1043",
+        "severity": "Error",
+        "message": "Unexpected \u0027end of expression\u0027 (in expression \u0022\u0027a\u0027 \u002B\u0022 at position 5)",
+        "path": "$.root.children[8].properties.message",
+        "nodeId": "syntax",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[8]",
+          "nodeId": "syntax",
+          "property": "message"
+        }
+      },
+      {
+        "code": "MYRPA1044",
+        "severity": "Error",
+        "message": "Unknown name \u0027nobody\u0027 in expression \u0022nobody\u0022.",
+        "path": "$.root.children[9].properties.message",
+        "nodeId": "unknown-name",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[9]",
+          "nodeId": "unknown-name",
+          "property": "message"
+        }
+      },
+      {
+        "code": "MYRPA1045",
+        "severity": "Error",
+        "message": "\u0027who\u0027 is read-only (In argument or local) and cannot be assigned.",
+        "path": "$.root.children[10].properties.to",
+        "nodeId": "bad-target",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[10]",
+          "nodeId": "bad-target",
+          "property": "to"
+        }
+      },
+      {
+        "code": "MYRPA1046",
+        "severity": "Error",
+        "message": "\u0027Loud\u0027 is not allowed. Use one of: Trace, Debug, Information, Warning, Error, Critical.",
+        "path": "$.root.children[11].properties.level",
+        "nodeId": "bad-level",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[11]",
+          "nodeId": "bad-level",
+          "property": "level"
+        }
+      },
+      {
+        "code": "MYRPA1047",
+        "severity": "Error",
+        "message": "Local \u0027who\u0027 hides an existing name; choose a different name.",
+        "path": "$.root.children[12].properties.itemVariable",
+        "nodeId": "hides",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[12]",
+          "nodeId": "hides",
+          "property": "itemVariable"
+        }
+      },
+      {
+        "code": "MYRPA1050",
+        "severity": "Error",
+        "message": "Activity \u0027Core.Log\u0027 does not accept a children list.",
+        "path": "$.root.children[13].children",
+        "nodeId": "with-children",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[13]",
+          "nodeId": "with-children",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1051",
+        "severity": "Error",
+        "message": "Activity \u0027Core.If\u0027 has no slot \u0027maybe\u0027 (known: then, else).",
+        "path": "$.root.children[14].slots.maybe",
+        "nodeId": "unknown-slot",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[14].slots.maybe",
+          "nodeId": "m",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1052",
+        "severity": "Error",
+        "message": "Required slot \u0027then\u0027 of \u0027Core.If\u0027 is missing.",
+        "path": "$.root.children[15].slots",
+        "nodeId": "no-then",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[15]",
+          "nodeId": "no-then",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1043",
+        "severity": "Error",
+        "message": "Unexpected \u0027end of expression\u0027 (in expression \u0022\u0027a\u0027 \u002B\u0022 at position 5)",
+        "path": "$.root.children[16].properties.arguments.who",
+        "nodeId": "map-entry",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[16]",
+          "nodeId": "map-entry",
+          "property": "arguments"
+        }
+      }
+    ]
+  },
+  {
+    "file": "diag-schema-malformed.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1010",
+        "severity": "Error",
+        "message": "\u0022one\u0022 is not a schema version; expected a string \u0027major.minor\u0027 such as \u00221.0\u0022.",
+        "path": "$.schemaVersion",
+        "nodeId": null,
+        "wpf": {
+          "kind": "workflow"
+        }
+      }
+    ]
+  },
+  {
+    "file": "diag-schema-unsupported.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1011",
+        "severity": "Error",
+        "message": "Schema version 2.0 is not supported; this MyRPA reads 1.0 to 1.0.",
+        "path": "$.schemaVersion",
+        "nodeId": null,
+        "wpf": {
+          "kind": "workflow"
+        }
+      }
+    ]
+  },
+  {
+    "file": "known-comments.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1044",
+        "severity": "Error",
+        "message": "Unknown name \u0027nobody\u0027 in expression \u0022nobody\u0022.",
+        "path": "$.root.properties.message",
+        "nodeId": "main",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root",
+          "nodeId": "main",
+          "property": "message"
+        }
+      }
+    ]
+  },
+  {
+    "file": "roundtrip-lossy-literals.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1064",
+        "severity": "Error",
+        "message": "Default value does not match type Int: A JSON Number is not a valid Int value.",
+        "path": "$.variables[0].default",
+        "nodeId": null,
+        "wpf": {
+          "kind": "row",
+          "list": "variables",
+          "index": 0
+        }
+      }
+    ]
+  },
+  {
+    "file": "roundtrip-valid.json",
+    "readable": true,
+    "diagnostics": [
+      {
+        "code": "MYRPA1005",
+        "severity": "Warning",
+        "message": "Unknown field \u0027x-top-note\u0027 is ignored.",
+        "path": "$.x-top-note",
+        "nodeId": null,
+        "wpf": {
+          "kind": "workflow"
+        }
+      },
+      {
+        "code": "MYRPA1005",
+        "severity": "Warning",
+        "message": "Unknown field \u0027x-node-note\u0027 is ignored.",
+        "path": "$.root.x-node-note",
+        "nodeId": null,
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root",
+          "nodeId": "main",
+          "property": null
+        }
+      }
+    ]
+  }
+]

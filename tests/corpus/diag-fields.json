@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "id": "bad id!",
+  "version": "1.0.0",
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "type": "Core.Log", "properties": { "message": "'no id'" } },
+      { "id": "no-type" }
+    ]
+  }
+}

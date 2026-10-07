@@ -4,9 +4,10 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio — completing Phase 5 (W4B
-  done; W7–W10 authorized by the owner on 2026-10-08).** See `docs/architecture/web-studio-roadmap.md`. W10 (WPF
-  deletion) requires the W9 human run of the manual script and the owner's sign-off. Phase 6 must not start without
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio — completing Phase 5 (W4B–W8
+  done; W9 automated evidence done, see `docs/architecture/web-studio-parity.md`; W7–W10 authorized by the owner on
+  2026-10-08).** See `docs/architecture/web-studio-roadmap.md`. W10 (WPF deletion) is blocked until a person runs the
+  manual script (parity §4), CI has run on GitHub, and the owner signs off (parity §5). Phase 6 must not start without
   authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only

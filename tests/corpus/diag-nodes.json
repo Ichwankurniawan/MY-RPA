@@ -1,0 +1,172 @@
+{
+  "schemaVersion": "1.0",
+  "id": "diag-nodes",
+  "name": "diag-nodes",
+  "version": "1.0.0",
+  "arguments": [
+    {
+      "name": "who",
+      "direction": "In",
+      "type": "String"
+    }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      {
+        "id": "bad id",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'x'"
+        }
+      },
+      {
+        "id": "twice",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'x'"
+        }
+      },
+      {
+        "id": "twice",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'y'"
+        }
+      },
+      {
+        "id": "malformed",
+        "type": "nodots"
+      },
+      {
+        "id": "unregistered",
+        "type": "Vendor.Missing"
+      },
+      {
+        "id": "no-message",
+        "type": "Core.Log"
+      },
+      {
+        "id": "extra-prop",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'x'",
+          "colour": "red"
+        }
+      },
+      {
+        "id": "shape",
+        "type": "Core.Log",
+        "properties": {
+          "message": {
+            "not": "an expression"
+          }
+        }
+      },
+      {
+        "id": "syntax",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'a' +"
+        }
+      },
+      {
+        "id": "unknown-name",
+        "type": "Core.Log",
+        "properties": {
+          "message": "nobody"
+        }
+      },
+      {
+        "id": "bad-target",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "who",
+          "value": "'x'"
+        }
+      },
+      {
+        "id": "bad-level",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'x'",
+          "level": "Loud"
+        }
+      },
+      {
+        "id": "hides",
+        "type": "Core.ForEach",
+        "properties": {
+          "items": "[1]",
+          "itemVariable": "who"
+        },
+        "slots": {
+          "body": {
+            "id": "inner",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'x'"
+            }
+          }
+        }
+      },
+      {
+        "id": "with-children",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'x'"
+        },
+        "children": [
+          {
+            "id": "orphan",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'x'"
+            }
+          }
+        ]
+      },
+      {
+        "id": "unknown-slot",
+        "type": "Core.If",
+        "properties": {
+          "condition": "true"
+        },
+        "slots": {
+          "then": {
+            "id": "t",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'x'"
+            }
+          },
+          "maybe": {
+            "id": "m",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'x'"
+            }
+          }
+        }
+      },
+      {
+        "id": "no-then",
+        "type": "Core.If",
+        "properties": {
+          "condition": "true"
+        }
+      },
+      {
+        "id": "map-entry",
+        "type": "Core.InvokeWorkflow",
+        "properties": {
+          "workflow": "child.json",
+          "arguments": {
+            "who": "'a' +"
+          }
+        }
+      }
+    ]
+  }
+}

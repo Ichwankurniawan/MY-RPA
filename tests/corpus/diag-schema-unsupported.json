@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "2.0",
+  "id": "w",
+  "name": "W",
+  "version": "1",
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence"
+  }
+}

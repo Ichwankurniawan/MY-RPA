@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ApiError } from './api';
+import { indexDocument } from './document';
 import { applyEvent, currentRun, inputArguments, maxEvents, maxEventsPerFrame, maxRuns, stopRefusalOf, Studio, type RunView } from './studio';
 import { FakeApi, FakeEventSource, immediately, helloWorldEvents, settle } from './test-support';
 import type { ExecutionEvent, JsonObject } from './types';
@@ -136,7 +137,7 @@ describe('Validation before run', () => {
     expect(api.runs).toHaveLength(0);
     expect(run()).toMatchObject({ status: 'NotStarted', notStarted: { reason: 'validation' } });
     expect(state().diagnostics).toHaveLength(1);
-    expect(state().errorNodeIds.has('main')).toBe(true);
+    expect(state().errorNodeKeys.has(indexDocument(state().document as JsonObject).byNodeId.get('main') as string)).toBe(true);
     expect(state().busy).toBeUndefined();
   });
 

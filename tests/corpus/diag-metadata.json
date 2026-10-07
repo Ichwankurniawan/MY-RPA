@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "id": "bad id!",
+  "name": "",
+  "version": 7,
+  "x-unknown": true,
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence"
+  }
+}

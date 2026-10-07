@@ -38,3 +38,4 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0032](0032-web-studio-rich-authoring.md) | Web Studio rich authoring (W4B) | Accepted for W4B | W4B |
 | [0033](0033-web-studio-parity-authoring.md) | Web Studio parity authoring: slots, moves, clipboard, drag-and-drop (W7) | Accepted for W7 | W7 |
 | [0034](0034-web-studio-quality-review.md) | Web Studio quality: performance, accessibility, security, dependencies (W8) | Accepted for W8 | W8 |
+| [0035](0035-web-studio-wpf-exit-review.md) | Web Studio WPF exit review: corpus parity and exit evidence (W9) | Accepted for W9; sign-off pending | W9 |
