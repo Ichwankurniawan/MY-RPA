@@ -117,8 +117,14 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   - **Stop** (button or Shift+F5): `POST /api/runs/{id}/cancel`. The run shows **Cancelling…** until the server
     reports its final state; Stop is disabled, with the reason, when the run cannot be stopped.
   - **Execution panel:** status and run id, workflow, start time, elapsed time (then duration), the node running now,
-    the error with its code and node and a **Select failed node** button, outputs, a notice when the stream is
-    reconnecting or events were lost (`stream.gap`), and the run's events and logs with times.
+    execution and correlation ids, the error with its code, node, activity type and error kind and a **Select failed
+    node** button, outputs, a notice when the stream is reconnecting or events were lost (`stream.gap`), and the run's
+    events and logs with times. **Clear log** empties the list for that run (the run is unaffected).
+  - **Plugins:** plugins that failed to load (optional ones; a required one stops the server) are reported in a notice
+    above the designer; the loaded plugins are listed under the activity catalog.
+  - **Visible browser runs:** `Browser.Open` has a `headless` property, and the browser plugin's `headless` setting
+    is its default; set it to `false` in the plugin configuration file given to the server with `--plugin-config` (as
+    the WPF Studio did). No Studio option is needed.
   - **Tree:** while the shown run is of the open file, nodes carry Running, Succeeded, Failed or Cancelled; nodes with
     no state were not executed and are dimmed. Only the run's own workflow maps to nodes; events of invoked workflows
     are listed only.

@@ -202,6 +202,8 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await start.click();
   await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
   const outputs = await page.getByTestId('run-outputs').textContent();
+  const correlation = await page.getByTestId('run-correlation-id').textContent();
+  check((await runStatus.textContent()).includes(correlation) && (await page.getByTestId('run-execution-id').textContent()).length > 0, 'execution and correlation ids shown');
   check(outputs.includes('"greeting":"Hi Ada"') && outputs.includes('"doubled":6'), `outputs ${outputs}`);
   step(`W5-1. Run dialog: required "who" blocked Start; who=Ada, times=3 (text) → Succeeded, ${outputs}`);
 
@@ -226,13 +228,15 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await click('Run');
   await runStatus.filter({ hasText: 'Failed' }).waitFor();
   const failure = await page.getByTestId('run-error').textContent();
-  check(failure.includes('at boom') && failure.includes('Planned failure'), `failure ${failure}`);
+  check(failure.includes('at boom (Core.Throw') && failure.includes('Planned failure'), `failure ${failure}`);
   check((await row('boom').getAttribute('data-run-status')) === 'Failed' && (await row('never').getAttribute('data-run-status')) === null, 'failed and not executed nodes');
   await click('Select failed node');
   check((await selected()) === 'boom', `selected after "Select failed node": ${await selected()}`);
   await message.fill("'Changed after the failure'");
   await title.filter({ hasText: /•$/ }).waitFor();
   await page.screenshot({ path: join(results, 'studio-run-failed.png') });
+  await click('Clear log');
+  check((await page.locator('.events li').count()) === 0 && (await runStatus.textContent()).includes('Failed'), 'Clear log empties the list, the run stays Failed');
   await page.keyboard.press('Control+z');
   await title.filter({ hasText: /^fail\.json$/ }).waitFor();
   step(`W5-3. Failure: Failed, ${failure.replace(' Select failed node', '').trim()}; Select failed node selected "boom"; the workflow stayed editable`);

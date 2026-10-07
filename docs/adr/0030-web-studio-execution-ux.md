@@ -66,5 +66,8 @@ and replay already existed.
   10,000 (`EventBufferCapacity`). A run with more retained events therefore overflows the queue at once, whatever the
   client's speed: the server drops the connection, the browser waits `retry: 2000` and resumes by cursor, and the cycle
   repeats. Nothing was lost or duplicated, but large runs arrived in 2-second steps.
-- Deferred: persistent run history, plugin load diagnostics in the Studio, visible (headful) browser runs, clearing
-  the log, execution and correlation ids in the panel.
+- Completed on 2026-10-08 (W5 gap closing, before W7): plugin load diagnostics in the Studio (`GET /api/plugins`, a
+  notice above the designer and the loaded plugins under the catalog), Clear log, execution and correlation ids, and the
+  failing activity's type and error kind. Visible browser runs need no new option: the browser plugin's `headless`
+  setting (via `--plugin-config`) and `Browser.Open`'s `headless` property already provide them, as in the WPF Studio.
+- Deferred: persistent run history (post-Phase-5).

@@ -167,6 +167,9 @@ input.code, textarea.code { font-family: ui-monospace, Consolas, monospace; }
 .connection { grid-area: designer / toolbox / output / properties; }
 .statusbar { grid-area: status; margin: 0; padding: 4px 12px; border-top: 1px solid var(--border); color: var(--muted); min-height: 1.8em; background: var(--panel); }
 .hint { color: var(--muted); }
+.notice { border: 1px solid var(--warn); background: var(--warn-bg); color: var(--text); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+.notice ul { margin: 4px 0 0; padding-left: 18px; }
+.loaded-plugins { font-size: 12px; margin-top: 8px; }
 
 .problems ul { list-style: none; margin: 0; padding: 0; }
 .problems button { background: none; border: none; padding: 2px 0; text-align: left; color: inherit; }

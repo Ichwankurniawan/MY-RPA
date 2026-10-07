@@ -93,6 +93,12 @@ export interface ExecutionError {
   errorType?: string | null;
 }
 
+/** `GET /api/plugins`: loaded plugins and their load diagnostics (ADR-0014, ADR-0019). */
+export interface PluginReport {
+  plugins: { id: string; name: string; version: string; sha256: string; activities: string[] }[];
+  diagnostics: { code: string; severity: string; message: string; pluginId?: string | null }[];
+}
+
 /** `GET /api/runs/{runId}`. */
 export interface RunStatus {
   runId: string;

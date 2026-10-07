@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, Diagnostic, JsonObject, RunStatus, ServerInfo, ValidationResult, WorkflowFile } from './types';
+import type { ActivityDescriptor, Diagnostic, JsonObject, PluginReport, RunStatus, ServerInfo, ValidationResult, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -32,6 +32,7 @@ export interface StartRunOptions {
 export interface StudioApi {
   info(): Promise<ServerInfo>;
   activities(): Promise<ActivityDescriptor[]>;
+  plugins(): Promise<PluginReport>;
   workflows(project: string): Promise<WorkflowFile[]>;
   readWorkflow(project: string, path: string): Promise<{ text: string; etag: string }>;
   /** Saves over the version with `etag` (If-Match); returns the new ETag. 412 when the file changed meanwhile. */
@@ -98,6 +99,7 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
   return {
     info: () => get<ServerInfo>('/api/info'),
     activities: async () => (await get<{ activities: ActivityDescriptor[] }>('/api/activities')).activities,
+    plugins: () => get<PluginReport>('/api/plugins'),
     workflows: async (project) => (await get<{ workflows: WorkflowFile[] }>(`/api/projects/${encodeURIComponent(project)}/workflows`)).workflows,
     async readWorkflow(project, path) {
       const response = await fetcher(filePath(project, path), { headers: { Accept: 'application/json' } });

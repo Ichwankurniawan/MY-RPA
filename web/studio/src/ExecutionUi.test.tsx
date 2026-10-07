@@ -184,6 +184,34 @@ describe('Execution UI', () => {
     expect(events().join('|')).toContain('[Information] from one');
   });
 
+  it('names the failing activity type and error kind, shows execution and correlation ids, and clears the log', async () => {
+    const { api } = await renderStudio();
+    await click('Run');
+    await emit(started(), { ...base('run-1'), sequence: 2, kind: 'log', level: 'Information', message: 'before' });
+    await emit(completed(3, 'Failed', { code: 'MYRPA2001', message: 'No such element.', nodeId: 'after', activityType: 'Browser.Click', errorType: 'ElementNotFound' }));
+
+    expect(screen.getByTestId('run-error').textContent).toContain('MYRPA2001 at after (Browser.Click, ElementNotFound): No such element.');
+    expect(screen.getByTestId('run-execution-id').textContent).toBe('e1');
+    expect(screen.getByTestId('run-correlation-id').textContent).toBe('run-1');
+    expect(api.runs).toHaveLength(1);
+
+    await click('Clear log');
+    expect(within(screen.getByRole('list', { name: 'Execution events' })).queryAllByRole('listitem')).toHaveLength(0);
+    expect(status()).toContain('Failed'); // clearing the log does not change the run
+  });
+
+  it('reports plugins that failed to load, and lists the loaded ones', async () => {
+    const api = new FakeApi();
+    api.pluginReport = {
+      plugins: [{ id: 'MyRPA.Samples.Demo', name: 'Demo', version: '1.0.0', sha256: 'x', activities: ['Demo.Echo', 'Demo.GetField'] }],
+      diagnostics: [{ code: 'MYRPA3104', severity: 'Error', message: 'The plugin assembly could not be loaded.', pluginId: 'Vendor.Broken' }],
+    };
+    await renderStudio('plain.json', api);
+
+    expect(screen.getByRole('alert').textContent).toContain('Error MYRPA3104 (Vendor.Broken): The plugin assembly could not be loaded.');
+    expect(screen.getByText('Plugins: Demo 1.0.0 (2 activities)')).toBeTruthy();
+  });
+
   it('shows a dropped stream and missing events', async () => {
     await renderStudio();
     await click('Run');

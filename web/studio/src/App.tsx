@@ -297,6 +297,7 @@ function Toolbox() {
           );
         })}
       </ul>
+      <LoadedPlugins />
     </aside>
   );
 }
@@ -643,6 +644,7 @@ function WorkflowTree() {
   return (
     <section className="designer" aria-labelledby="designer-heading">
       <h2 id="designer-heading">Workflow</h2>
+      <PluginNotice />
       <EditBar />
       <Breadcrumbs />
       {/* While a run of this file is shown, nodes without a run state were not executed (styled as such). */}
@@ -812,6 +814,48 @@ function useNow(active: boolean): number {
   return now;
 }
 
+/** " (Core.Throw, ElementNotFound)": the failing activity's type and the error's classification, when known. */
+function failureKind(error: { activityType?: string | null; errorType?: string | null }): string {
+  const parts = [error.activityType, error.errorType].filter((p): p is string => typeof p === 'string' && p !== '');
+  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+}
+
+/** Plugins that failed to load (optional ones; a required one stops the server) and what each said. */
+function PluginNotice() {
+  const diagnostics = useStudioState((s) => s.plugins?.diagnostics);
+  if (!diagnostics || diagnostics.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="notice" role="alert">
+      <strong>Plugin problems ({diagnostics.length}).</strong> Activities of a plugin that did not load are shown as not in the catalog.
+      <ul>
+        {diagnostics.map((d, i) => (
+          <li key={i}>
+            {d.severity} {d.code}
+            {d.pluginId ? ` (${d.pluginId})` : ''}: {d.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The plugins the server loaded, under the activity catalog. */
+function LoadedPlugins() {
+  const plugins = useStudioState((s) => s.plugins?.plugins);
+  if (!plugins || plugins.length === 0) {
+    return null;
+  }
+
+  return (
+    <p className="hint loaded-plugins">
+      Plugins: {plugins.map((p) => `${p.name} ${p.version} (${p.activities.length} activities)`).join('; ')}
+    </p>
+  );
+}
+
 const duration = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 /** The failed node, when the run ran the open file and the node is in it (an invoked workflow's node is not). */
@@ -876,6 +920,14 @@ function ExecutionPanel() {
               <dd data-testid="run-current">{executing}</dd>
             </>
           )}
+          {run.result && (
+            <>
+              <dt>Execution id</dt>
+              <dd data-testid="run-execution-id">{run.result.executionId}</dd>
+              <dt>Correlation id</dt>
+              <dd data-testid="run-correlation-id">{run.result.correlationId}</dd>
+            </>
+          )}
         </dl>
       )}
       {run?.notStarted && (
@@ -886,7 +938,8 @@ function ExecutionPanel() {
       {run?.error && (
         <p className="field-error" data-testid="run-error">
           {run.error.code}
-          {run.error.nodeId ? ` at ${run.error.nodeId}` : ''}: {run.error.message}{' '}
+          {run.error.nodeId ? ` at ${run.error.nodeId}` : ''}
+          {failureKind(run.error)}: {run.error.message}{' '}
           {failedNode && (
             <button type="button" onClick={() => studio.selectNodeId(failedNode)}>
               Select failed node
@@ -900,6 +953,11 @@ function ExecutionPanel() {
         </p>
       )}
       {run?.result && Object.keys(run.result.outputs).length > 0 && <p data-testid="run-outputs">Outputs: {JSON.stringify(run.result.outputs)}</p>}
+      {run !== undefined && run.events.length > 0 && (
+        <button type="button" className="small" onClick={() => studio.clearLog(run.key)} title="Clear the events and logs shown for this run">
+          Clear log
+        </button>
+      )}
       <ol className="events" aria-label="Execution events">
         {(run?.events ?? []).map((e, i) => (
           <EventRow key={e.kind === 'stream.gap' ? `gap-${i}` : `${e.runId}:${e.sequence}`} event={e} />

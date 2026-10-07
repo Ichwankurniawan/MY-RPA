@@ -2,7 +2,7 @@
 
 import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
-import type { ActivityDescriptor, ExecutionEvent, JsonObject, RunStatus, ValidationResult } from './types';
+import type { ActivityDescriptor, ExecutionEvent, JsonObject, PluginReport, RunStatus, ValidationResult } from './types';
 
 export const helloWorld = `{
   "schemaVersion": "1.0",
@@ -132,6 +132,12 @@ export class FakeApi implements StudioApi {
 
   async activities() {
     return catalog;
+  }
+
+  pluginReport: PluginReport = { plugins: [], diagnostics: [] };
+
+  async plugins() {
+    return this.pluginReport;
   }
 
   async workflows() {

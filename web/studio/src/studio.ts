@@ -23,7 +23,7 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
+import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 
 export interface OpenFile {
@@ -135,6 +135,8 @@ export interface StudioState {
   readonly runDialog?: RunDialogState;
   /** The open in-app dialog of file management (W6), if any. */
   readonly dialog?: StudioDialog;
+  /** Loaded plugins and their load diagnostics (`GET /api/plugins`). */
+  readonly plugins?: PluginReport;
   /** A request to show an argument or variable row (from the Problems list); `seq` makes repeats distinct. */
   readonly rowFocus?: { readonly list: DataList; readonly index: number; readonly seq: number };
 }
@@ -465,12 +467,16 @@ export class Studio {
     try {
       const info = await this.api.info();
       const activities = await this.api.activities();
+      // Plugin load problems (W5): a plugin that failed to load is not fatal for optional plugins; say so up front.
+      const plugins = await this.api.plugins().catch(() => undefined);
+      const problems = plugins?.diagnostics.length ?? 0;
       this.store.set({
         connection: 'ready',
         projects: info.projects,
         activities,
         catalog: new Map(activities.map((activity) => [activity.type, activity])),
-        message: `Connected to ${info.name} (${info.mode} mode).`,
+        plugins,
+        message: `Connected to ${info.name} (${info.mode} mode).${problems > 0 ? ` ${problems} plugin problem(s): see the notice above the designer.` : ''}`,
       });
       if (info.open) {
         // Named on the server's command line (--open): open it right away.
@@ -1163,6 +1169,13 @@ export class Studio {
 
       this.updateRun(run.key, { cancelRequested: false });
       this.say(`Cannot stop run ${run.runId}: ${(error as Error).message}`);
+    }
+  }
+
+  /** Clears the shown events and logs of a run (in this tab only; the run itself is unaffected). */
+  clearLog(key: string | undefined = this.state.currentRunKey): void {
+    if (key !== undefined) {
+      this.updateRun(key, { events: [], missingEvents: 0 });
     }
   }
 
