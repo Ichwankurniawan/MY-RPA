@@ -1,6 +1,8 @@
-import { createContext, memo, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { childSteps, editability, indexDocument, isObject, keyOf, nodeLabel } from './document';
-import { useStore } from './store';
+import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { StudioContext, useStudio, useStudioState } from './context';
+import { DataPanel } from './DataPanel';
+import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel } from './document';
+import { PropertiesPanel } from './PropertyEditors';
 import {
   currentRun,
   deleteRefusalOf,
@@ -15,23 +17,10 @@ import {
   type Studio,
   type StudioDialog,
   type StudioState,
+  workflowKey,
 } from './studio';
-import type { Diagnostic, ExecutionEvent, Json, JsonObject, PropertyDescriptor, WorkflowFile } from './types';
+import type { ExecutionEvent, JsonObject, WorkflowFile } from './types';
 
-const StudioContext = createContext<Studio | null>(null);
-
-function useStudio(): Studio {
-  const studio = useContext(StudioContext);
-  if (studio === null) {
-    throw new Error('No Studio in context.');
-  }
-
-  return studio;
-}
-
-function useStudioState<T>(selector: (state: StudioState) => T): T {
-  return useStore(useStudio().store, selector);
-}
 
 export function App({ studio }: { studio: Studio }) {
   useEffect(() => {
@@ -253,34 +242,60 @@ function Toolbox() {
   const activities = useStudioState((s) => s.activities);
   const refusal = useStudioState(insertRefusal);
   const [query, setQuery] = useState('');
-  const shown = useMemo(() => {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  // The catalog (built-in and plugin activities, ADR-0020) grouped by category; the search also matches descriptions.
+  const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q === '' ? activities : activities.filter((a) => `${a.displayName} ${a.type} ${a.category}`.toLowerCase().includes(q));
+    const shown = q === '' ? activities : activities.filter((a) => `${a.displayName} ${a.type} ${a.category} ${a.description ?? ''}`.toLowerCase().includes(q));
+    const byCategory = new Map<string, typeof activities>();
+    for (const activity of shown) {
+      byCategory.set(activity.category, [...(byCategory.get(activity.category) ?? []), activity]);
+    }
+
+    return [...byCategory].sort(([a], [b]) => a.localeCompare(b));
   }, [activities, query]);
+  const searching = query.trim() !== '';
+  const toggle = (category: string) => setCollapsed((current) => new Set(current.has(category) ? [...current].filter((c) => c !== category) : [...current, category]));
 
   return (
     <aside className="toolbox" aria-labelledby="toolbox-heading">
       <h2 id="toolbox-heading">Activities</h2>
-      <input type="search" placeholder="Search" aria-label="Search activities" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <input type="search" placeholder="Search activities" aria-label="Search activities" value={query} onChange={(e) => setQuery(e.target.value)} />
       <p className="hint" id="toolbox-hint">
         {refusal ?? 'Inserts after the selected activity, or at the end of a selected Sequence.'}
       </p>
-      <ul aria-label="Activity catalog">
-        {shown.map((a) => (
-          <li key={a.type}>
-            <button
-              type="button"
-              className="insert"
-              title={a.description}
-              aria-label={`Insert ${a.displayName} (${a.type})`}
-              aria-describedby="toolbox-hint"
-              disabled={refusal !== undefined}
-              onClick={() => studio.insertActivity(a.type)}
-            >
-              <span>{a.displayName}</span> <small>{a.type}</small>
-            </button>
-          </li>
-        ))}
+      {groups.length === 0 && <p className="hint">{searching ? `No activity matches "${query.trim()}".` : 'The server has no activities.'}</p>}
+      <ul aria-label="Activity catalog" className="catalog">
+        {groups.map(([category, members]) => {
+          const open = searching || !collapsed.has(category);
+          return (
+            <li key={category} className="category">
+              <button type="button" className="category-toggle" aria-expanded={open} onClick={() => toggle(category)}>
+                <span aria-hidden="true">{open ? '▾' : '▸'}</span> {category} <small>({members.length})</small>
+              </button>
+              {open && (
+                <ul aria-label={category}>
+                  {members.map((a) => (
+                    <li key={a.type}>
+                      <button
+                        type="button"
+                        className="insert"
+                        title={a.description}
+                        aria-label={`Insert ${a.displayName} (${a.type})`}
+                        aria-describedby="toolbox-hint"
+                        disabled={refusal !== undefined}
+                        onClick={() => studio.insertActivity(a.type)}
+                      >
+                        <span>{a.displayName}</span> <small>{a.type}</small>
+                        {a.description && <small className="description">{a.description}</small>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </aside>
   );
@@ -629,11 +644,55 @@ function WorkflowTree() {
     <section className="designer" aria-labelledby="designer-heading">
       <h2 id="designer-heading">Workflow</h2>
       <EditBar />
+      <Breadcrumbs />
       {/* While a run of this file is shown, nodes without a run state were not executed (styled as such). */}
       <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown} className={showsRun ? 'shows-run' : undefined}>
         {isObject(root) && <TreeNode node={root} depth={1} />}
       </ul>
     </section>
+  );
+}
+
+/** Where the selection is: Workflow › ancestors › selected node (slot names included); each step selects it. */
+function Breadcrumbs() {
+  const studio = useStudio();
+  const document = useStudioState((s) => s.document);
+  const selectedKey = useStudioState((s) => s.selectedKey);
+  const catalog = useStudioState((s) => s.catalog);
+  if (document === undefined) {
+    return null;
+  }
+
+  const path = selectedKey === undefined ? undefined : indexDocument(document).byKey.get(selectedKey)?.path;
+  const crumbs =
+    path === undefined
+      ? []
+      : Array.from({ length: path.length + 1 }, (_, depth) => {
+          const node = nodeAt(document, path.slice(0, depth));
+          const step = depth === 0 ? undefined : path[depth - 1];
+          const type = typeof node.type === 'string' ? node.type : undefined;
+          return { key: keyOf(node), slot: step && 'slot' in step ? step.slot : undefined, label: nodeLabel(node, type ? catalog.get(type) : undefined) };
+        });
+
+  return (
+    <nav className="breadcrumbs" aria-label="Selection">
+      <ol>
+        <li>
+          <button type="button" className="link" aria-current={selectedKey === workflowKey ? 'location' : undefined} onClick={() => studio.selectWorkflow()}>
+            Workflow
+          </button>
+        </li>
+        {crumbs.map((crumb, i) => (
+          <li key={crumb.key}>
+            <span aria-hidden="true"> › </span>
+            {crumb.slot !== undefined && <span className="slot">{crumb.slot}: </span>}
+            <button type="button" className="link" aria-current={i === crumbs.length - 1 ? 'location' : undefined} onClick={() => studio.select(crumb.key)}>
+              {crumb.label}
+            </button>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
@@ -678,6 +737,11 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
   const status = useStudioState((s) => (id === undefined ? undefined : s.nodeStatus.get(id)));
   const activity = useStudioState((s) => (type === undefined ? undefined : s.catalog.get(type)));
   const children = childSteps(node);
+  // Containers (a list or slots) get a visible boundary; empty ones say so in the card (not as tree items).
+  const container = activity !== undefined && (activity.allowsChildren || activity.slots.length > 0);
+  const emptyList = activity?.allowsChildren === true && !(Array.isArray(node.children) && node.children.length > 0);
+  const presentSlots = isObject(node.slots) ? node.slots : {};
+  const missingSlots = activity?.slots.filter((s) => !s.prefix && !(s.name in presentSlots)) ?? [];
 
   return (
     <li
@@ -693,13 +757,24 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
         studio.select(key);
       }}
     >
-      <div className={`node${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
+      <div className={`node${container ? ' container' : ''}${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
         {slot !== undefined && <span className="slot">{slot}:</span>}
         <span className="label">{nodeLabel(node, activity)}</span>
         <span className="type">{type}</span>
         {id !== undefined && <span className="id">#{id}</span>}
         {hasError && <span className="badge error">error</span>}
         {status !== undefined && <span className={`badge status-${status.toLowerCase()}`}>{status}</span>}
+        {activity === undefined && type !== undefined && <span className="badge">not in catalog</span>}
+        {(emptyList || missingSlots.length > 0) && (
+          <span className="node-hints">
+            {emptyList && <span>No activities yet: select it and insert from Activities.</span>}
+            {missingSlots.map((s) => (
+              <span key={s.name} className={s.required ? 'required-slot' : undefined}>
+                {s.name}: empty{s.required ? ' (required)' : ''}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
       {children.length > 0 && (
         <ul role="group">
@@ -712,198 +787,11 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
   );
 });
 
-function propertyDiagnostics(diagnostics: readonly Diagnostic[] | undefined, nodeId: Json | undefined, name: string): Diagnostic[] {
-  return (diagnostics ?? []).filter((d) => d.nodeId === nodeId && d.path.endsWith(`.properties.${name}`));
-}
-
-function PropertiesPanel() {
-  const studio = useStudio();
-  const document = useStudioState((s) => s.document);
-  const selectedKey = useStudioState((s) => s.selectedKey);
-  const readOnlyReason = useStudioState((s) => s.file?.readOnlyReason);
-  const diagnostics = useStudioState((s) => s.diagnostics);
-  const catalog = useStudioState((s) => s.catalog);
-  const entry = document && selectedKey ? indexDocument(document).byKey.get(selectedKey) : undefined;
-
-  if (entry === undefined) {
-    return (
-      <aside className="properties" aria-labelledby="properties-heading">
-        <h2 id="properties-heading">Properties</h2>
-        <p className="hint">Select a node.</p>
-      </aside>
-    );
-  }
-
-  const node = entry.node;
-  const type = typeof node.type === 'string' ? node.type : '';
-  const activity = catalog.get(type);
-  const properties = isObject(node.properties) ? node.properties : {};
-  const known = new Set(activity?.properties.map((p) => p.name));
-  const others = Object.entries(properties).filter(([name]) => !known.has(name));
-  const nodeDiagnostics = (diagnostics ?? []).filter((d) => d.nodeId === node.id);
-  const disabled = readOnlyReason !== undefined;
-
-  return (
-    <aside className="properties" aria-labelledby="properties-heading">
-      <h2 id="properties-heading">Properties</h2>
-      <dl className="facts">
-        <dt>Type</dt>
-        <dd data-testid="node-type">{type}</dd>
-        <dt>Id</dt>
-        <dd>{typeof node.id === 'string' ? node.id : ''}</dd>
-      </dl>
-      {activity?.description && <p className="hint">{activity.description}</p>}
-      <TextField
-        label="Display name"
-        value={typeof node.displayName === 'string' ? node.displayName : ''}
-        disabled={disabled}
-        onChange={(text) => studio.editDisplayName(entry.key, text)}
-      />
-      {activity === undefined && <p className="hint">This activity is not in the catalog; its properties are read-only.</p>}
-      {activity?.properties.map((descriptor) => (
-        <PropertyEditor
-          key={descriptor.name}
-          nodeKey={entry.key}
-          descriptor={descriptor}
-          value={properties[descriptor.name]}
-          disabled={disabled}
-          errors={propertyDiagnostics(diagnostics, node.id, descriptor.name)}
-        />
-      ))}
-      {others.map(([name, value]) => (
-        <div className="field" key={name}>
-          <span className="field-label">{name}</span>
-          <output className="readonly">{JSON.stringify(value)}</output>
-          <small>{activity ? 'Not a property of this activity.' : 'Read-only.'}</small>
-        </div>
-      ))}
-      {nodeDiagnostics.length > 0 && (
-        <ul className="node-problems" aria-label="Problems of this node">
-          {nodeDiagnostics.map((d, i) => (
-            <li key={i} className={d.severity.toLowerCase()}>
-              {d.code}: {d.message}
-            </li>
-          ))}
-        </ul>
-      )}
-    </aside>
-  );
-}
-
-function TextField({ label, value, disabled, onChange }: { label: string; value: string; disabled: boolean; onChange: (text: string) => void }) {
-  const id = useId();
-  return (
-    <div className="field">
-      <label className="field-label" htmlFor={id}>
-        {label}
-      </label>
-      <input id={id} value={value} disabled={disabled} spellCheck={false} onChange={(e) => onChange(e.target.value)} />
-    </div>
-  );
-}
-
-function PropertyEditor({
-  nodeKey,
-  descriptor,
-  value,
-  disabled,
-  errors,
-}: {
-  nodeKey: string;
-  descriptor: PropertyDescriptor;
-  value: Json | undefined;
-  disabled: boolean;
-  errors: Diagnostic[];
-}) {
-  const studio = useStudio();
-  const id = useId();
-  const state = editability(descriptor, value);
-  const describedBy = `${id}-hint${errors.length > 0 ? ` ${id}-error` : ''}`;
-  const onChange = (text: string) => studio.editProperty(nodeKey, descriptor, text);
-  const label = (
-    <label className="field-label" htmlFor={id}>
-      {descriptor.name}
-      {descriptor.required && <span aria-label="required"> *</span>} <small>{descriptor.kind}</small>
-    </label>
-  );
-
-  let editor;
-  if (!state.editable) {
-    editor = (
-      <output id={id} className="readonly" aria-describedby={describedBy}>
-        {value === undefined ? '' : JSON.stringify(value)} — {state.reason}
-      </output>
-    );
-  } else if (descriptor.kind === 'Text' && descriptor.allowedValues.length > 0) {
-    const options = [...(descriptor.required ? [] : ['']), ...descriptor.allowedValues];
-    if (!options.includes(state.text)) {
-      options.push(state.text);
-    }
-
-    editor = (
-      <select id={id} value={state.text} disabled={disabled} aria-describedby={describedBy} onChange={(e) => onChange(e.target.value)}>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option === '' ? '(not set)' : option}
-          </option>
-        ))}
-      </select>
-    );
-  } else {
-    editor = (
-      <input
-        id={id}
-        className={descriptor.kind === 'Expression' ? 'code' : undefined}
-        value={state.text}
-        disabled={disabled}
-        spellCheck={false}
-        aria-invalid={errors.length > 0}
-        aria-describedby={describedBy}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    );
-  }
-
-  return (
-    <div className={`field${errors.length > 0 ? ' invalid' : ''}`}>
-      {label}
-      {editor}
-      <small id={`${id}-hint`}>{descriptor.description}</small>
-      {errors.length > 0 && (
-        <span id={`${id}-error`} className="field-error">
-          {errors.map((e) => `${e.code}: ${e.message}`).join(' ')}
-        </span>
-      )}
-    </div>
-  );
-}
-
+/** The lower area: workflow data (problems, variables, arguments) beside the execution of runs. */
 function OutputPanel() {
-  const studio = useStudio();
-  const diagnostics = useStudioState((s) => s.diagnostics);
-  const stale = useStudioState((s) => s.diagnostics !== undefined && s.validated !== s.document);
-
   return (
     <section className="output" aria-label="Output">
-      <div className="problems">
-        <h2>Problems{stale ? ' (the workflow changed since)' : ''}</h2>
-        {diagnostics === undefined ? (
-          <p className="hint">Not validated yet.</p>
-        ) : diagnostics.length === 0 ? (
-          <p data-testid="no-problems">No problems.</p>
-        ) : (
-          <ul aria-label="Problems">
-            {diagnostics.map((d, i) => (
-              <li key={i} className={d.severity.toLowerCase()}>
-                <button type="button" disabled={!d.nodeId} onClick={() => d.nodeId && studio.selectNodeId(d.nodeId)}>
-                  {d.severity} {d.code}
-                  {d.nodeId ? ` (${d.nodeId})` : ''}: {d.message}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <DataPanel />
       <ExecutionPanel />
     </section>
   );

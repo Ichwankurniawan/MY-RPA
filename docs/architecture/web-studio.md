@@ -1,13 +1,14 @@
 # Web Studio
 
-Status: Web Studio W6 (project and file management; on W3, W4A and W5). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
+Status: Web Studio W4B (rich authoring; on W3, W4A, W5 and W6). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
 [ADR-0022](../adr/0022-server-control-plane-and-project-structure.md) (server serves the Studio),
 [ADR-0024](../adr/0024-execution-event-streaming-sse.md) (one event stream per tab),
 [ADR-0025](../adr/0025-local-mode-security.md) (local-mode security),
 [ADR-0028](../adr/0028-web-studio-first-slice.md) (W3 slice),
 [ADR-0029](../adr/0029-web-studio-structural-editing.md) (structural editing and undo/redo),
 [ADR-0030](../adr/0030-web-studio-execution-ux.md) (execution UX),
-[ADR-0031](../adr/0031-web-studio-project-and-file-management.md) (project and file management).
+[ADR-0031](../adr/0031-web-studio-project-and-file-management.md) (project and file management),
+[ADR-0032](../adr/0032-web-studio-rich-authoring.md) (rich authoring).
 
 The Web Studio is a React + TypeScript + Vite app in `web/studio`, outside the .NET solution. It talks only to its own
 `MyRPA.Server` origin through the API in [server.md](server.md). It is not at WPF parity yet; the ADR-0021 exit
@@ -62,13 +63,30 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   mine, or Save mine as…; the edits stay until the choice.
 - **Crash recovery:** unsaved edits are kept in this browser (local storage) a second after typing pauses. Opening the
   file again offers them back (Restore, as one undoable step, or Discard), noting when the file changed on disk since.
-- **Tree:** the workflow as an ARIA tree (children, then named slots), with the selected node highlighted.
+- **Designer:** the workflow as an ARIA tree of activity cards (children, then named slots); containers have a
+  boundary; empty lists and missing slots are named in the card. Breadcrumbs (Workflow › … › selection) select any
+  ancestor or the workflow itself.
   - Keyboard: ↑ ↓ Home End move the selection.
-  - Badges show nodes with validation errors and each node's run state.
-- **Properties:** type and id; editable display name; one editor per catalog property.
-  - Required markers and descriptions are shown.
-  - Validation errors appear on the property itself.
-- **Toolbox:** the catalog (`/api/activities`) with a search filter. Each entry is an Insert button.
+  - Badges show nodes with validation errors, each node's run state, and activities missing from the catalog.
+- **Properties** (W4B, ADR-0032): for an activity, its type, editable id, display name and one editor per catalog
+  property kind:
+  - Expression: text (a literal number, boolean or null is shown as JSON and marked *literal*);
+  - Text: text, or a choice list when the catalog names allowed values;
+  - AssignmentTarget: text with suggestions (variables, Out/InOut arguments); LocalName: text;
+  - ExpressionMap / AssignmentTargetMap: entries (name → value) with add, remove and in-place refusal of a blank or
+    duplicate name.
+  - Required markers, descriptions and validation errors on the property itself.
+  - Properties the catalog does not describe (all of an activity missing from the catalog) are raw JSON, stored only
+    while valid, with add and remove.
+  - For the workflow (first breadcrumb): id, name, version, description.
+- **Variables and Arguments** (tabs beside Problems): add, remove, rename; type; direction and required (arguments);
+  default as JSON, stored only while valid. An Out argument has no required flag or default. Row problems show on the
+  row.
+- **Live validation:** the server validates once typing pauses (300 ms) and the results appear on nodes, properties,
+  rows and the workflow; validation never blocks typing.
+- **Toolbox:** the catalog (`/api/activities`, built-in and plugin activities) grouped by category (collapsible), with a
+  search over names, types, categories and descriptions. Each entry is an Insert button.
+- **Themes:** light and dark, following the system setting.
 - **Structural editing** (W4A, ADR-0029):
   - Insert: after the selected activity, or at the end of a selected Sequence. The new node is `{ id, type }` with a
     unique id (`log-1`) and is selected. Nothing is inserted into slots yet.
@@ -78,7 +96,8 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   - Disabled commands show their reason as a tooltip; refused keyboard commands report it in the status bar.
 - **Undo/redo:** Undo and Redo buttons, Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z (also in text fields). Up to 200 steps;
   typing in one property is one step; a new edit clears redo; opening a file starts a new history.
-- **Validate:** `POST /api/validate`. The Problems list selects the node when a problem is clicked.
+- **Validate:** `POST /api/validate` (also automatic, above). The Problems list goes to where a problem belongs: its
+  node, its argument or variable row, or the workflow.
 - **Save:** `PUT` with `If-Match`. A 412 keeps the edits and reports the conflict. Ctrl+S saves.
 - **Dirty state:** a `•` in the title and document title; a `beforeunload` prompt while dirty. Opening another file
   asks before discarding. Undoing back to the saved version is clean again.
@@ -121,6 +140,10 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation, stream status |
 | `src/store.ts` | A minimal external store with slice subscriptions |
 | `src/drafts.ts` | Crash-recovery drafts in local storage (guarded; in memory for tests) |
+| `src/workflowData.ts` | Workflow-level edits (metadata, arguments, variables, node ids, property values) and diagnostic locations |
+| `src/context.ts` | The Studio context and slice-subscription hooks |
+| `src/PropertyEditors.tsx` | Properties: node and workflow editors, one per property kind, raw JSON |
+| `src/DataPanel.tsx` | Problems, Variables and Arguments tabs |
 | `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save; runs (validate first, run dialog, recent runs, Stop, per-frame event batching); files (new, rename, delete, save as, unsaved prompt, conflicts, recovery) |
 | `src/App.tsx` | Layout: toolbar (Save as, Run, Stop, status), Files panel, toolbox (Insert), edit bar (Undo, Redo, Move, Delete), tree, properties, problems, Execution panel, run and file dialogs, status bar |
 | `scripts/harness.mjs` | Shared by the browser scripts: throwaway project, real server with `--web`, headless Chromium |
@@ -145,6 +168,12 @@ nothing about the client.
   mixed histories, redo cleared by a new edit, dirty state across save/undo/redo, the 200-step cap, save and reload.
 - `StructureUi.test.tsx`: command enabling and reasons, insert, delete and move by buttons and keys, focus, undo/redo
   by buttons and shortcuts, saving structural edits.
+- `authoring.test.ts` (W4B): metadata, rows (free names, unknown fields kept, Out without required/default), JSON
+  defaults, node ids, property values, assignment targets, diagnostic locations; undo of every new edit kind; live
+  validation; going to a problem; read-only files.
+- `AuthoringUi.test.tsx` (W4B): metadata via the breadcrumb with undo, breadcrumbs and id editing, literals and target
+  suggestions, map entries, raw JSON of unknown activities, the variables and arguments tables, problems on rows with
+  navigation, toolbox categories and search.
 - `execution.test.ts` (W5): input arguments, the run dialog flow and `argumentText`, validation before run, not-started
   reasons, the lifecycle from server events, failures, timeouts and `MYRPA2004`, Stop (Cancelling…, 409, errors,
   refusals), node mapping (own workflow only, open file only), the event cap, concurrent runs on one stream, the
@@ -176,8 +205,8 @@ nothing about the client.
 
 - **Editing:** inserting into slots; moving between containers or slots; drag-and-drop (pointer hit-testing,
   ADR-0021); cut/copy/paste; id editing; multi-selection.
-- **Editors:** the variables/arguments and workflow metadata editors; map editors; literal (number, boolean, null)
-  editors; CodeMirror expression editing with live syntax feedback; assignment-target suggestions.
+- **Editors:** syntax highlighting and completion in expressions (ADR-0032 decided against CodeMirror for now);
+  renaming a variable does not rewrite the expressions that use it.
 - **Running:** persistent run history (only recent runs of this tab are kept); plugin load diagnostics in the Studio;
   visible (non-headless) browser runs; searching by execution or correlation id.
 - **Files:** folder operations; moving files between projects; noticing outside changes before saving; recovery across

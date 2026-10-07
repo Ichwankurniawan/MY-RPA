@@ -15,7 +15,7 @@ backend work may start in parallel once authorized; see ADR-0021 "Consequences")
 | **W2** | Server / control plane | ✅ Done (`ba857ba`) |
 | **W3** | First working Web Studio | ✅ Done (`2d15bbc`) |
 | **W4A** | Structural editing | ✅ Done (`62f2d05`, approved 2026-09-25) |
-| **W4B** | Rich authoring | ⬜ Open (needs authorization) |
+| **W4B** | Rich authoring | ✅ Done (2026-10-08; ADR-0032) |
 | **W5** | Execution UX | ✅ Done (2026-10-07; authorized before W4B; ADR-0030) |
 | **W6** | Project/file management | ✅ Done (2026-10-07; ADR-0031) |
 | **W7** | Advanced authoring / parity | ⬜ |
@@ -23,16 +23,16 @@ backend work may start in parallel once authorized; see ADR-0021 "Consequences")
 | **W9** | WPF exit criteria + migration | ⬜ |
 | **W10** | WPF removal / Phase 5 completion | ⬜ |
 
-## Exit criteria status after W4A
+## Exit criteria status
 
-Numbers refer to ADR-0021 "Exit criteria for deleting WPF".
+Numbers refer to ADR-0021 "Exit criteria for deleting WPF". Updated as slices complete.
 
-| # | Criterion | Done (W3/W4A) | Open | Planned in |
+| # | Criterion | Done | Open | Planned in |
 |---|---|---|---|---|
-| 1 | Authoring | Open, save; insert catalog activities by keyboard into lists; move within a list; delete; unique ids; display name; toolbox search | Create, save-as; insert into slots (incl. `case:`); nest/move across containers; drag-and-drop; editable id; raw properties of unknown activities; lossless round-trip corpus; metadata editor | W4B, W6, W7 |
-| 2 | Property editing | String values of Expression/Text/AssignmentTarget/LocalName; required markers, descriptions; allowed-value lists; no "typed but not committed" state | Map editor; literal editors; assignment-target suggestions; live expression syntax feedback | W4B |
-| 3 | Variables and arguments | — | Whole editor | W4B |
-| 4 | Validation | Diagnostics on node and property; Problems list navigates; MYRPA1040 on the property | Argument/variable/workflow-level locations; validation ≤ 500 ms after typing stops (debounced); corpus parity with Phase 5 `DraftValidator` | W4B, W9 |
+| 1 | Authoring | Open, save; create, save-as (W6); insert catalog activities by keyboard into lists; move within a list; delete; unique ids; editable id, display name, metadata editor, raw properties of unknown activities (W4B); toolbox search and categories | Insert into slots (incl. `case:`); nest/move across containers; drag-and-drop; lossless round-trip corpus | W7, W9 |
+| 2 | Property editing | All six kinds (W4B): maps, literals, assignment-target suggestions, live syntax feedback (server validation); required markers, descriptions, allowed-value lists; no "typed but not committed" state (invalid JSON or a duplicate map name is refused in place) | — | — |
+| 3 | Variables and arguments | Add, remove, rename; type, direction, required; defaults as JSON with inline errors (W4B) | — | — |
+| 4 | Validation | Diagnostics on node, property, argument/variable row and workflow; Problems list navigates to each; MYRPA1040 on the property; live validation 300 ms after typing stops, never blocking (W4B) | Corpus parity with Phase 5 `DraftValidator` | W9 |
 | 5 | Undo/redo | 200 steps; typing merged; every current edit kind; dirty state incl. undo to saved | New edit kinds must join the history as they are added | each slice |
 | 6 | Copy/paste | — | Cut/copy/paste within and across documents with id renaming; keyboard paste without a permission prompt | W7 |
 | 7 | Execution | Run; status, outputs; error with failing node; per-node states; unsaved buffer; stream re-creation; W5: validate before run, typed argument input (`argumentText`), timeout, Stop with Cancelling…, concurrent runs, reconnect proven end to end (smoke) | — | W5 |

@@ -59,6 +59,18 @@ export const catalog: ActivityDescriptor[] = [
       { name: 'else', required: false, prefix: false },
     ],
   },
+  {
+    type: 'Core.InvokeWorkflow',
+    displayName: 'Invoke Workflow',
+    category: 'Workflow',
+    allowsChildren: false,
+    properties: [
+      { name: 'workflow', kind: 'Text', required: true, allowedValues: [], scopeSlots: [] },
+      { name: 'arguments', kind: 'ExpressionMap', required: false, allowedValues: [], scopeSlots: [] },
+      { name: 'outputs', kind: 'AssignmentTargetMap', required: false, allowedValues: [], scopeSlots: [] },
+    ],
+    slots: [],
+  },
 ];
 
 export class FakeEventSource implements EventSourceLike {

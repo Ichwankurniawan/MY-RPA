@@ -35,3 +35,4 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0029](0029-web-studio-structural-editing.md) | Web Studio structural editing and undo/redo (W4A) | Accepted for W4A | W4A |
 | [0030](0030-web-studio-execution-ux.md) | Web Studio execution UX (W5) | Accepted for W5 | W5 |
 | [0031](0031-web-studio-project-and-file-management.md) | Web Studio project and file management (W6) | Accepted for W6 | W6 |
+| [0032](0032-web-studio-rich-authoring.md) | Web Studio rich authoring (W4B) | Accepted for W4B | W4B |

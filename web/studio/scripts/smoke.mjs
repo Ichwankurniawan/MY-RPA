@@ -293,13 +293,69 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check((await page.getByTestId('stream-reconnecting').count()) === 0, 'the reconnecting notice is gone');
   step(`W5-6. Stream lost mid-run: re-created and resumed; sequences 1..${sequences.length} without duplicates or loss; both logs`);
 
-  // W6: project and file management. All through the Files panel and in-app dialogs, against the real file system.
   const filesTree = page.getByRole('tree', { name: 'Workflow files' });
   const fileRow = (path) => filesTree.locator(`[data-path="${path}"]`);
   const dialogButton = (name) => dialog.getByRole('button', { name, exact: true });
   const titleIs = (text) => title.filter({ hasText: new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$`) }).waitFor();
   const onDisk = (path) => readFileSync(join(project, ...path.split('/')), 'utf8');
   const exists = (path) => existsSync(join(project, ...path.split('/')));
+  const properties = page.getByRole('complementary', { name: 'Properties' });
+
+  // W4B: rich authoring, the PRD 5.5 "Greeter" flow within W4B scope (inserting into slots is W7).
+  await page.getByRole('button', { name: 'New…', exact: true }).click();
+  await dialog.getByLabel('Path in the project').fill('greeter.json');
+  await dialogButton('Create').click();
+  await titleIs('greeter.json');
+  await page.getByRole('navigation', { name: 'Selection' }).getByRole('button', { name: 'Workflow', exact: true }).click();
+  await properties.getByLabel('Name', { exact: true }).fill('Greeter');
+  await page.getByRole('tab', { name: /^Arguments/ }).click();
+  await click('Add argument');
+  await page.getByLabel('argument 1 name').fill('who');
+  await page.getByLabel('argument 1 default').fill('"World"');
+  await page.getByRole('tab', { name: /^Variables/ }).click();
+  await click('Add variable');
+  await page.getByLabel('variable 1 name').fill('message');
+  await row('main').click();
+  await page.getByRole('button', { name: 'Insert Assign (Core.Assign)' }).click();
+  await properties.getByLabel(/^to/).fill('message');
+  await properties.getByLabel(/^value/).fill("'Hello, ' + who");
+  await page.getByRole('button', { name: 'Insert Log (Core.Log)' }).click();
+  await properties.getByLabel(/^message/).fill('message');
+  await page.getByRole('tab', { name: /^Problems/ }).click();
+  await page.getByTestId('no-problems').waitFor(); // live validation (no Validate pressed) found no problems
+  await page.screenshot({ path: join(results, 'studio-authoring.png') });
+  step('W4B-1. Authored Greeter: metadata, argument who = "World", variable message, Assign and Log; live validation: no problems');
+
+  // Live expression feedback: a syntax error appears on the property without pressing Validate; Undo fixes it.
+  // (Selecting another node ends the typing group, so the broken edit is an undo step of its own.)
+  await row('assign-1').click();
+  await row('log-1').click();
+  await properties.getByLabel(/^message/).fill('message +');
+  await properties.locator('.field-error').filter({ hasText: 'MYRPA1043' }).waitFor();
+  await page.keyboard.press('Control+z');
+  await page.getByTestId('no-problems').waitFor();
+  await page.keyboard.press('Control+z');
+  check((await properties.getByLabel(/^message/).inputValue()) === '', 'undo removed the Log message');
+  await page.keyboard.press('Control+y');
+  check((await properties.getByLabel(/^message/).inputValue()) === 'message', 'redo restored it');
+  step('W4B-2. Live validation showed MYRPA1043 on the property while typing; Undo/Redo of authoring edits');
+
+  await click('Save');
+  await titleIs('greeter.json');
+  const greeter = JSON.parse(onDisk('greeter.json'));
+  check(greeter.name === 'Greeter' && greeter.arguments[0].default === 'World' && greeter.variables[0].name === 'message', `saved ${JSON.stringify(greeter)}`);
+  check(greeter.root.children.map((c) => c.type).join(',') === 'Core.Assign,Core.Log', 'saved activities');
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await fileRow('greeter.json').dblclick();
+  await titleIs('greeter.json');
+  await runWithDefaults();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  const greeterLogs = (await page.locator('.events .log').allTextContents()).map((l) => l.trim());
+  check(greeterLogs.join('|') === '[Information] Hello, World', `logs ${greeterLogs}`);
+  step('W4B-3. Saved, reloaded and reopened (all preserved); ran with the default argument: "Hello, World"');
+
+  // W6: project and file management. All through the Files panel and in-app dialogs, against the real file system.
 
   // W6-1: New… creates a valid workflow (in a new folder) and opens it.
   await page.getByRole('button', { name: 'New…', exact: true }).click();

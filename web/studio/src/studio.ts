@@ -23,7 +23,8 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, JsonObject, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
+import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
+import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 
 export interface OpenFile {
   readonly project: string;
@@ -134,7 +135,12 @@ export interface StudioState {
   readonly runDialog?: RunDialogState;
   /** The open in-app dialog of file management (W6), if any. */
   readonly dialog?: StudioDialog;
+  /** A request to show an argument or variable row (from the Problems list); `seq` makes repeats distinct. */
+  readonly rowFocus?: { readonly list: DataList; readonly index: number; readonly seq: number };
 }
+
+/** The selection key of the workflow itself (its metadata in Properties); never a node key. */
+export const workflowKey = '@workflow';
 
 /**
  * In-app dialogs of file management (W6, ADR-0031); they replace `window.confirm`.
@@ -156,6 +162,8 @@ export interface StudioOptions {
   readonly drafts?: DraftStore;
   /** How long typing pauses before the draft is written (ms). */
   readonly draftDelayMs?: number;
+  /** How long typing pauses before the server validates the document (ms; undefined: never automatically). */
+  readonly validateDelayMs?: number;
 }
 
 /** A new workflow's document: valid, with an empty root Sequence; its id comes from the file name. */
@@ -375,6 +383,8 @@ export class Studio {
   private readonly drafts: DraftStore;
   private readonly draftDelayMs: number;
   private draftTimer?: ReturnType<typeof setTimeout>;
+  private readonly validateDelayMs: number | undefined;
+  private validateTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly api: StudioApi,
@@ -384,6 +394,7 @@ export class Studio {
   ) {
     this.drafts = options.drafts ?? storageDrafts();
     this.draftDelayMs = options.draftDelayMs ?? 1000;
+    this.validateDelayMs = 'validateDelayMs' in options ? options.validateDelayMs : 300;
     this.store = createStore<StudioState>({
       connection: 'connecting',
       activities: [],
@@ -413,6 +424,11 @@ export class Studio {
         document = this.state.document;
         clearTimeout(this.draftTimer);
         this.draftTimer = setTimeout(() => this.writeDraft(), this.draftDelayMs);
+        // Live validation (W4B): the server validates once typing pauses; the result never blocks typing.
+        clearTimeout(this.validateTimer);
+        if (document !== undefined && this.validateDelayMs !== undefined) {
+          this.validateTimer = setTimeout(() => void this.autoValidate(), this.validateDelayMs);
+        }
       }
     });
   }
@@ -548,6 +564,57 @@ export class Studio {
 
   editDisplayName(key: string, text: string): void {
     this.edit(key, 'Edit display name', `displayName:${key}`, (document, path) => setDisplayName(document, path, text));
+  }
+
+  /** Sets any value of a node's property (map, literal, raw JSON); `undefined` removes it. Typing merges per property. */
+  editPropertyValue(key: string, name: string, value: Json | undefined, mergeKey = `property:${key}:${name}`): void {
+    this.edit(key, `Edit ${name}`, mergeKey, (document, path) => setPropertyValue(document, path, name, value));
+  }
+
+  editNodeId(key: string, id: string): void {
+    this.edit(key, 'Edit id', `id:${key}`, (document, path) => setNodeId(document, path, id));
+  }
+
+  /** A workflow-level edit (metadata, arguments, variables) as one undoable step; typing with one `mergeKey` merges. */
+  editWorkflow(label: string, mergeKey: string | undefined, apply: (document: JsonObject) => JsonObject): void {
+    const { document } = this.state;
+    if (document !== undefined && editRefusal(this.state) === undefined) {
+      this.commit(apply(document), this.state.selectedKey, label, mergeKey);
+    }
+  }
+
+  /** Selects the workflow itself: Properties shows its metadata. */
+  selectWorkflow(): void {
+    this.select(workflowKey);
+  }
+
+  /** Goes to where a diagnostic belongs: its node (and property), its argument or variable row, or the workflow. */
+  goToDiagnostic(diagnostic: Diagnostic): void {
+    const target = diagnosticTarget(diagnostic);
+    if (target.kind === 'node') {
+      this.selectNodeId(target.nodeId);
+    } else if (target.kind === 'row') {
+      this.store.set((state) => ({ rowFocus: { list: target.list, index: target.index, seq: (state.rowFocus?.seq ?? 0) + 1 } }));
+    } else {
+      this.selectWorkflow();
+    }
+  }
+
+  /** Validates the document as it is now (after typing pauses); never blocks editing and never says anything. */
+  private async autoValidate(): Promise<void> {
+    const document = this.state.document;
+    if (document === undefined || this.state.connection !== 'ready') {
+      return;
+    }
+
+    try {
+      const result = await this.api.validate(document);
+      if (this.state.document === document) {
+        this.showDiagnostics(result.diagnostics, document);
+      }
+    } catch {
+      // The explicit Validate and Run report problems; background validation stays quiet.
+    }
   }
 
   private edit(key: string, label: string, mergeKey: string, apply: (document: JsonObject, path: readonly Step[]) => JsonObject): void {
@@ -1185,6 +1252,10 @@ function nodeIdOf(document: JsonObject, key: string): string {
 
 /** `key` when that node exists in `document`, else the root's key. */
 function existingKey(document: JsonObject, key: string | undefined): string | undefined {
+  if (key === workflowKey) {
+    return key; // the workflow itself is always there
+  }
+
   const index = indexDocument(document);
   return key !== undefined && index.byKey.has(key) ? key : index.entries[0]?.key;
 }

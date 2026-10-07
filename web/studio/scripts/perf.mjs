@@ -50,7 +50,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
         for (let i = 0; i < count; i++) {
           const start = performance.now();
           if (kind === 'keystroke') {
-            const input = document.querySelector('.properties input.code');
+            const input = document.querySelector('.properties input[placeholder^="expression"]');
             setValue.call(input, `${input.value}x`);
             input.dispatchEvent(new Event('input', { bubbles: true }));
           } else if (kind === 'move') {
@@ -114,7 +114,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     const times = [];
     while (!status().includes('Succeeded') && performance.now() - start < 120_000) {
       const t0 = performance.now();
-      const input = document.querySelector('.properties input.code');
+      const input = document.querySelector('.properties input[placeholder^="expression"]');
       setValue.call(input, `${input.value}y`);
       input.dispatchEvent(new Event('input', { bubbles: true }));
       await frame();

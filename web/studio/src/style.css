@@ -1,30 +1,71 @@
+/* MyRPA Web Studio. Colors are tokens with a light and a dark theme (prefers-color-scheme); no inline styles (CSP). */
 :root {
-  --bg: #f6f7f9;
+  --bg: #f4f5f8;
   --panel: #ffffff;
+  --panel-2: #f9fafb;
   --border: #d5d9e0;
+  --border-strong: #b8bec9;
   --text: #1d2330;
   --muted: #5b6475;
   --accent: #2458d6;
+  --accent-text: #ffffff;
   --selected: #dce6fb;
   --error: #b42318;
+  --error-bg: #fde2df;
   --ok: #1a7f37;
+  --ok-bg: #dcf3e2;
+  --info-bg: #e3ebff;
+  --warn: #8a5300;
+  --warn-bg: #fff1d6;
+  --container: #f0f3fa;
+  color-scheme: light;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--bg);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181e;
+    --panel: #1d2128;
+    --panel-2: #23282f;
+    --border: #353b45;
+    --border-strong: #4a5160;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #6d9cff;
+    --accent-text: #0d1220;
+    --selected: #24365c;
+    --error: #ff8a7a;
+    --error-bg: #4a1f1a;
+    --ok: #6fd28c;
+    --ok-bg: #1d3a26;
+    --info-bg: #1f2d4d;
+    --warn: #f0c060;
+    --warn-bg: #3d3018;
+    --container: #1a2030;
+    color-scheme: dark;
+  }
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; }
 h1 { font-size: 16px; margin: 0 12px 0 0; }
-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 8px; }
-button, select, input { font: inherit; }
-button { padding: 4px 12px; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { padding: 4px 12px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--panel-2); cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.55; cursor: default; }
+button.small { padding: 1px 8px; }
+button.link { padding: 0; border: none; background: none; color: var(--accent); text-decoration: underline; }
+select, input, textarea { background: var(--panel); border: 1px solid var(--border-strong); border-radius: 4px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .studio {
   display: grid;
-  grid-template-columns: 220px 1fr 320px;
+  grid-template-columns: 240px 1fr 340px;
   grid-template-rows: auto minmax(0, 1fr) minmax(240px, 40vh) auto;
   grid-template-areas: 'toolbar toolbar toolbar' 'toolbox designer properties' 'output output output' 'status status status';
   height: 100vh;
@@ -47,59 +88,88 @@ button { padding: 4px 12px; }
 .files .file.open { font-weight: 600; }
 .files .file:focus-visible { outline: 2px solid var(--accent); }
 .files .folder-name { color: var(--muted); }
-.toolbox input { width: 100%; margin-bottom: 8px; }
+
+/* Activities: categories (collapsible) with insert buttons. */
+.toolbox input { width: 100%; margin-bottom: 8px; padding: 4px 6px; }
 .toolbox ul { list-style: none; margin: 0; padding: 0; }
 .toolbox li { padding: 1px 0; }
-.toolbox button.insert { width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 4px; padding: 2px 4px; cursor: pointer; }
-.toolbox button.insert:hover:not(:disabled) { border-color: var(--border); background: var(--bg); }
-.toolbox button.insert:disabled { cursor: default; opacity: 0.6; }
-.editbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.toolbox .category-toggle { width: 100%; text-align: left; border: none; background: none; padding: 4px 2px; font-weight: 600; color: var(--muted); }
+.toolbox button.insert { width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px 6px; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
+.toolbox button.insert:hover:not(:disabled) { border-color: var(--border); background: var(--panel-2); }
 .toolbox small { color: var(--muted); }
-.designer { grid-area: designer; background: var(--bg); }
-.properties { grid-area: properties; border-left: 1px solid var(--border); }
-.output { grid-area: output; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; overflow: hidden; }
-/* Each half scrolls on its own, so a long event list is never clipped by the row. */
-.output > div { overflow: auto; min-height: 0; }
-.toolbar-status { color: var(--muted); }
-.connection { grid-area: designer / toolbox / output / properties; }
-.statusbar { grid-area: status; margin: 0; padding: 4px 12px; border-top: 1px solid var(--border); color: var(--muted); min-height: 1.8em; }
-.hint { color: var(--muted); }
+.toolbox .description { flex-basis: 100%; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 
+/* Designer: activity cards; containers have a tinted boundary; nesting is indented with a guide line. */
+.designer { grid-area: designer; background: var(--bg); }
+.breadcrumbs ol { display: flex; flex-wrap: wrap; gap: 0 4px; list-style: none; margin: 0 0 8px; padding: 0; color: var(--muted); }
+.breadcrumbs li { display: flex; gap: 4px; align-items: baseline; }
+.breadcrumbs .slot { color: var(--accent); }
+.breadcrumbs [aria-current] { font-weight: 600; text-decoration: none; color: var(--text); }
 [role='tree'], [role='group'] { list-style: none; margin: 0; padding: 0; }
-[role='group'] { padding-left: 20px; border-left: 1px dashed var(--border); margin-left: 8px; }
+[role='group'] { padding-left: 20px; border-left: 1px dashed var(--border-strong); margin-left: 10px; }
 [role='treeitem'] { outline: none; }
 [role='treeitem']:focus-visible > .node { outline: 2px solid var(--accent); }
-.node { display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; margin: 2px 0; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); cursor: pointer; }
+.node { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 6px 10px; margin: 4px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); cursor: pointer; box-shadow: 0 1px 1px rgb(0 0 0 / 0.04); }
+.node.container { background: var(--container); border-left: 3px solid var(--border-strong); }
 .node.selected { background: var(--selected); border-color: var(--accent); }
 .node.has-error { border-color: var(--error); }
 .node .slot { color: var(--accent); font-weight: 600; }
 .node .label { font-weight: 600; }
 .node .type, .node .id { color: var(--muted); font-size: 12px; }
+.node .node-hints { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--muted); }
+.node .required-slot { color: var(--error); }
 .badge { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--border); }
-.badge.error, .badge.status-failed { background: #fde2df; color: var(--error); }
-.badge.status-succeeded { background: #dcf3e2; color: var(--ok); }
-.badge.status-running { background: #e3ebff; color: var(--accent); }
-.badge.status-cancelled { background: #fff1d6; color: #8a5300; }
+.badge.error, .badge.status-failed { background: var(--error-bg); color: var(--error); }
+.badge.status-succeeded { background: var(--ok-bg); color: var(--ok); }
+.badge.status-running { background: var(--info-bg); color: var(--accent); }
+.badge.status-cancelled { background: var(--warn-bg); color: var(--warn); }
 .node[data-run-status='Running'] { border-color: var(--accent); }
 /* A run of this file is shown: nodes without a run state were not executed. */
 .shows-run .node:not([data-run-status]) .label { color: var(--muted); font-weight: normal; }
 
+/* Properties. */
+.properties { grid-area: properties; border-left: 1px solid var(--border); }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; font-family: ui-monospace, Consolas, monospace; }
-.field { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.field { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
 .field-label { font-weight: 600; }
-.field-label small { color: var(--muted); font-weight: normal; }
+.field-label small { color: var(--muted); font-weight: normal; margin-left: 4px; }
 .field small { color: var(--muted); }
-.field input, .field select { width: 100%; padding: 4px 6px; }
-.field input.code { font-family: ui-monospace, Consolas, monospace; }
-.field.invalid input { border-color: var(--error); }
+.field input, .field select, .field textarea { width: 100%; padding: 4px 6px; }
+input.code, textarea.code { font-family: ui-monospace, Consolas, monospace; }
+.field.invalid input, input[aria-invalid='true'] { border-color: var(--error); }
 .field-error, .error { color: var(--error); }
 .readonly { font-family: ui-monospace, Consolas, monospace; color: var(--muted); }
 .node-problems { padding-left: 16px; }
+.map-editor { display: flex; flex-direction: column; gap: 4px; }
+.map-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.map-row > input, .map-row > .json-field { flex: 1 1 0; min-width: 0; }
+.map-row .map-error { flex-basis: 100%; font-size: 12px; }
+.json-field { display: flex; flex-direction: column; }
+.json-field .field-error { font-size: 12px; }
+
+/* Lower area: tabs (Problems, Variables, Arguments) beside the execution panel. */
+.output { grid-area: output; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; overflow: hidden; }
+/* Each half scrolls on its own, so a long event list is never clipped by the row. */
+.output > div { overflow: auto; min-height: 0; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 8px; position: sticky; top: 0; background: var(--panel); }
+.tabs [role='tab'] { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 4px 10px; color: var(--muted); }
+.tabs [role='tab'][aria-selected='true'] { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+.rows-editor table { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
+.rows-editor th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 2px 4px; }
+.rows-editor td { padding: 2px 4px; vertical-align: top; }
+.rows-editor td input:not([type='checkbox']), .rows-editor td select { width: 100%; padding: 2px 4px; }
+.rows-editor tr.invalid td:first-child input { border-color: var(--error); }
+.rows-editor .field-error { display: block; font-size: 12px; }
+.toolbar-status { color: var(--muted); }
+.connection { grid-area: designer / toolbox / output / properties; }
+.statusbar { grid-area: status; margin: 0; padding: 4px 12px; border-top: 1px solid var(--border); color: var(--muted); min-height: 1.8em; background: var(--panel); }
+.hint { color: var(--muted); }
 
 .problems ul { list-style: none; margin: 0; padding: 0; }
-.problems button { background: none; border: none; padding: 2px 0; text-align: left; cursor: pointer; color: inherit; }
+.problems button { background: none; border: none; padding: 2px 0; text-align: left; color: inherit; }
 .problems .error button { color: var(--error); }
 .events { font-family: ui-monospace, Consolas, monospace; font-size: 12px; margin: 0; padding-left: 0; list-style: none; }
 .events .seq { color: var(--muted); display: inline-block; min-width: 2.5em; }
@@ -108,6 +178,7 @@ button { padding: 4px 12px; }
 .events .log { color: var(--ok); }
 .events .time { color: var(--muted); }
 .recent-runs { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; color: var(--muted); }
-.run-dialog { min-width: 360px; max-width: 90vw; border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
+.run-dialog { min-width: 360px; max-width: 90vw; border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: var(--panel); color: var(--text); }
+.run-dialog::backdrop { background: rgb(0 0 0 / 0.35); }
 .run-dialog h2 { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text); }
-.dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+.dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
