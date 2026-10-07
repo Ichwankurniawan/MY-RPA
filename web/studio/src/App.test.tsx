@@ -2,10 +2,10 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { Studio } from './studio';
-import { FakeApi, FakeEventSource, helloWorldEvents, settle } from './test-support';
+import { FakeApi, FakeEventSource, immediately, helloWorldEvents, settle } from './test-support';
 
 async function renderStudio(api = new FakeApi()) {
-  const studio = new Studio(api, (url) => new FakeEventSource(url));
+  const studio = new Studio(api, (url) => new FakeEventSource(url), immediately);
   render(<App studio={studio} />);
   await act(settle);
   fireEvent.change(screen.getByRole('combobox', { name: 'Workflow' }), { target: { value: 'hello-world.json' } });
@@ -94,7 +94,12 @@ describe('App', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Run' }));
       await settle();
     });
-    expect(screen.getByTestId('run-status').textContent).toContain('Running');
+    // hello-world declares userName (In, with a default): the run dialog asks first; blank keeps the default.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+      await settle();
+    });
+    expect(screen.getByTestId('run-status').textContent).toContain('Waiting to start');
     await act(async () => {
       helloWorldEvents('run-1').forEach((e) => FakeEventSource.instances[0].emit(e));
       await settle();
@@ -111,7 +116,7 @@ describe('App', () => {
   it('asks for the start link when the browser has no session', async () => {
     const api = new FakeApi();
     api.signedIn = false;
-    render(<App studio={new Studio(api, (url) => new FakeEventSource(url))} />);
+    render(<App studio={new Studio(api, (url) => new FakeEventSource(url), immediately)} />);
     await act(settle);
 
     expect(screen.getByText(/Open the start link/)).toBeTruthy();

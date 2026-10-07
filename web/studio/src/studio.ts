@@ -20,7 +20,7 @@ import {
   setProperty,
   type Step,
 } from './document';
-import { RunEventStream, type EventSourceFactory } from './events';
+import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
 import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, JsonObject, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
 
@@ -33,12 +33,61 @@ export interface OpenFile {
   readonly readOnlyReason?: string;
 }
 
+/**
+ * One press of Run and, once the server accepted it, that run. Validating and NotStarted are the Studio's own steps
+ * before the server has a run; Starting means accepted and waiting for the engine (possibly queued). After that the
+ * status is the server's: Running, then the final status of `execution.completed` (Succeeded, Failed, Cancelled,
+ * TimedOut). The Studio never decides an execution outcome itself (ADR-0030).
+ */
 export interface RunView {
+  /** The attempt's client key (a run id exists only once the server accepted the run). */
+  readonly key: string;
   readonly runId?: string;
-  /** Starting, Running, then the engine's final status (Succeeded, Failed, Cancelled, TimedOut), or NotStarted. */
+  readonly project: string;
+  readonly path: string;
+  /** When Run was pressed (ISO 8601). */
+  readonly requestedAt: string;
   readonly status: string;
+  /** Why the run never started: the workflow did not validate, or the server refused the request. */
+  readonly notStarted?: { readonly reason: 'validation' | 'request'; readonly message: string };
+  /** Stop was requested; the outcome is still the server's (shown as Cancelling… until it arrives). */
+  readonly cancelRequested: boolean;
+  /** The engine's start time (`execution.started`). */
+  readonly startedAt?: string;
+  readonly durationMs?: number;
   readonly error?: ExecutionError;
   readonly result?: RunStatus['result'];
+  /** The run's events, the latest `maxEvents`. */
+  readonly events: readonly ExecutionEvent[];
+  /** Node id → Running, Succeeded, Failed or Cancelled (the run's own workflow only, never invoked ones). */
+  readonly nodeStatus: ReadonlyMap<string, string>;
+  /** Nodes started and not yet completed, in start order; the last one is executing now. */
+  readonly runningNodes: readonly string[];
+  /** Events the server no longer had when they were requested (`stream.gap`). */
+  readonly missingEvents: number;
+}
+
+/** An input (In or InOut) argument declared by the workflow, for the run dialog. */
+export interface RunArgument {
+  readonly name: string;
+  readonly type: string;
+  readonly required: boolean;
+  /** The declared default as JSON, for display only. */
+  readonly defaultJson?: string;
+}
+
+export interface RunDialogState {
+  readonly path: string;
+  readonly arguments: readonly RunArgument[];
+  /** The texts entered the last time this file was run in this session. */
+  readonly values: Readonly<Record<string, string>>;
+  readonly timeoutMs?: number;
+}
+
+export interface RunOptions {
+  /** Input arguments as typed text; blank ones are left out so the engine applies the default. */
+  readonly argumentText?: Readonly<Record<string, string>>;
+  readonly timeoutMs?: number;
 }
 
 /** One undo or redo step: a complete document version (structurally shared) and the selection that went with it. */
@@ -72,13 +121,160 @@ export interface StudioState {
   readonly validated?: JsonObject;
   readonly errorNodeIds: ReadonlySet<string>;
   readonly busy?: 'opening' | 'saving' | 'validating' | 'starting';
-  readonly run?: RunView;
-  readonly events: readonly ExecutionEvent[];
-  /** Node id → Running, Succeeded, Failed or Cancelled for the current run. */
+  /** Recent runs, newest first (at most `maxRuns`, unfinished ones are never dropped). */
+  readonly runs: readonly RunView[];
+  /** The run shown in the Execution panel and on the tree. */
+  readonly currentRunKey?: string;
+  /** The current run's node states when it ran the open file; otherwise empty. */
   readonly nodeStatus: ReadonlyMap<string, string>;
+  /** Whether the tree shows a run's node states (nodes without one were not executed). */
+  readonly treeShowsRun: boolean;
+  readonly stream: StreamStatus;
+  readonly runDialog?: RunDialogState;
 }
 
+/** Events kept per run. */
 export const maxEvents = 1000;
+
+/** Runs kept in the Recent runs list. */
+export const maxRuns = 10;
+
+/** Streamed events applied per animation frame; more wait for the next frame. */
+export const maxEventsPerFrame = 250;
+
+const noStatus: ReadonlyMap<string, string> = new Map();
+
+/** Whether the run may still change (the Studio is validating, or the server has not finished it). */
+export const isActive = (run: RunView): boolean => run.status === 'Validating' || run.status === 'Starting' || run.status === 'Running';
+
+export function currentRun(state: StudioState): RunView | undefined {
+  return state.runs.find((run) => run.key === state.currentRunKey);
+}
+
+/** Why Run is not available now (undefined when it is). Other runs may still be going on. */
+export function runRefusalOf(state: StudioState): string | undefined {
+  if (state.document === undefined || state.file === undefined) {
+    return 'Open a workflow first.';
+  }
+
+  return state.busy !== undefined ? `Wait until ${state.busy} has finished.` : undefined;
+}
+
+/** Why `run` cannot be stopped now (undefined when it can). */
+export function stopRefusalOf(run: RunView | undefined): string | undefined {
+  if (run === undefined) {
+    return 'No run to stop.';
+  }
+
+  if (run.status === 'NotStarted') {
+    return 'The run did not start.';
+  }
+
+  if (!isActive(run)) {
+    return `The run already finished (${run.status}).`;
+  }
+
+  if (run.runId === undefined) {
+    return 'The run has not been accepted by the server yet.';
+  }
+
+  return run.cancelRequested ? 'Cancelling…' : undefined;
+}
+
+/** The workflow's In and InOut arguments, read from the document. */
+export function inputArguments(document: JsonObject): RunArgument[] {
+  const declared = Array.isArray(document.arguments) ? document.arguments : [];
+  return declared.filter(isObject).flatMap((argument) =>
+    typeof argument.name === 'string' && (argument.direction === 'In' || argument.direction === 'InOut')
+      ? [
+          {
+            name: argument.name,
+            type: typeof argument.type === 'string' ? argument.type : '',
+            required: argument.required === true,
+            defaultJson: 'default' in argument ? JSON.stringify(argument.default) : undefined,
+          },
+        ]
+      : [],
+  );
+}
+
+/**
+ * A run after a batch of its events (in stream order), with one copy of its event list and node map per batch. Only the
+ * run's own workflow (no parent execution) maps to tree nodes; events of invoked workflows are only listed.
+ */
+export function applyEvents(run: RunView, batch: readonly ExecutionEvent[]): RunView {
+  if (batch.length === 0) {
+    return run;
+  }
+
+  let { status, startedAt, durationMs, error, missingEvents } = run;
+  let nodeStatus: Map<string, string> | undefined;
+  const runningNodes = [...run.runningNodes];
+  for (const event of batch) {
+    if (event.kind === 'stream.gap') {
+      missingEvents += (event.missingToSequence ?? 0) - (event.missingFromSequence ?? 0) + 1;
+      continue;
+    }
+
+    if (event.parentExecutionId) {
+      continue;
+    }
+
+    // The engine has the run once it reports anything of it (also when a gap hid execution.started).
+    if (status === 'Starting' && event.kind !== 'log') {
+      status = 'Running';
+    }
+
+    if (event.kind === 'execution.started') {
+      startedAt = event.time;
+    } else if (event.kind === 'node.started' && event.nodeId) {
+      (nodeStatus ??= new Map(run.nodeStatus)).set(event.nodeId, 'Running');
+      runningNodes.push(event.nodeId);
+    } else if (event.kind === 'node.completed' && event.nodeId) {
+      (nodeStatus ??= new Map(run.nodeStatus)).set(event.nodeId, event.status ?? 'Succeeded');
+      const at = runningNodes.lastIndexOf(event.nodeId);
+      if (at >= 0) {
+        runningNodes.splice(at, 1);
+      }
+    } else if (event.kind === 'execution.completed') {
+      status = event.status ?? 'Succeeded';
+      durationMs = event.durationMs;
+      error = event.error;
+      runningNodes.length = 0;
+    }
+  }
+
+  const all = run.events.concat(batch);
+  const events = all.length > maxEvents ? all.slice(all.length - maxEvents) : all;
+  return { ...run, events, status, startedAt, durationMs, error, missingEvents, nodeStatus: nodeStatus ?? run.nodeStatus, runningNodes };
+}
+
+/** A run after one of its events. */
+export const applyEvent = (run: RunView, event: ExecutionEvent): RunView => applyEvents(run, [event]);
+
+/** Runs `flush` once before the next paint (in the browser), so a burst of events costs one render. */
+export type Scheduler = (flush: () => void) => void;
+
+export const nextFrame: Scheduler = (flush) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => flush()) : setTimeout(flush, 0));
+
+/** The tree shows the current run's node states only when that run is of the open file. */
+function treeView(state: StudioState): Pick<StudioState, 'nodeStatus' | 'treeShowsRun'> {
+  const run = currentRun(state);
+  const shows = run?.runId !== undefined && run.project === state.file?.project && run.path === state.file.path;
+  return { nodeStatus: shows ? run.nodeStatus : noStatus, treeShowsRun: shows };
+}
+
+/** At most `maxRuns`: the oldest finished runs go first; unfinished ones stay so their events still have a home. */
+function trimRuns(runs: readonly RunView[]): RunView[] {
+  const kept = [...runs];
+  for (let i = kept.length - 1; i >= 0 && kept.length > maxRuns; i--) {
+    if (!isActive(kept[i])) {
+      kept.splice(i, 1);
+    }
+  }
+
+  return kept;
+}
 
 /** Undo steps kept per document (ADR-0021: at least 200). */
 export const maxUndo = 200;
@@ -126,10 +322,17 @@ export class Studio {
   private readonly events: RunEventStream;
   /** Consecutive edits with the same key (typing in one field) form one undo step; anything else ends the group. */
   private mergeKey?: string;
+  private attempts = 0;
+  /** Argument texts per file (`project/path`), remembered for the session. */
+  private readonly argumentDrafts = new Map<string, Record<string, string>>();
+  private lastTimeoutMs?: number;
+  /** Events received since the last flush, applied together (ADR-0030: one store update per frame). */
+  private pending: ExecutionEvent[] = [];
 
   constructor(
     private readonly api: StudioApi,
     createSource: EventSourceFactory,
+    private readonly schedule: Scheduler = nextFrame,
   ) {
     this.store = createStore<StudioState>({
       connection: 'connecting',
@@ -140,10 +343,18 @@ export class Studio {
       undo: [],
       redo: [],
       errorNodeIds: new Set(),
-      events: [],
-      nodeStatus: new Map(),
+      runs: [],
+      nodeStatus: noStatus,
+      treeShowsRun: false,
+      stream: 'idle',
     });
-    this.events = new RunEventStream(api, createSource, (event) => this.receive(event), (message) => this.say(message));
+    this.events = new RunEventStream(
+      api,
+      createSource,
+      (event) => this.receive(event),
+      (message) => this.say(message),
+      (stream) => this.store.set({ stream }),
+    );
   }
 
   private get state(): StudioState {
@@ -217,6 +428,7 @@ export class Studio {
         errorNodeIds: new Set(),
         message: opened.readOnlyReason ? `Opened ${path} read-only: ${opened.readOnlyReason}` : `Opened ${path}.`,
       });
+      this.store.set(treeView);
     } catch (error) {
       this.store.set({ busy: undefined, message: `Cannot open ${path}: ${(error as Error).message}` });
     }
@@ -407,30 +619,112 @@ export class Studio {
     }
   }
 
-  /** Runs the file; an unsaved document runs as if it were saved at its path. Events arrive on the tab's stream. */
-  async run(): Promise<void> {
-    const state = this.state;
-    const { document, file } = state;
-    if (document === undefined || file === undefined) {
+  runRefusal(): string | undefined {
+    return runRefusalOf(this.state);
+  }
+
+  /** Run (F5): asks for the workflow's input arguments first when it declares any, else runs right away. */
+  async requestRun(): Promise<void> {
+    const refusal = this.runRefusal();
+    if (refusal !== undefined) {
+      this.say(`Cannot run: ${refusal}`);
       return;
     }
 
-    this.store.set({ busy: 'starting', run: { status: 'Starting' }, events: [], nodeStatus: new Map() });
+    const { document, file } = this.state;
+    const inputs = inputArguments(document!);
+    if (inputs.length === 0) {
+      await this.run();
+      return;
+    }
+
+    const draft = this.argumentDrafts.get(`${file!.project}/${file!.path}`) ?? {};
+    this.store.set({ runDialog: { path: file!.path, arguments: inputs, values: draft, timeoutMs: this.lastTimeoutMs } });
+  }
+
+  closeRunDialog(): void {
+    this.store.set({ runDialog: undefined });
+  }
+
+  /** Start from the run dialog: remembers the texts, sends the non-blank ones (blank keeps the default). */
+  async startFromDialog(values: Readonly<Record<string, string>>, timeoutMs: number | undefined): Promise<void> {
+    const { file, document } = this.state;
+    if (file === undefined || document === undefined) {
+      return;
+    }
+
+    this.argumentDrafts.set(`${file.project}/${file.path}`, { ...values });
+    this.lastTimeoutMs = timeoutMs;
+    // Only arguments the workflow declares now: a remembered text of a renamed or removed argument is never sent.
+    const declared = new Set(inputArguments(document).map((a) => a.name));
+    const argumentText = Object.fromEntries(Object.entries(values).filter(([name, text]) => declared.has(name) && text.trim() !== ''));
+    this.store.set({ runDialog: undefined });
+    await this.run({ argumentText: Object.keys(argumentText).length > 0 ? argumentText : undefined, timeoutMs });
+  }
+
+  /**
+   * Validates the document on the server, and only if it is valid starts it; an unsaved document runs as if it were
+   * saved at its path. The run is followed on the tab's one event stream. Other runs keep going.
+   */
+  async run(options: RunOptions = {}): Promise<void> {
+    const refusal = this.runRefusal();
+    if (refusal !== undefined) {
+      this.say(`Cannot run: ${refusal}`);
+      return;
+    }
+
+    const state = this.state;
+    const document = state.document!;
+    const file = state.file!;
+    const key = `attempt-${++this.attempts}`;
+    this.addRun({
+      key,
+      project: file.project,
+      path: file.path,
+      requestedAt: new Date().toISOString(),
+      status: 'Validating',
+      cancelRequested: false,
+      events: [],
+      nodeStatus: noStatus,
+      runningNodes: [],
+      missingEvents: 0,
+    });
+    this.store.set({ busy: 'starting', message: `Validating ${file.path}…` });
+
+    try {
+      const validation = await this.api.validate(document);
+      this.showDiagnostics(validation.diagnostics, document);
+      if (!validation.valid) {
+        const errors = validation.diagnostics.filter((d) => d.severity === 'Error').length;
+        this.notStarted(key, 'validation', `Not started: the workflow has ${errors} validation error(s). Fix the problems listed, then run again.`);
+        return;
+      }
+    } catch (error) {
+      this.notStarted(key, 'request', `Not started: validation failed: ${(error as Error).message}`);
+      return;
+    }
+
+    this.updateRun(key, { status: 'Starting' });
     let runId: string;
     try {
-      runId = await this.api.startRun(file.project, file.path, isDirty(state) ? document : undefined);
+      runId = await this.api.startRun(file.project, file.path, {
+        document: isDirty(state) ? document : undefined,
+        argumentText: options.argumentText,
+        timeoutMs: options.timeoutMs,
+      });
     } catch (error) {
       if (error instanceof ApiError && error.diagnostics) {
         this.showDiagnostics(error.diagnostics, document);
-        this.store.set({ busy: undefined, run: { status: 'NotStarted' }, message: 'Not started: the workflow has validation errors.' });
+        this.notStarted(key, 'validation', 'Not started: the workflow has validation errors.');
       } else {
-        this.store.set({ busy: undefined, run: { status: 'NotStarted' }, message: `Not started: ${(error as Error).message}` });
+        this.notStarted(key, 'request', `Not started: ${(error as Error).message}`);
       }
 
       return;
     }
 
-    this.store.set({ busy: undefined, run: { runId, status: 'Running' }, message: `Run ${runId} started.` });
+    this.updateRun(key, { runId });
+    this.store.set({ busy: undefined, message: `Run ${runId} started.` });
     try {
       await this.events.follow(runId);
     } catch (error) {
@@ -438,41 +732,105 @@ export class Studio {
     }
   }
 
-  private receive(event: ExecutionEvent): void {
-    const run = this.state.run;
-    if (run?.runId !== event.runId) {
+  /**
+   * Stop (Shift+F5): asks the server to cancel the run cooperatively. The run shows Cancelling… until the server
+   * reports its final state on the stream; a request is never taken as the outcome.
+   */
+  async stop(key: string | undefined = this.state.currentRunKey): Promise<void> {
+    const run = this.state.runs.find((r) => r.key === key);
+    const refusal = stopRefusalOf(run);
+    if (run === undefined || refusal !== undefined) {
+      this.say(`Cannot stop: ${refusal}`);
       return;
     }
 
-    const isRun = !event.parentExecutionId;
-    this.store.set((state) => {
-      const events = state.events.length >= maxEvents ? [...state.events.slice(1 - maxEvents), event] : [...state.events, event];
-      let nodeStatus = state.nodeStatus;
-      if (event.nodeId && (event.kind === 'node.started' || event.kind === 'node.completed') && isRun) {
-        nodeStatus = new Map(nodeStatus).set(event.nodeId, event.kind === 'node.started' ? 'Running' : (event.status ?? 'Succeeded'));
+    this.updateRun(run.key, { cancelRequested: true });
+    this.say(`Cancelling run ${run.runId}…`);
+    try {
+      await this.api.cancelRun(run.runId!);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        return; // It finished meanwhile; its outcome arrives on the stream.
       }
 
-      if (isRun && event.kind === 'execution.completed') {
-        return {
-          events,
-          nodeStatus,
-          run: { ...run, status: event.status ?? 'Succeeded', error: event.error },
-          message: `Run ${event.status ?? 'finished'}${event.error ? `: ${event.error.message}` : ''}.`,
-        };
-      }
-
-      return { events, nodeStatus };
-    });
-
-    if (isRun && event.kind === 'execution.completed') {
-      void this.fetchResult(event.runId);
+      this.updateRun(run.key, { cancelRequested: false });
+      this.say(`Cannot stop run ${run.runId}: ${(error as Error).message}`);
     }
   }
 
-  private async fetchResult(runId: string): Promise<void> {
+  /** Shows another recent run in the Execution panel (and on the tree, if it ran the open file). */
+  selectRun(key: string): void {
+    if (this.state.runs.some((run) => run.key === key)) {
+      this.setRuns(() => ({ currentRunKey: key }));
+    }
+  }
+
+  private notStarted(key: string, reason: 'validation' | 'request', message: string): void {
+    this.updateRun(key, { status: 'NotStarted', notStarted: { reason, message } });
+    this.store.set({ busy: undefined, message });
+  }
+
+  /** Changes the runs and keeps the tree's node states in step. */
+  private setRuns(update: (state: StudioState) => Partial<StudioState>): void {
+    this.store.set((state) => {
+      const changes = update(state);
+      return { ...changes, ...treeView({ ...state, ...changes }) };
+    });
+  }
+
+  private addRun(run: RunView): void {
+    this.setRuns((state) => ({ runs: trimRuns([run, ...state.runs]), currentRunKey: run.key }));
+  }
+
+  private updateRun(key: string, change: Partial<RunView> | ((run: RunView) => RunView)): void {
+    this.setRuns((state) => ({
+      runs: state.runs.map((run) => (run.key !== key ? run : typeof change === 'function' ? change(run) : { ...run, ...change })),
+    }));
+  }
+
+  private receive(event: ExecutionEvent): void {
+    this.pending.push(event);
+    if (this.pending.length === 1) {
+      this.schedule(() => this.flush());
+    }
+  }
+
+  /**
+   * Applies the queued events, grouped by run in stream order, in one store update. A burst (a fast run's whole event
+   * stream arriving at once) is spread over frames, at most `maxEventsPerFrame` per frame, so no frame stalls.
+   */
+  private flush(): void {
+    const batch = this.pending.length > maxEventsPerFrame ? this.pending.splice(0, maxEventsPerFrame) : this.pending;
+    this.pending = batch === this.pending ? [] : this.pending;
+    if (this.pending.length > 0) {
+      this.schedule(() => this.flush());
+    }
+
+    const byRun = new Map<string, ExecutionEvent[]>();
+    for (const event of batch) {
+      const events = byRun.get(event.runId);
+      if (events) {
+        events.push(event);
+      } else {
+        byRun.set(event.runId, [event]);
+      }
+    }
+
+    this.setRuns((state) => ({ runs: state.runs.map((run) => (run.runId !== undefined && byRun.has(run.runId) ? applyEvents(run, byRun.get(run.runId)!) : run)) }));
+    for (const event of batch) {
+      const run = this.state.runs.find((r) => r.runId === event.runId);
+      if (run !== undefined && !event.parentExecutionId && event.kind === 'execution.completed') {
+        const where = event.error?.nodeId ? ` at ${event.error.nodeId}` : '';
+        this.say(`Run ${event.runId} ${event.status ?? 'finished'}${event.error ? `${where}: ${event.error.message}` : ''}.`);
+        void this.fetchResult(run.key, event.runId);
+      }
+    }
+  }
+
+  private async fetchResult(key: string, runId: string): Promise<void> {
     try {
       const status = await this.api.run(runId);
-      this.store.set((state) => (state.run?.runId === runId ? { run: { ...state.run, result: status.result } } : {}));
+      this.updateRun(key, { result: status.result });
     } catch {
       // The status and error are already known from the stream; outputs are optional.
     }

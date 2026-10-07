@@ -1,11 +1,12 @@
 # Web Studio
 
-Status: Web Studio W4A (structural editing on the W3 slice). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
+Status: Web Studio W5 (execution UX; on W3 and W4A). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
 [ADR-0022](../adr/0022-server-control-plane-and-project-structure.md) (server serves the Studio),
 [ADR-0024](../adr/0024-execution-event-streaming-sse.md) (one event stream per tab),
 [ADR-0025](../adr/0025-local-mode-security.md) (local-mode security),
 [ADR-0028](../adr/0028-web-studio-first-slice.md) (W3 slice),
-[ADR-0029](../adr/0029-web-studio-structural-editing.md) (structural editing and undo/redo).
+[ADR-0029](../adr/0029-web-studio-structural-editing.md) (structural editing and undo/redo),
+[ADR-0030](../adr/0030-web-studio-execution-ux.md) (execution UX).
 
 The Web Studio is a React + TypeScript + Vite app in `web/studio`, outside the .NET solution. It talks only to its own
 `MyRPA.Server` origin through the API in [server.md](server.md). It is not at WPF parity yet; the ADR-0021 exit
@@ -58,11 +59,34 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 - **Save:** `PUT` with `If-Match`. A 412 keeps the edits and reports the conflict. Ctrl+S saves.
 - **Dirty state:** a `•` in the title and document title; a `beforeunload` prompt while dirty. Opening another file
   asks before discarding. Undoing back to the saved version is clean again.
-- **Run:** `POST /api/runs`. An unsaved document runs as a buffer at its path. F5 runs.
-  - The run is followed on the tab's one event stream.
-  - The Run panel shows the status, run id, duration, outputs, the error with its node, and every event including
-    logs.
-  - A refused (invalid) workflow shows its diagnostics and the status `NotStarted`.
+- **Run** (W5, ADR-0030): the Run button or F5.
+  - **Configuration:** when the workflow declares In or InOut arguments, a run dialog asks for them first. Each field
+    is labelled with name, type and a required marker, and shows the declared default. Text goes to the server as
+    typed (`argumentText`) and is parsed there like the CLI's `--arg`. A blank field keeps the default. Start stays
+    disabled, with the reason, while a required argument is blank. An optional timeout (ms) is sent as `timeoutMs`.
+    The texts are remembered per file for the session.
+  - **Validation first:** `POST /api/validate` runs before anything is started. An invalid workflow shows its problems
+    and the run is **Not started — validation failed**; no run request is made. A request the server refuses (for
+    example an argument it cannot parse) is **Not started — refused by the server**.
+  - **Lifecycle:** Validating… → Waiting to start (accepted; also while queued) → Running → the engine's final status
+    (Succeeded, Failed, Cancelled, Timed out). Only Validating and Not started are the Studio's own steps; everything
+    after acceptance comes from the server's events. A `MYRPA2004` failure reads "Failed — arguments rejected, no
+    activity ran".
+  - **Stop** (button or Shift+F5): `POST /api/runs/{id}/cancel`. The run shows **Cancelling…** until the server
+    reports its final state; Stop is disabled, with the reason, when the run cannot be stopped.
+  - **Execution panel:** status and run id, workflow, start time, elapsed time (then duration), the node running now,
+    the error with its code and node and a **Select failed node** button, outputs, a notice when the stream is
+    reconnecting or events were lost (`stream.gap`), and the run's events and logs with times.
+  - **Tree:** while the shown run is of the open file, nodes carry Running, Succeeded, Failed or Cancelled; nodes with
+    no state were not executed and are dimmed. Only the run's own workflow maps to nodes; events of invoked workflows
+    are listed only.
+  - **Several runs:** Run stays available while other runs go on. Recent runs (up to 10; unfinished ones are kept)
+    can be chosen in the Execution panel; each has its own status, events, logs and node states. All runs share the
+    tab's one event stream.
+  - **Reconnect:** the browser resumes the stream with `Last-Event-ID`; if the stream is gone, the Studio creates a
+    new one and resubscribes each unfinished run after the last sequence it saw. Duplicates are ignored.
+  - Streamed events are applied once per animation frame, so a burst of events costs one render.
+  - The workflow stays editable during and after a run. An unsaved document runs as a buffer at its path.
 
 ## Structure
 
@@ -71,10 +95,10 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `src/types.ts` | Wire types (hand-written for W3, ADR-0028 decision 6) |
 | `src/api.ts` | Fetch client: anti-forgery header on state changes, ETags, error bodies |
 | `src/document.ts` | Document model: immutable v1.0 JSON, client keys (`WeakMap`), index, path-copying edits, structural edits and their refusals, lossy-file detection, editability |
-| `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation |
+| `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation, stream status |
 | `src/store.ts` | A minimal external store with slice subscriptions |
-| `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save, run |
-| `src/App.tsx` | Layout: toolbar, toolbox (Insert), edit bar (Undo, Redo, Move, Delete), tree, properties, problems and run output, status bar |
+| `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save; runs (validate first, run dialog, recent runs, Stop, per-frame event batching) |
+| `src/App.tsx` | Layout: toolbar (Run, Stop, status), toolbox (Insert), edit bar (Undo, Redo, Move, Delete), tree, properties, problems, Execution panel, run dialog, status bar |
 | `scripts/harness.mjs` | Shared by the browser scripts: throwaway project, real server with `--web`, headless Chromium |
 | `scripts/smoke.mjs` | End-to-end smoke test |
 | `scripts/perf.mjs` | 3,000-node performance measurement |
@@ -97,10 +121,21 @@ nothing about the client.
   mixed histories, redo cleared by a new edit, dirty state across save/undo/redo, the 200-step cap, save and reload.
 - `StructureUi.test.tsx`: command enabling and reasons, insert, delete and move by buttons and keys, focus, undo/redo
   by buttons and shortcuts, saving structural edits.
+- `execution.test.ts` (W5): input arguments, the run dialog flow and `argumentText`, validation before run, not-started
+  reasons, the lifecycle from server events, failures, timeouts and `MYRPA2004`, Stop (Cancelling…, 409, errors,
+  refusals), node mapping (own workflow only, open file only), the event cap, concurrent runs on one stream, the
+  recent-runs cap, per-frame batching, and stream re-creation with replay and gaps.
+- `ExecutionUi.test.tsx` (W5): the run dialog (required, defaults, timeout, Cancel), the lifecycle and node states on
+  the tree, Stop and Shift+F5, failure explanation and Select failed node, not-started labels, recent runs, the
+  reconnecting and missing-events notices.
 - `scripts/smoke.mjs`: the full demo against the real server and engine: open, insert, move (keyboard), edit, undo,
-  redo, delete, undo the delete, validate, save, reload, run with events and logs, an error case, one SSE connection
-  per page, and no browser errors or CSP violations. It writes screenshots to `web/studio/test-results/`.
-- `scripts/perf.mjs`: measured, not asserted in CI (see ADR-0029 for the numbers).
+  redo, delete, undo the delete, validate, save, reload, run with events and logs, an error case (validated before
+  run; no run request), and W5: the run dialog with typed arguments, the running view (current node, start time,
+  node states), a failure with Select failed node, cancellation (Cancelling… then Cancelled), two concurrent runs, and
+  a stream lost mid-run and resumed without duplicates. Also one SSE connection per page and no browser errors or CSP
+  violations. It writes screenshots to `web/studio/test-results/`.
+- `scripts/perf.mjs`: measured, not asserted in CI (see ADR-0029 and ADR-0030 for the numbers), including typing
+  during an event-heavy run.
 - Architecture test `WebStudioRulesTests`: no dnd-kit or other drag-and-drop framework in `package.json` or
   `package-lock.json`.
 
@@ -110,7 +145,8 @@ nothing about the client.
   ADR-0021); cut/copy/paste; id editing; multi-selection.
 - **Editors:** the variables/arguments and workflow metadata editors; map editors; literal (number, boolean, null)
   editors; CodeMirror expression editing with live syntax feedback; assignment-target suggestions.
-- **Running:** typed argument input, Stop, a timeout control, and run history.
+- **Running:** persistent run history (only recent runs of this tab are kept); plugin load diagnostics in the Studio;
+  visible (non-headless) browser runs; searching by execution or correlation id.
 - **Files:** create, rename, delete, save-as; recovery after a crash.
 - **Round-trip:** files with comments or trailing commas; formatting preservation; every number form; duplicate JSON
   keys.

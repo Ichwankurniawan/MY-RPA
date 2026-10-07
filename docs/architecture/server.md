@@ -65,7 +65,7 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>
 | `PUT /api/projects/{project}/workflows/{path}` | Create (`If-None-Match: *`) or update (`If-Match: <etag>`). The body must be a JSON object. Returns 201 or 204 with the new `ETag`; 412 on a conflict; 428 without a precondition. Invalid workflows can be saved; validation is separate. |
 | `DELETE /api/projects/{project}/workflows/{path}` | Delete; `If-Match` required |
 | `POST /api/validate` | `{ document }` → `{ valid, diagnostics: [{ code, severity, message, path, nodeId }] }` from the engine's `WorkflowLoader`. `…properties.<name>` in a path names the property (ADR-0026). |
-| `POST /api/runs` | `{ project, path, document?, arguments?, timeoutMs? }` → 202 `{ runId }`. See below. |
+| `POST /api/runs` | `{ project, path, document?, arguments?, argumentText?, timeoutMs? }` → 202 `{ runId }`. See below. |
 | `GET /api/runs/{runId}` | `{ runId, state, lastSequence, result? }`. The result has status, ids, duration, outputs and error. |
 | `POST /api/runs/{runId}/cancel` | 202, 404 if the run is unknown, 409 if it already finished |
 | `POST /api/streams` | 201 `{ streamId }`: one per browser tab |
@@ -79,7 +79,15 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>
 - With `document`, an unsaved buffer runs as if it were saved at `path`, so `Core.InvokeWorkflow` resolves from there.
   Confinement is unchanged: the entry workflow's directory (ADR-0012, ADR-0027).
 - `arguments` are JSON values, converted by the engine's `WorkflowValues.TryFromJson` to the declared types.
-- An invalid workflow gets 422 with the diagnostics. Unknown arguments or bad values get 400.
+- `argumentText` (W5, ADR-0030) maps input argument names to text as a person typed it. The text is parsed by
+  `WorkflowValues.TryParseText`, the rule of the CLI's `--arg` and the WPF run prompt. String is taken verbatim;
+  Int, Decimal, Boolean and DateTime use invariant formats; List, Dictionary and Object are parsed as JSON. The Web
+  Studio's run dialog uses it, so the browser never converts values. A name may appear in `arguments` or in
+  `argumentText`, not both.
+- Arguments left out get their declared default. A missing required argument is reported by the engine as a failed
+  run with `MYRPA2004` before any node runs.
+- An invalid workflow gets 422 with the diagnostics. Unknown or Out arguments, bad values or text, and a name given
+  twice get 400.
 
 ## Event stream (ADR-0024)
 

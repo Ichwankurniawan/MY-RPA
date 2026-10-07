@@ -344,6 +344,79 @@ public sealed class RunAndStreamTests
         Assert.Contains(expected, (await ServerHarness.JsonAsync(response)).GetProperty("error").GetString(), StringComparison.Ordinal);
     }
 
+    private static string TypedArgumentsWorkflow() => ServerHarness.Workflow(
+        """
+        { "id": "main", "type": "Core.Sequence", "children": [
+          { "id": "s", "type": "Core.Assign", "properties": { "to": "outS", "value": "s" } },
+          { "id": "n", "type": "Core.Assign", "properties": { "to": "outN", "value": "n + 1" } },
+          { "id": "b", "type": "Core.Assign", "properties": { "to": "outB", "value": "b" } },
+          { "id": "d", "type": "Core.Assign", "properties": { "to": "outD", "value": "d" } },
+          { "id": "l", "type": "Core.Assign", "properties": { "to": "outL", "value": "l" } } ] }
+        """,
+        """
+        [ { "name": "s", "direction": "In", "type": "String" }, { "name": "n", "direction": "In", "type": "Int" },
+          { "name": "b", "direction": "In", "type": "Boolean" }, { "name": "d", "direction": "In", "type": "DateTime" },
+          { "name": "l", "direction": "In", "type": "List" },
+          { "name": "outS", "direction": "Out", "type": "String" }, { "name": "outN", "direction": "Out", "type": "Int" },
+          { "name": "outB", "direction": "Out", "type": "Boolean" }, { "name": "outD", "direction": "Out", "type": "DateTime" },
+          { "name": "outL", "direction": "Out", "type": "List" } ]
+        """);
+
+    [Fact]
+    public async Task ArgumentText_IsParsedLikeTheCommandLine()
+    {
+        await using var h = await ServerHarness.StartAsync();
+        h.WriteWorkflow("typed.json", TypedArgumentsWorkflow());
+
+        using var response = await h.SendAsync(h.Unsafe(HttpMethod.Post, "/api/runs", new
+        {
+            project = h.ProjectName,
+            path = "typed.json",
+            argumentText = new Dictionary<string, string> { ["s"] = "Ada \"Lovelace\"", ["n"] = "42", ["b"] = "true", ["d"] = "2026-01-02T03:04:05Z", ["l"] = "[1, \"two\"]" },
+        }));
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var outputs = (await h.WaitForRunAsync((await ServerHarness.JsonAsync(response)).GetProperty("runId").GetString()!)).GetProperty("outputs");
+
+        Assert.Equal("Ada \"Lovelace\"", outputs.GetProperty("outS").GetString()); // String is taken verbatim, not as JSON
+        Assert.Equal(43, outputs.GetProperty("outN").GetInt64());
+        Assert.True(outputs.GetProperty("outB").GetBoolean());
+        Assert.StartsWith("2026-01-02T03:04:05", outputs.GetProperty("outD").GetString(), StringComparison.Ordinal);
+        Assert.Equal(2, outputs.GetProperty("outL").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData("""{ "n": "many" }""", null, "Argument 'n'")]
+    [InlineData("""{ "nobody": "x" }""", null, "not an input argument")]
+    [InlineData("""{ "outN": "1" }""", null, "not an input argument")]
+    [InlineData("""{ "n": null }""", null, "Argument 'n'")]
+    [InlineData("""{ "n": "1" }""", """{ "n": 1 }""", "both as a value and as text")]
+    public async Task BadArgumentText_IsRejected_AndNothingRuns(string argumentText, string? arguments, string expected)
+    {
+        await using var h = await ServerHarness.StartAsync();
+        h.WriteWorkflow("typed.json", TypedArgumentsWorkflow());
+        var body = $$"""{ "project": "{{h.ProjectName}}", "path": "typed.json", "argumentText": {{argumentText}}{{(arguments is null ? string.Empty : $", \"arguments\": {arguments}")}} }""";
+
+        using var response = await h.SendAsync(h.Unsafe(HttpMethod.Post, "/api/runs", rawJson: body));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(expected, (await ServerHarness.JsonAsync(response)).GetProperty("error").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ArgumentText_NeedsTheSessionAndTheAntiForgeryHeader()
+    {
+        await using var h = await ServerHarness.StartAsync();
+        h.WriteWorkflow("typed.json", TypedArgumentsWorkflow());
+        var body = new { project = h.ProjectName, path = "typed.json", argumentText = new { n = "1" } };
+        using var stranger = ServerHarness.NewClient(h.BaseUri);
+        using var withoutSession = h.Unsafe(HttpMethod.Post, "/api/runs", body);
+        using var withoutHeader = h.Unsafe(HttpMethod.Post, "/api/runs", body);
+        withoutHeader.Headers.Remove("X-MyRPA-Request");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await stranger.SendAsync(withoutSession, Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await h.SendAsync(withoutHeader)).StatusCode);
+    }
+
     [Fact]
     public async Task OneStream_MultiplexesSeveralRuns_EachInOrderAndComplete()
     {

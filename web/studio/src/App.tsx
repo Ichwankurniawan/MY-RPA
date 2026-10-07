@@ -1,8 +1,21 @@
 import { createContext, memo, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { childSteps, editability, indexDocument, isObject, keyOf, nodeLabel } from './document';
 import { useStore } from './store';
-import { deleteRefusalOf, insertRefusal, isDirty, moveRefusalOf, type Studio, type StudioState } from './studio';
-import type { Diagnostic, Json, JsonObject, PropertyDescriptor } from './types';
+import {
+  currentRun,
+  deleteRefusalOf,
+  insertRefusal,
+  isActive,
+  isDirty,
+  moveRefusalOf,
+  runRefusalOf,
+  stopRefusalOf,
+  type RunDialogState,
+  type RunView,
+  type Studio,
+  type StudioState,
+} from './studio';
+import type { Diagnostic, ExecutionEvent, Json, JsonObject, PropertyDescriptor } from './types';
 
 const StudioContext = createContext<Studio | null>(null);
 
@@ -56,7 +69,11 @@ function Shell() {
         studio.undo();
       } else if (event.key === 'F5' && !event.ctrlKey) {
         event.preventDefault();
-        void studio.run();
+        if (event.shiftKey) {
+          void studio.stop();
+        } else if (studio.store.get().runDialog === undefined) {
+          void studio.requestRun();
+        }
       }
     };
     const onLeave = (event: BeforeUnloadEvent) => {
@@ -81,6 +98,7 @@ function Shell() {
           <WorkflowTree />
           <PropertiesPanel />
           <OutputPanel />
+          <RunDialogHost />
         </>
       ) : (
         <ConnectionPanel />
@@ -89,6 +107,28 @@ function Shell() {
     </div>
   );
 }
+
+/** What a run's state means, in words. The status itself is the server's; only the wording is the Studio's. */
+export function statusLabel(run: RunView): string {
+  switch (run.status) {
+    case 'Validating':
+      return 'Validating…';
+    case 'NotStarted':
+      return run.notStarted?.reason === 'validation' ? 'Not started — validation failed' : 'Not started — refused by the server';
+    case 'Starting':
+      return run.cancelRequested ? 'Cancelling…' : 'Waiting to start';
+    case 'Running':
+      return run.cancelRequested ? 'Cancelling…' : 'Running';
+    case 'Failed':
+      return run.error?.code === 'MYRPA2004' ? 'Failed — arguments rejected, no activity ran' : 'Failed';
+    case 'TimedOut':
+      return 'Timed out';
+    default:
+      return run.status;
+  }
+}
+
+const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
 
 function ConnectionPanel() {
   const connection = useStudioState((s) => s.connection);
@@ -125,7 +165,9 @@ function Toolbar() {
   const hasDocument = useStudioState((s) => s.document !== undefined);
   const dirty = useStudioState(isDirty);
   const busy = useStudioState((s) => s.busy);
-  const running = useStudioState((s) => s.run?.status === 'Starting' || s.run?.status === 'Running');
+  const runRefusal = useStudioState(runRefusalOf);
+  const stopRefusal = useStudioState((s) => stopRefusalOf(currentRun(s)));
+  const run = useStudioState(currentRun);
   const [choice, setChoice] = useState('');
 
   const open = () => {
@@ -173,9 +215,15 @@ function Toolbar() {
       <button type="button" onClick={() => void studio.validate()} disabled={!hasDocument || busy !== undefined}>
         Validate
       </button>
-      <button type="button" onClick={() => void studio.run()} disabled={!hasDocument || running || busy !== undefined} title="F5">
+      <button type="button" onClick={() => void studio.requestRun()} disabled={runRefusal !== undefined} title={runRefusal ?? 'Validate, then run (F5)'}>
         Run
       </button>
+      <button type="button" onClick={() => void studio.stop()} disabled={stopRefusal !== undefined} title={stopRefusal ?? 'Stop the run (Shift+F5)'}>
+        Stop
+      </button>
+      <span className="toolbar-status" data-testid="toolbar-run-status">
+        {run ? `Status: ${statusLabel(run)}` : ''}
+      </span>
     </header>
   );
 }
@@ -222,6 +270,7 @@ function WorkflowTree() {
   const studio = useStudio();
   const document = useStudioState((s) => s.document);
   const selectedKey = useStudioState((s) => s.selectedKey);
+  const showsRun = useStudioState((s) => s.treeShowsRun);
   const tree = useRef<HTMLUListElement>(null);
   const refocus = useRef(false);
 
@@ -277,7 +326,8 @@ function WorkflowTree() {
     <section className="designer" aria-labelledby="designer-heading">
       <h2 id="designer-heading">Workflow</h2>
       <EditBar />
-      <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown}>
+      {/* While a run of this file is shown, nodes without a run state were not executed (styled as such). */}
+      <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown} className={showsRun ? 'shows-run' : undefined}>
         {isObject(root) && <TreeNode node={root} depth={1} />}
       </ul>
     </section>
@@ -340,7 +390,7 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
         studio.select(key);
       }}
     >
-      <div className={`node${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`}>
+      <div className={`node${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
         {slot !== undefined && <span className="slot">{slot}:</span>}
         <span className="label">{nodeLabel(node, activity)}</span>
         <span className="type">{type}</span>
@@ -529,8 +579,6 @@ function OutputPanel() {
   const studio = useStudio();
   const diagnostics = useStudioState((s) => s.diagnostics);
   const stale = useStudioState((s) => s.diagnostics !== undefined && s.validated !== s.document);
-  const run = useStudioState((s) => s.run);
-  const events = useStudioState((s) => s.events);
 
   return (
     <section className="output" aria-label="Output">
@@ -553,44 +601,238 @@ function OutputPanel() {
           </ul>
         )}
       </div>
-      <div className="run">
-        <h2>Run</h2>
-        <p data-testid="run-status">
-          Status: <strong>{run?.status ?? 'Not run'}</strong>
-          {run?.runId && <span className="hint"> · run {run.runId}</span>}
-          {run?.result && <span className="hint"> · {Math.round(run.result.durationMs)} ms</span>}
-        </p>
-        {run?.error && (
-          <p className="field-error">
-            {run.error.code}
-            {run.error.nodeId ? ` at ${run.error.nodeId}` : ''}: {run.error.message}
-          </p>
-        )}
-        {run?.result && Object.keys(run.result.outputs).length > 0 && (
-          <p data-testid="run-outputs">Outputs: {JSON.stringify(run.result.outputs)}</p>
-        )}
-        <ol className="events" aria-label="Execution events">
-          {events.map((e, i) => (
-            <li key={e.kind === 'stream.gap' ? `gap-${i}` : `${e.runId}:${e.sequence}`} className={`event event-${e.kind.replace('.', '-')}`}>
-              <span className="seq">{e.sequence}</span> <span className="kind">{e.kind}</span>
-              {e.nodeId && <span className="event-node"> {e.nodeId}</span>}
-              {e.status && <span> {e.status}</span>}
-              {e.kind === 'log' && (
-                <span className="log">
-                  {' '}
-                  [{e.level}] {e.message}
-                </span>
-              )}
-              {e.kind === 'stream.gap' && (
-                <span>
-                  {' '}
-                  events {e.missingFromSequence}–{e.missingToSequence} are no longer available
-                </span>
-              )}
-            </li>
-          ))}
-        </ol>
-      </div>
+      <ExecutionPanel />
     </section>
+  );
+}
+
+/** The current time, refreshed every second while `active`. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+  return now;
+}
+
+const duration = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
+
+/** The failed node, when the run ran the open file and the node is in it (an invoked workflow's node is not). */
+function failedNodeOf(state: StudioState): string | undefined {
+  const run = currentRun(state);
+  const id = run?.error?.nodeId;
+  const sameFile = run !== undefined && run.project === state.file?.project && run.path === state.file.path;
+  return id && sameFile && state.document && indexDocument(state.document).byNodeId.has(id) ? id : undefined;
+}
+
+/** The current run (or one chosen from the recent runs): its state, timing, failure, outputs and events. */
+function ExecutionPanel() {
+  const studio = useStudio();
+  const runs = useStudioState((s) => s.runs);
+  const run = useStudioState(currentRun);
+  const stream = useStudioState((s) => s.stream);
+  const failedNode = useStudioState(failedNodeOf);
+  const active = run !== undefined && isActive(run);
+  const now = useNow(active && run.startedAt !== undefined);
+  const elapsed = run?.durationMs ?? (run?.startedAt && active ? Math.max(0, now - Date.parse(run.startedAt)) : undefined);
+  const executing = active ? run.runningNodes.at(-1) : undefined;
+
+  return (
+    <div className="run" role="region" aria-labelledby="execution-heading">
+      <h2 id="execution-heading">Execution</h2>
+      {runs.length > 1 && (
+        <label className="recent-runs">
+          Recent runs{' '}
+          <select value={run?.key} onChange={(e) => studio.selectRun(e.target.value)}>
+            {runs.map((r) => (
+              <option key={r.key} value={r.key}>
+                {time(r.requestedAt)} {r.path} — {statusLabel(r)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {stream === 'reconnecting' && <p className="hint" data-testid="stream-reconnecting">The event stream was interrupted; reconnecting…</p>}
+      <p data-testid="run-status">
+        Status: <strong>{run ? statusLabel(run) : 'Not run'}</strong>
+        {run?.runId && <span className="hint"> · run {run.runId}</span>}
+      </p>
+      {run && (
+        <dl className="facts run-facts">
+          <dt>Workflow</dt>
+          <dd>{run.path}</dd>
+          {run.startedAt && (
+            <>
+              <dt>Started</dt>
+              <dd data-testid="run-started">{time(run.startedAt)}</dd>
+            </>
+          )}
+          {elapsed !== undefined && (
+            <>
+              <dt>{run.durationMs !== undefined ? 'Duration' : 'Elapsed'}</dt>
+              <dd data-testid="run-elapsed">{duration(elapsed)}</dd>
+            </>
+          )}
+          {executing && (
+            <>
+              <dt>Running</dt>
+              <dd data-testid="run-current">{executing}</dd>
+            </>
+          )}
+        </dl>
+      )}
+      {run?.notStarted && (
+        <p className="field-error" data-testid="run-not-started">
+          {run.notStarted.message}
+        </p>
+      )}
+      {run?.error && (
+        <p className="field-error" data-testid="run-error">
+          {run.error.code}
+          {run.error.nodeId ? ` at ${run.error.nodeId}` : ''}: {run.error.message}{' '}
+          {failedNode && (
+            <button type="button" onClick={() => studio.selectNodeId(failedNode)}>
+              Select failed node
+            </button>
+          )}
+        </p>
+      )}
+      {run !== undefined && run.missingEvents > 0 && (
+        <p className="hint" data-testid="run-gap">
+          {run.missingEvents} earlier event(s) of this run are no longer available on the server.
+        </p>
+      )}
+      {run?.result && Object.keys(run.result.outputs).length > 0 && <p data-testid="run-outputs">Outputs: {JSON.stringify(run.result.outputs)}</p>}
+      <ol className="events" aria-label="Execution events">
+        {(run?.events ?? []).map((e, i) => (
+          <EventRow key={e.kind === 'stream.gap' ? `gap-${i}` : `${e.runId}:${e.sequence}`} event={e} />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** One event. Memoized on the event object: a batch of new events renders only the new rows. */
+const EventRow = memo(function EventRow({ event: e }: { event: ExecutionEvent }) {
+  return (
+    <li className={`event event-${e.kind.replace('.', '-')}`}>
+      <span className="time">[{time(e.time)}]</span> <span className="seq">{e.sequence}</span> <span className="kind">{e.kind}</span>
+      {e.nodeId && <span className="event-node"> {e.nodeId}</span>}
+      {e.status && <span> {e.status}</span>}
+      {e.kind === 'log' && (
+        <span className="log">
+          {' '}
+          [{e.level}] {e.message}
+        </span>
+      )}
+      {e.kind === 'stream.gap' && (
+        <span>
+          {' '}
+          events {e.missingFromSequence}–{e.missingToSequence} are no longer available
+        </span>
+      )}
+    </li>
+  );
+});
+
+/** The largest `timeoutMs` the server accepts (a 32-bit integer, about 24.8 days). */
+const maxTimeoutMs = 2_147_483_647;
+
+function RunDialogHost() {
+  const dialog = useStudioState((s) => s.runDialog);
+  return dialog ? <RunDialog dialog={dialog} /> : null;
+}
+
+/**
+ * Run configuration: one text field per input argument. The text goes to the server as typed and is parsed there like
+ * the CLI's --arg (ADR-0030); blank keeps the declared default. Only the `required` flag is checked here.
+ */
+function RunDialog({ dialog }: { dialog: RunDialogState }) {
+  const studio = useStudio();
+  const ref = useRef<HTMLDialogElement>(null);
+  const id = useId();
+  const [values, setValues] = useState<Record<string, string>>(() => ({ ...dialog.values }));
+  const [timeout, setTimeoutText] = useState(dialog.timeoutMs?.toString() ?? '');
+
+  useEffect(() => {
+    const element = ref.current;
+    if (element && !element.open) {
+      if (typeof element.showModal === 'function') {
+        element.showModal();
+      } else {
+        element.setAttribute('open', '');
+      }
+    }
+  }, []);
+
+  const missing = dialog.arguments.filter((a) => a.required && (values[a.name] ?? '').trim() === '').map((a) => a.name);
+  const timeoutMs = timeout.trim() === '' ? undefined : Number(timeout);
+  const refusal =
+    missing.length > 0 ? `Enter the required argument(s): ${missing.join(', ')}.`
+    : timeoutMs !== undefined && !(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= maxTimeoutMs)
+      ? `The timeout must be a whole number of milliseconds from 1 to ${maxTimeoutMs}.`
+    : undefined;
+
+  return (
+    <dialog
+      ref={ref}
+      className="run-dialog"
+      aria-labelledby={`${id}-title`}
+      onCancel={(e) => {
+        e.preventDefault();
+        studio.closeRunDialog();
+      }}
+    >
+      <form
+        method="dialog"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (refusal === undefined) {
+            void studio.startFromDialog(values, timeoutMs);
+          }
+        }}
+      >
+        <h2 id={`${id}-title`}>Run {dialog.path}</h2>
+        <p className="hint">Values are read like the command line's --arg. Leave a field blank to use its default.</p>
+        {dialog.arguments.map((a) => (
+          <div className="field" key={a.name}>
+            <label className="field-label" htmlFor={`${id}-${a.name}`}>
+              {a.name}
+              {a.required && <span aria-label="required"> *</span>} <small>{a.type}</small>
+            </label>
+            <input
+              id={`${id}-${a.name}`}
+              value={values[a.name] ?? ''}
+              spellCheck={false}
+              placeholder={a.defaultJson !== undefined ? `default: ${a.defaultJson}` : a.required ? 'required' : 'no default'}
+              onChange={(e) => setValues({ ...values, [a.name]: e.target.value })}
+            />
+          </div>
+        ))}
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-timeout`}>
+            Timeout (ms) <small>optional</small>
+          </label>
+          <input id={`${id}-timeout`} inputMode="numeric" value={timeout} placeholder="engine default" onChange={(e) => setTimeoutText(e.target.value)} />
+        </div>
+        <p className="hint" id={`${id}-refusal`} role="status">
+          {refusal}
+        </p>
+        <div className="dialog-buttons">
+          <button type="submit" disabled={refusal !== undefined} aria-describedby={`${id}-refusal`}>
+            Start
+          </button>
+          <button type="button" onClick={() => studio.closeRunDialog()}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </dialog>
   );
 }

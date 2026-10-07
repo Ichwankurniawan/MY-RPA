@@ -75,6 +75,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
       { kind, count },
     );
 
+  // The W4A editing metrics, on the page as W4A measured it (no run shown yet).
   const results = [
     ['Property keystroke to paint', await measure('keystroke'), 50],
     ['Structural: move up/down', await measure('move'), 100],
@@ -83,6 +84,47 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     ['Structural: insert', await measure('insert'), 100],
     ['Structural: delete', await measure('delete'), 100],
   ];
+
+  // Reopen the fixture (discarding those edits), so it is valid again: Run validates first.
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.getByTestId('document-title').filter({ hasText: /^flat-3000\.json$/ }).waitFor();
+  await page.locator('[role=treeitem][data-node-id="log-150-4"] > .node').click();
+
+  // W5: typing while the fixture itself runs. The run streams about 8,700 events (3,001 node starts and completions,
+  // 2,700 logs) through SSE into the Studio; each keystroke is timed to the next painted frame, as above, for as
+  // long as the run's events keep arriving. Long tasks (> 50 ms on the main thread) are counted too.
+  const heavy = await page.evaluate(async () => {
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    const status = () => document.querySelector('[data-testid="run-status"]').textContent;
+    const longTasks = [];
+    const observer = new PerformanceObserver((list) => list.getEntries().forEach((e) => longTasks.push(e.duration)));
+    observer.observe({ type: 'longtask', buffered: false });
+    const runButton = [...document.querySelectorAll('header button')].find((b) => b.textContent === 'Run');
+    const start = performance.now();
+    const events = () => document.querySelectorAll('.events li').length;
+    runButton.click();
+    // Until the run's first events are shown (with batching, a fast run may skip straight past Running).
+    while (events() === 0 && performance.now() - start < 30_000) {
+      await frame();
+    }
+
+    const times = [];
+    while (!status().includes('Succeeded') && performance.now() - start < 120_000) {
+      const t0 = performance.now();
+      const input = document.querySelector('.properties input.code');
+      setValue.call(input, `${input.value}y`);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await frame();
+      times.push(performance.now() - t0);
+    }
+
+    observer.disconnect();
+    return { times, totalMs: performance.now() - start, status: status(), longTasks };
+  });
+  check(heavy.status.includes('Succeeded'), `the event-heavy run did not finish: ${heavy.status}`);
+  const engineDuration = await page.getByTestId('run-elapsed').textContent();
 
   console.log(`3,001-node fixture, ${samples} samples per metric (production build, headless Chromium)`);
   console.log(`  Open to interactive (click Open → last node rendered, includes the file request): ${openMs} ms (target ≤ 1000)`);
@@ -96,6 +138,15 @@ await withStudio(async ({ project, page, startServer, problems }) => {
         `script and render before the frame: p50 ${percentile(scripts, 50).toFixed(1)} ms, p95 ${percentile(scripts, 95).toFixed(1)} ms`,
     );
   }
+
+  const heavyP95 = heavy.times.length > 0 ? percentile(heavy.times, 95) : 0;
+  within &&= heavyP95 <= 50;
+  console.log(
+    `  Keystroke to paint during an event-heavy run (the fixture itself, ~8,700 events): ${heavy.times.length} samples, ` +
+      (heavy.times.length > 0 ? `p50 ${percentile(heavy.times, 50).toFixed(1)} ms, p95 ${heavyP95.toFixed(1)} ms (target p95 ≤ 50); ` : 'none (the run finished first); ') +
+      `run shown as Succeeded after ${(heavy.totalMs / 1000).toFixed(1)} s (engine duration ${engineDuration}); long tasks: ${heavy.longTasks.length}` +
+      (heavy.longTasks.length > 0 ? `, longest ${Math.max(...heavy.longTasks).toFixed(0)} ms` : ''),
+  );
 
   check(problems.length === 0, `browser errors: ${problems.join('; ')}`);
   check(within, 'a measurement is above its target');

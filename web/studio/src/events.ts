@@ -17,6 +17,9 @@ export type EventSourceFactory = (url: string) => EventSourceLike;
 
 export const executionEventKinds = ['execution.started', 'node.started', 'node.completed', 'execution.completed', 'log', 'stream.gap'];
 
+/** Whether the tab's stream is delivering events; `idle` when no stream is open. */
+export type StreamStatus = 'idle' | 'connected' | 'reconnecting';
+
 const closed = 2;
 
 export class RunEventStream {
@@ -30,6 +33,7 @@ export class RunEventStream {
     private readonly createSource: EventSourceFactory,
     private readonly onEvent: (event: ExecutionEvent) => void,
     private readonly onError: (message: string) => void = () => {},
+    private readonly onStatus: (status: StreamStatus) => void = () => {},
   ) {}
 
   /** Follows a run on this tab's stream (opening the stream on first use). */
@@ -57,8 +61,20 @@ export class RunEventStream {
       source.addEventListener(kind, (message) => this.receive(JSON.parse(message.data) as ExecutionEvent));
     }
 
+    // Sent by the server on every connection, including the browser's own reconnects with Last-Event-ID.
+    source.addEventListener('stream.opened', () => {
+      if (this.source === source) {
+        this.onStatus('connected');
+      }
+    });
     source.onerror = () => {
-      if (source.readyState === closed && this.source === source) {
+      if (this.source !== source) {
+        return;
+      }
+
+      // CONNECTING: the browser retries by itself and resumes with Last-Event-ID. CLOSED: the stream is gone.
+      this.onStatus('reconnecting');
+      if (source.readyState === closed) {
         this.reopen();
       }
     };
@@ -95,6 +111,7 @@ export class RunEventStream {
   private reopen(): void {
     this.close();
     if (this.unfinished.size === 0) {
+      this.onStatus('idle');
       return;
     }
 

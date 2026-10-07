@@ -3,23 +3,56 @@
 // browser (headless Chromium). It works on a throwaway copy of samples/hello-world.json, so it never edits the repository
 // and can run repeatedly. Checks use roles, labels and data attributes, never pixels. See harness.mjs for prerequisites.
 
-import { copyFileSync, readFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, repo, results, withStudio } from './harness.mjs';
 
 const step = (text) => console.log(`  ✓ ${text}`);
 
+// W5 workflows, written into the throwaway project only.
+const workflow = (id, root, args = []) => JSON.stringify({ schemaVersion: '1.0', id, name: id, version: '1.0.0', arguments: args, root }, null, 2);
+const log = (id, text) => ({ id, type: 'Core.Log', properties: { message: `'${text}'` } });
+const delay = (id, ms) => ({ id, type: 'Core.Delay', properties: { milliseconds: String(ms) } });
+const sequence = (...children) => ({ id: 'main', type: 'Core.Sequence', children });
+const w5Workflows = {
+  'greet.json': workflow(
+    'greet',
+    sequence(
+      { id: 'set-greeting', type: 'Core.Assign', properties: { to: 'greeting', value: "'Hi ' + who" } },
+      { id: 'set-doubled', type: 'Core.Assign', properties: { to: 'doubled', value: 'times * 2' } },
+    ),
+    [
+      { name: 'who', direction: 'In', type: 'String', required: true },
+      { name: 'times', direction: 'In', type: 'Int', default: 1 },
+      { name: 'greeting', direction: 'Out', type: 'String' },
+      { name: 'doubled', direction: 'Out', type: 'Int' },
+    ],
+  ),
+  'wait.json': workflow('wait', sequence(log('before', 'before the wait'), delay('wait', 1500), log('after', 'after the wait'))),
+  'fail.json': workflow('fail', sequence(log('start', 'starting'), { id: 'boom', type: 'Core.Throw', properties: { message: "'Planned failure'" } }, log('never', 'not reached'))),
+  'long.json': workflow('long', sequence(log('begin', 'long run begins'), delay('long-wait', 60000))),
+  'resume.json': workflow('resume', sequence(log('a', 'first'), delay('pause', 5000), log('b', 'second'))),
+};
+
 await withStudio(async ({ project, page, startServer, problems }) => {
   const file = join(project, 'hello-world.json');
   copyFileSync(join(repo, 'samples', 'hello-world.json'), file);
+  for (const [name, text] of Object.entries(w5Workflows)) {
+    writeFileSync(join(project, name), text);
+  }
+
   const original = JSON.parse(readFileSync(file, 'utf8'));
   const startLink = await startServer();
   console.log(`MyRPA.Server: ${startLink.replace(/token=.*/, 'token=…')}`);
 
   let streamConnections = [];
+  let runRequests = 0;
   page.on('request', (request) => {
-    if (request.method() === 'GET' && /^\/api\/streams\/[^/]+$/.test(new URL(request.url()).pathname)) {
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET' && /^\/api\/streams\/[^/]+$/.test(path)) {
       streamConnections.push(request.url());
+    } else if (request.method() === 'POST' && path === '/api/runs') {
+      runRequests++;
     }
   });
 
@@ -33,12 +66,28 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const treeIds = () => page.locator('[role=treeitem]').evaluateAll((items) => items.map((i) => i.dataset.nodeId).join(','));
   const selected = () => page.locator('[role=treeitem][aria-selected=true]').getAttribute('data-node-id');
   const expectTree = async (expected, what) => check((await treeIds()) === expected, `${what}: tree ${await treeIds()}`);
-  const openHelloWorld = async () => {
-    await page.getByText('Connected to MyRPA.Server').waitFor();
-    await page.getByRole('combobox', { name: 'Workflow' }).selectOption('hello-world.json');
+  const openWorkflow = async (name) => {
+    await page.getByRole('combobox', { name: 'Workflow' }).selectOption(name);
     await click('Open');
-    await title.filter({ hasText: /^hello-world\.json$/ }).waitFor();
+    await title.filter({ hasText: new RegExp(`^${name.replace('.', '\\.')}$`) }).waitFor();
   };
+  const openHelloWorld = async () => {
+    // After a page load, wait for the Studio to have connected (the workflow list is loaded by then).
+    if ((await page.getByRole('combobox', { name: 'Workflow' }).locator('option', { hasText: 'hello-world.json' }).count()) === 0) {
+      await page.getByText('Connected to MyRPA.Server').waitFor();
+    }
+
+    await openWorkflow('hello-world.json');
+  };
+  const dialog = page.getByRole('dialog');
+  // hello-world declares userName (In, default "World"): Run asks for it; Start with the field blank keeps the default.
+  const runWithDefaults = async () => {
+    await click('Run');
+    await dialog.waitFor();
+    await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+  };
+  const toolbarButton = (name) => page.getByRole('banner').getByRole('button', { name, exact: true });
+  const eventSequences = () => page.locator('.events .seq').allTextContents();
 
   // W3: session, open, tree, selection, properties.
   await page.goto(startLink);
@@ -110,7 +159,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check(!(await edit('Undo').isEnabled()), 'a reopened file starts a new history');
   step('11-12. Reloaded the page and reopened the file: same structure and property');
 
-  await click('Run');
+  await runWithDefaults();
   await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
   const kinds = await page.locator('.events .kind').allTextContents();
   const logs = (await page.locator('.events .log').allTextContents()).map((l) => l.trim());
@@ -124,20 +173,130 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   step('13-14. Ran through Execution.Hosting; SSE delivered the events and both logs in order; status Succeeded');
 
   // Error case (W3): an expression syntax error found by the server; Run refuses; undo fixes it; runs again.
+  // Error case (W3, now validate-before-run, W5): the server finds the syntax error and the run is never requested.
   await message.fill('greeting +');
   await click('Validate');
   await page.locator('.field-error').filter({ hasText: 'MYRPA1043' }).waitFor();
-  await click('Run');
-  await runStatus.filter({ hasText: 'NotStarted' }).waitFor();
+  const requestsBefore = runRequests;
+  await runWithDefaults();
+  await runStatus.filter({ hasText: 'Not started — validation failed' }).waitFor();
+  check(runRequests === requestsBefore, `an invalid workflow made ${runRequests - requestsBefore} run request(s)`);
   await page.screenshot({ path: join(results, 'studio-validation-error.png') });
   await page.keyboard.press('Control+z');
   check((await message.inputValue()) === inserted, 'undo the broken edit');
-  await click('Run');
+  await runWithDefaults();
   await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
   check(streamConnections.length === 1, `SSE connections after reload: ${streamConnections.length}`);
-  step('Error case: MYRPA1043 on the property, Run refused (422); undo restored the saved version, which ran again; one SSE connection');
+  step('Error case: MYRPA1043 on the property; Run validated first and never requested the run (Not started — validation failed); undo fixed it and it ran again; one SSE connection');
 
-  check(problems.length === 0, `browser errors: ${problems.join('; ')}`);
+  // W5-1: run configuration. A required argument blocks Start; the text is parsed by the server like --arg.
+  await openWorkflow('greet.json');
+  await click('Run');
+  await dialog.waitFor();
+  const start = dialog.getByRole('button', { name: 'Start', exact: true });
+  check(await start.isDisabled(), 'Start is disabled while the required argument is blank');
+  check((await dialog.getByText('Enter the required argument(s): who.').count()) === 1, 'the reason is shown');
+  check((await dialog.getByLabel(/^times/).getAttribute('placeholder')) === 'default: 1', 'the default is shown');
+  await dialog.getByLabel(/^who/).fill('Ada');
+  await dialog.getByLabel(/^times/).fill('3');
+  await start.click();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  const outputs = await page.getByTestId('run-outputs').textContent();
+  check(outputs.includes('"greeting":"Hi Ada"') && outputs.includes('"doubled":6'), `outputs ${outputs}`);
+  step(`W5-1. Run dialog: required "who" blocked Start; who=Ada, times=3 (text) → Succeeded, ${outputs}`);
+
+  // W5-2: live view of a running workflow: status, start time, current node, node badges, logs.
+  await openWorkflow('wait.json');
+  await click('Run'); // no input arguments: no dialog
+  await page.getByTestId('run-current').filter({ hasText: /^wait$/ }).waitFor();
+  check((await runStatus.textContent()).includes('Running'), `status while running: ${await runStatus.textContent()}`);
+  check((await page.getByTestId('toolbar-run-status').textContent()) === 'Status: Running', 'toolbar status');
+  check((await page.getByTestId('run-started').textContent()).length > 0, 'start time shown');
+  check((await row('wait').getAttribute('data-run-status')) === 'Running', 'the running node is marked');
+  check((await row('after').getAttribute('data-run-status')) === null, 'a node not executed yet has no run state');
+  await page.screenshot({ path: join(results, 'studio-running.png') });
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  check((await row('after').getAttribute('data-run-status')) === 'Succeeded', 'node state after the run');
+  const waitLogs = (await page.locator('.events .log').allTextContents()).map((l) => l.trim());
+  check(waitLogs.join('|') === '[Information] before the wait|[Information] after the wait', `logs ${waitLogs}`);
+  step('W5-2. Running view: Running, current node "wait", start time, running/not-executed node states, then Succeeded with both logs');
+
+  // W5-3: failure: status, failed node, navigation, still editable.
+  await openWorkflow('fail.json');
+  await click('Run');
+  await runStatus.filter({ hasText: 'Failed' }).waitFor();
+  const failure = await page.getByTestId('run-error').textContent();
+  check(failure.includes('at boom') && failure.includes('Planned failure'), `failure ${failure}`);
+  check((await row('boom').getAttribute('data-run-status')) === 'Failed' && (await row('never').getAttribute('data-run-status')) === null, 'failed and not executed nodes');
+  await click('Select failed node');
+  check((await selected()) === 'boom', `selected after "Select failed node": ${await selected()}`);
+  await message.fill("'Changed after the failure'");
+  await title.filter({ hasText: /•$/ }).waitFor();
+  await page.screenshot({ path: join(results, 'studio-run-failed.png') });
+  await page.keyboard.press('Control+z');
+  await title.filter({ hasText: /^fail\.json$/ }).waitFor();
+  step(`W5-3. Failure: Failed, ${failure.replace(' Select failed node', '').trim()}; Select failed node selected "boom"; the workflow stayed editable`);
+
+  // W5-4: cancellation. Cancelling… until the server reports Cancelled (seen through a DOM observer).
+  await openWorkflow('long.json');
+  await click('Run');
+  await page.getByTestId('run-current').filter({ hasText: /^long-wait$/ }).waitFor();
+  await page.evaluate(() => {
+    window.__statuses = [];
+    const target = document.querySelector('[data-testid="run-status"]');
+    new MutationObserver(() => window.__statuses.push(target.textContent)).observe(target, { subtree: true, childList: true, characterData: true });
+  });
+  await toolbarButton('Stop').click();
+  await runStatus.filter({ hasText: 'Cancelled' }).waitFor();
+  const statuses = await page.evaluate(() => window.__statuses);
+  check(statuses.some((s) => s.includes('Cancelling…')), `statuses seen: ${statuses.join(' → ')}`);
+  check(await toolbarButton('Stop').isDisabled(), 'Stop is disabled after the run finished');
+  check((await row('long-wait').getAttribute('data-run-status')) === 'Cancelled', 'the cancelled node');
+  step('W5-4. Stop: Cancelling… shown until the server reported Cancelled; the node shows Cancelled; Stop disabled afterwards');
+
+  // W5-5: two runs at once on the one stream; each keeps its own status and logs.
+  await click('Run');
+  await page.getByTestId('run-current').filter({ hasText: /^long-wait$/ }).waitFor();
+  const longRun = (await runStatus.textContent()).match(/run (\S+)/)[1];
+  await openHelloWorld();
+  await runWithDefaults();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  const helloLogs = (await page.locator('.events .log').allTextContents()).join('|');
+  check(!helloLogs.includes('long run begins'), `logs mixed: ${helloLogs}`);
+  const recent = page.getByRole('combobox', { name: /Recent runs/ });
+  const longOption = await recent.locator('option').evaluateAll((options, id) => options.find((o) => o.textContent.includes('long.json') && o.textContent.includes('Running'))?.value, longRun);
+  check(longOption !== undefined, 'the long run is listed as running');
+  await recent.selectOption(longOption);
+  await runStatus.filter({ hasText: longRun }).waitFor();
+  check((await runStatus.textContent()).includes('Running'), 'the long run is still running');
+  const longLogs = (await page.locator('.events .log').allTextContents()).map((l) => l.trim()).join('|');
+  check(longLogs === '[Information] long run begins', `long run logs: ${longLogs}`);
+  check(streamConnections.length === 1, `SSE connections: ${streamConnections.length}`);
+  await toolbarButton('Stop').click();
+  await runStatus.filter({ hasText: 'Cancelled' }).waitFor();
+  step(`W5-5. Concurrent runs: hello-world Succeeded while ${longRun} kept running; separate logs and status; one SSE connection; then stopped`);
+
+  // W5-6: the stream disappears mid-run (deleted on the server); the Studio re-creates it and resumes after the last
+  // sequence it saw: no duplicates, nothing lost. (Resume with Last-Event-ID is covered by the server tests.)
+  await openWorkflow('resume.json');
+  await click('Run');
+  await page.getByTestId('run-current').filter({ hasText: /^pause$/ }).waitFor();
+  const streamUrl = new URL(streamConnections.at(-1));
+  const deleted = await page.evaluate(async (path) => (await fetch(path, { method: 'DELETE', headers: { 'X-MyRPA-Request': '1' } })).status, streamUrl.pathname);
+  check(deleted === 204, `stream delete: ${deleted}`);
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor({ timeout: 20_000 });
+  const sequences = (await eventSequences()).map(Number);
+  check(sequences.join(',') === sequences.map((_, i) => i + 1).join(','), `sequences ${sequences}`);
+  const resumeLogs = (await page.locator('.events .log').allTextContents()).map((l) => l.trim()).join('|');
+  check(resumeLogs === '[Information] first|[Information] second', `logs ${resumeLogs}`);
+  check(streamConnections.length >= 2 && new URL(streamConnections.at(-1)).pathname !== streamUrl.pathname, 'a new stream was created');
+  check((await page.getByTestId('stream-reconnecting').count()) === 0, 'the reconnecting notice is gone');
+  step(`W5-6. Stream lost mid-run: re-created and resumed; sequences 1..${sequences.length} without duplicates or loss; both logs`);
+
+  // The deleted stream answers the browser's automatic retry with a 404 (JSON), which Chromium reports on the console.
+  const expected = (text) => /EventSource's response has a MIME type/.test(text);
+  const unexpected = problems.filter((p) => !expected(p));
+  check(unexpected.length === 0, `browser errors: ${unexpected.join('; ')}`);
   step('No script errors or CSP violations in the browser');
   console.log(`Smoke test passed. Screenshots: ${results}`);
 });

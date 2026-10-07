@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { indexDocument } from './document';
-import { isDirty, Studio } from './studio';
-import { FakeApi, FakeEventSource, catalog, helloWorldEvents, settle } from './test-support';
+import { currentRun, isDirty, Studio } from './studio';
+import { FakeApi, FakeEventSource, immediately, catalog, helloWorldEvents, settle } from './test-support';
 import type { JsonObject } from './types';
 
 const message = catalog.find((a) => a.type === 'Core.Log')!.properties[0];
 
 async function openHelloWorld(api = new FakeApi()) {
-  const studio = new Studio(api, (url) => new FakeEventSource(url));
+  const studio = new Studio(api, (url) => new FakeEventSource(url), immediately);
   await studio.connect();
   await studio.open('hello-world.json');
   return { studio, api, state: () => studio.store.get() };
@@ -36,7 +36,7 @@ describe('Studio', () => {
   it('reports a missing session instead of failing', async () => {
     const api = new FakeApi();
     api.signedIn = false;
-    const studio = new Studio(api, (url) => new FakeEventSource(url));
+    const studio = new Studio(api, (url) => new FakeEventSource(url), immediately);
 
     await studio.connect();
 
@@ -102,17 +102,18 @@ describe('Studio', () => {
     expect(api.runs).toEqual([{ path: 'hello-world.json', document: undefined }]);
     expect(source.url).toBe('/api/streams/stream-1');
     expect(api.subscriptions).toEqual([{ streamId: 'stream-1', runId: 'run-1', afterSequence: 0 }]);
-    expect(state().run?.status).toBe('Running');
+    expect(currentRun(state())?.status).toBe('Starting'); // accepted; the engine has not reported it yet
 
     const events = helloWorldEvents('run-1');
     events.slice(0, 3).forEach((e) => source.emit(e));
+    expect(currentRun(state())?.status).toBe('Running');
     expect(state().nodeStatus.get('log-greeting')).toBe('Running');
     events.slice(3).forEach((e) => source.emit(e));
     source.emit(events[4]); // a duplicate after a reconnect is ignored
     await settle();
 
-    expect(state().run).toMatchObject({ runId: 'run-1', status: 'Succeeded', result: { outputs: { greeting: 'Hello, World!' } } });
-    expect(state().events.map((e) => e.kind)).toEqual(events.map((e) => e.kind));
+    expect(currentRun(state())).toMatchObject({ runId: 'run-1', status: 'Succeeded', result: { outputs: { greeting: 'Hello, World!' } } });
+    expect(currentRun(state())!.events.map((e) => e.kind)).toEqual(events.map((e) => e.kind));
     expect(state().nodeStatus.get('log-greeting')).toBe('Succeeded');
   });
 
@@ -142,7 +143,7 @@ describe('Studio', () => {
 
     await studio.run();
 
-    expect(state().run?.status).toBe('NotStarted');
+    expect(currentRun(state())?.status).toBe('NotStarted');
     expect(state().diagnostics?.[0].code).toBe('MYRPA1043');
   });
 
@@ -162,7 +163,7 @@ describe('Studio', () => {
   it('opens lossy files read-only: no edits, no saves', async () => {
     const api = new FakeApi();
     api.files.set('lossy.json', { text: '{ "schemaVersion": "1.0", "root": { "id": "l", "type": "Core.Log", "properties": { "message": 1.50 } } }', etag: 1 });
-    const studio = new Studio(api, (url) => new FakeEventSource(url));
+    const studio = new Studio(api, (url) => new FakeEventSource(url), immediately);
     await studio.connect();
     await studio.open('lossy.json');
     const key = studio.store.get().selectedKey!;

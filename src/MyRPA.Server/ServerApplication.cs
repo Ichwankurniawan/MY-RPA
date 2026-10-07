@@ -351,6 +351,33 @@ internal static class ServerApplication
                 arguments[name] = converted;
             }
 
+            // Text typed by a person (the Web Studio's run dialog), parsed like the CLI's --arg and the WPF prompt.
+            foreach (var (name, text) in request.ArgumentText ?? [])
+            {
+                var definition = loaded.Workflow.Arguments.FirstOrDefault(a => a.Name == name && a.IsInput);
+                if (definition is null)
+                {
+                    return BadRequest($"'{name}' is not an input argument of the workflow.");
+                }
+
+                if (arguments.ContainsKey(name))
+                {
+                    return BadRequest($"Argument '{name}' is given both as a value and as text.");
+                }
+
+                if (text is null)
+                {
+                    return BadRequest($"Argument '{name}': the text must be a string.");
+                }
+
+                if (!WorkflowValues.TryParseText(text, definition.Type, out var converted, out var conversionError))
+                {
+                    return BadRequest($"Argument '{name}': {conversionError}");
+                }
+
+                arguments[name] = converted;
+            }
+
             if (request.TimeoutMs is <= 0)
             {
                 return BadRequest("'timeoutMs' must be positive.");
@@ -484,7 +511,7 @@ internal static class ServerApplication
 internal sealed record ValidateRequest(JsonElement? Document);
 
 /// <summary>Body of <c>POST /api/runs</c>.</summary>
-internal sealed record StartRunRequest(string? Project, string? Path, JsonElement? Document, Dictionary<string, JsonElement>? Arguments, int? TimeoutMs);
+internal sealed record StartRunRequest(string? Project, string? Path, JsonElement? Document, Dictionary<string, JsonElement>? Arguments, int? TimeoutMs, Dictionary<string, string?>? ArgumentText = null);
 
 /// <summary>Body of <c>POST /api/streams/{streamId}/subscriptions</c>.</summary>
 internal sealed record SubscribeRequest(string? RunId, long? AfterSequence);

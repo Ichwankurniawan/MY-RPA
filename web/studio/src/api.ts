@@ -20,6 +20,15 @@ export class ApiError extends Error {
   }
 }
 
+/** Options of `POST /api/runs` beyond the file. */
+export interface StartRunOptions {
+  /** An unsaved document, run as if it were saved at `path`. */
+  readonly document?: JsonObject;
+  /** Input arguments as typed text, parsed by the server like the CLI's `--arg` (ADR-0030). */
+  readonly argumentText?: Readonly<Record<string, string>>;
+  readonly timeoutMs?: number;
+}
+
 export interface StudioApi {
   info(): Promise<ServerInfo>;
   activities(): Promise<ActivityDescriptor[]>;
@@ -28,9 +37,11 @@ export interface StudioApi {
   /** Saves over the version with `etag` (If-Match); returns the new ETag. 412 when the file changed meanwhile. */
   saveWorkflow(project: string, path: string, text: string, etag: string): Promise<string>;
   validate(document: JsonObject): Promise<ValidationResult>;
-  /** Runs the saved file, or `document` as if it were saved at `path`. */
-  startRun(project: string, path: string, document?: JsonObject): Promise<string>;
+  /** Runs the saved file, or `options.document` as if it were saved at `path`. 422 (invalid) and 400 mean not started. */
+  startRun(project: string, path: string, options?: StartRunOptions): Promise<string>;
   run(runId: string): Promise<RunStatus>;
+  /** Requests cooperative cancellation (202). 409 when the run already finished. The outcome arrives on the stream. */
+  cancelRun(runId: string): Promise<void>;
   createStream(): Promise<string>;
   subscribe(streamId: string, runId: string, afterSequence: number): Promise<void>;
   /** The SSE address of a stream. */
@@ -95,11 +106,14 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
       return response.headers.get('ETag') ?? '';
     },
     validate: async (document) => (await send('POST', '/api/validate', JSON.stringify({ document }))).json() as Promise<ValidationResult>,
-    async startRun(project, path, document) {
-      const response = await send('POST', '/api/runs', JSON.stringify({ project, path, document }));
+    async startRun(project, path, options = {}) {
+      const response = await send('POST', '/api/runs', JSON.stringify({ project, path, ...options }));
       return ((await response.json()) as { runId: string }).runId;
     },
     run: (runId) => get<RunStatus>(`/api/runs/${encodeURIComponent(runId)}`),
+    async cancelRun(runId) {
+      await send('POST', `/api/runs/${encodeURIComponent(runId)}/cancel`);
+    },
     async createStream() {
       const response = await send('POST', '/api/streams');
       return ((await response.json()) as { streamId: string }).streamId;

@@ -15,8 +15,8 @@ backend work may start in parallel once authorized; see ADR-0021 "Consequences")
 | **W2** | Server / control plane | ✅ Done (`ba857ba`) |
 | **W3** | First working Web Studio | ✅ Done (`2d15bbc`) |
 | **W4A** | Structural editing | ✅ Done (`62f2d05`, approved 2026-09-25) |
-| **W4B** | Rich authoring | 🔜 Next (needs authorization) |
-| **W5** | Execution UX | ⬜ |
+| **W4B** | Rich authoring | ⬜ Open (needs authorization) |
+| **W5** | Execution UX | ✅ Done (2026-10-07; authorized before W4B; ADR-0030) |
 | **W6** | Project/file management | ⬜ |
 | **W7** | Advanced authoring / parity | ⬜ |
 | **W8** | Performance + accessibility + hardening | ⬜ |
@@ -35,8 +35,8 @@ Numbers refer to ADR-0021 "Exit criteria for deleting WPF".
 | 4 | Validation | Diagnostics on node and property; Problems list navigates; MYRPA1040 on the property | Argument/variable/workflow-level locations; validation ≤ 500 ms after typing stops (debounced); corpus parity with Phase 5 `DraftValidator` | W4B, W9 |
 | 5 | Undo/redo | 200 steps; typing merged; every current edit kind; dirty state incl. undo to saved | New edit kinds must join the history as they are added | each slice |
 | 6 | Copy/paste | — | Cut/copy/paste within and across documents with id renaming; keyboard paste without a permission prompt | W7 |
-| 7 | Execution | Run; status, outputs; error with failing node; per-node states; unsaved buffer; stream re-creation | Typed argument input; Stop; timeout control; reconnect proven end to end | W5 |
-| 8 | Logs, output, errors | Level and node id; bounded (1,000); run id; no internals | Clear; execution and correlation ids visible | W5 |
+| 7 | Execution | Run; status, outputs; error with failing node; per-node states; unsaved buffer; stream re-creation; W5: validate before run, typed argument input (`argumentText`), timeout, Stop with Cancelling…, concurrent runs, reconnect proven end to end (smoke) | — | W5 |
+| 8 | Logs, output, errors | Level and node id; bounded (1,000); run id; no internals; W5: per-run logs with times, Select failed node, not-started reasons | Clear; execution and correlation ids visible | later slice |
 | 9 | Projects and files | Open project (server `--project`); file list; save conflict (412); `beforeunload` | File tree; create/rename/delete; in-app unsaved prompt (not `window.confirm`); crash recovery; command-line equivalents of the WPF startup options | W6 |
 | 10 | Keyboard and accessibility | Tree and commands by keyboard; Ctrl+S/Z/Y, Del, F5; ARIA tree; announced status | Ctrl+X/C/V, Shift+F5; every operation without a mouse; automated accessibility check; screen-reader smoke test | W5, W7, W8 |
 | 11 | Performance | Open, edit, undo/redo, insert/delete/move within targets on the flat 3,000-node fixture (`npm run perf`, local) | Nested fixture; drag activation/move; validation ≤ 500 ms; measured in CI | W4B, W7, W8 |

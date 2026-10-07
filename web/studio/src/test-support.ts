@@ -1,6 +1,6 @@
 // Test doubles for the unit and component tests (never imported by the application).
 
-import { ApiError, type StudioApi } from './api';
+import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
 import type { ActivityDescriptor, ExecutionEvent, JsonObject, RunStatus, ValidationResult } from './types';
 
@@ -96,7 +96,11 @@ export class FakeEventSource implements EventSourceLike {
 export class FakeApi implements StudioApi {
   files = new Map<string, { text: string; etag: number }>([['hello-world.json', { text: helloWorld, etag: 1 }]]);
   saves: { path: string; text: string; etag: string }[] = [];
-  runs: { path: string; document?: JsonObject }[] = [];
+  runs: ({ path: string } & StartRunOptions)[] = [];
+  cancels: string[] = [];
+  startFailure?: ApiError;
+  cancelFailure?: ApiError;
+  validations = 0;
   subscriptions: { streamId: string; runId: string; afterSequence: number }[] = [];
   streamsCreated = 0;
   signedIn = true;
@@ -142,16 +146,28 @@ export class FakeApi implements StudioApi {
   }
 
   async validate() {
+    this.validations++;
     return this.validation;
   }
 
-  async startRun(_project: string, path: string, document?: JsonObject) {
+  async startRun(_project: string, path: string, options: StartRunOptions = {}) {
     if (this.runRefusal) {
       throw new ApiError(422, 'invalid', this.runRefusal);
     }
 
-    this.runs.push({ path, document });
+    if (this.startFailure) {
+      throw this.startFailure;
+    }
+
+    this.runs.push({ path, ...options });
     return `run-${this.runs.length}`;
+  }
+
+  async cancelRun(runId: string) {
+    this.cancels.push(runId);
+    if (this.cancelFailure) {
+      throw this.cancelFailure;
+    }
   }
 
   async run(runId: string): Promise<RunStatus> {
@@ -190,6 +206,9 @@ export function helloWorldEvents(runId: string): ExecutionEvent[] {
     { ...base, sequence: 7, kind: 'execution.completed', workflowId: 'hello-world', status: 'Succeeded', durationMs: 12 },
   ];
 }
+
+/** Applies streamed events at once (the application batches them per animation frame). */
+export const immediately = (flush: () => void) => flush();
 
 /** Lets pending promise callbacks run. */
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));

@@ -25,7 +25,7 @@ button { padding: 4px 12px; }
 .studio {
   display: grid;
   grid-template-columns: 220px 1fr 320px;
-  grid-template-rows: auto 1fr 240px auto;
+  grid-template-rows: auto minmax(0, 1fr) minmax(240px, 40vh) auto;
   grid-template-areas: 'toolbar toolbar toolbar' 'toolbox designer properties' 'output output output' 'status status status';
   height: 100vh;
 }
@@ -45,7 +45,10 @@ button { padding: 4px 12px; }
 .toolbox small { color: var(--muted); }
 .designer { grid-area: designer; background: var(--bg); }
 .properties { grid-area: properties; border-left: 1px solid var(--border); }
-.output { grid-area: output; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.output { grid-area: output; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; overflow: hidden; }
+/* Each half scrolls on its own, so a long event list is never clipped by the row. */
+.output > div { overflow: auto; min-height: 0; }
+.toolbar-status { color: var(--muted); }
 .connection { grid-area: designer / toolbox / output / properties; }
 .statusbar { grid-area: status; margin: 0; padding: 4px 12px; border-top: 1px solid var(--border); color: var(--muted); min-height: 1.8em; }
 .hint { color: var(--muted); }
@@ -64,6 +67,10 @@ button { padding: 4px 12px; }
 .badge.error, .badge.status-failed { background: #fde2df; color: var(--error); }
 .badge.status-succeeded { background: #dcf3e2; color: var(--ok); }
 .badge.status-running { background: #e3ebff; color: var(--accent); }
+.badge.status-cancelled { background: #fff1d6; color: #8a5300; }
+.node[data-run-status='Running'] { border-color: var(--accent); }
+/* A run of this file is shown: nodes without a run state were not executed. */
+.shows-run .node:not([data-run-status]) .label { color: var(--muted); font-weight: normal; }
 
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; }
 .facts dt { color: var(--muted); }
@@ -87,3 +94,8 @@ button { padding: 4px 12px; }
 .events .kind { font-weight: 600; }
 .events .event-node { color: var(--accent); }
 .events .log { color: var(--ok); }
+.events .time { color: var(--muted); }
+.recent-runs { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; color: var(--muted); }
+.run-dialog { min-width: 360px; max-width: 90vw; border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
+.run-dialog h2 { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text); }
+.dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; }
