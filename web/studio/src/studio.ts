@@ -207,7 +207,7 @@ export const maxEvents = 1000;
 export const maxRuns = 10;
 
 /** Streamed events applied per animation frame; more wait for the next frame. */
-export const maxEventsPerFrame = 250;
+export const maxEventsPerFrame = 100;
 
 const noStatus: ReadonlyMap<string, string> = new Map();
 

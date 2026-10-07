@@ -12,7 +12,7 @@
   --selected: #dce6fb;
   --error: #b42318;
   --error-bg: #fde2df;
-  --ok: #1a7f37;
+  --ok: #116329;
   --ok-bg: #dcf3e2;
   --info-bg: #e3ebff;
   --warn: #8a5300;
@@ -97,7 +97,7 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 .toolbox button.insert { width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px 6px; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
 .toolbox button.insert:hover:not(:disabled) { border-color: var(--border); background: var(--panel-2); }
 .toolbox small { color: var(--muted); }
-.toolbox .description { flex-basis: 100%; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolbox .description { display: block; padding: 0 6px 2px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 
 /* Designer: activity cards; containers have a tinted boundary; nesting is indented with a guide line. */

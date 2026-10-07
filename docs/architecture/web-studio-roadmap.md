@@ -19,7 +19,7 @@ backend work may start in parallel once authorized; see ADR-0021 "Consequences")
 | **W5** | Execution UX | ✅ Done (2026-10-07; authorized before W4B; ADR-0030) |
 | **W6** | Project/file management | ✅ Done (2026-10-07; ADR-0031) |
 | **W7** | Advanced authoring / parity | ✅ Done (2026-10-08; ADR-0033) |
-| **W8** | Performance + accessibility + hardening | ⬜ |
+| **W8** | Performance + accessibility + hardening | ✅ Done (2026-10-08; ADR-0034) |
 | **W9** | WPF exit criteria + migration | ⬜ |
 | **W10** | WPF removal / Phase 5 completion | ⬜ |
 

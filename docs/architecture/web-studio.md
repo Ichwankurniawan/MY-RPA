@@ -41,7 +41,8 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `npm test` | Vitest unit and component tests (jsdom) |
 | `npm run build` | Typecheck and production build to `dist` |
 | `npm run smoke` | End-to-end smoke test: the Release server (`dotnet build MyRPA.sln -c Release`) and `dist`, driven by headless Chromium on a temporary copy of `samples/hello-world.json` |
-| `npm run perf` | Editing performance on the W0 3,000-node fixture against the ADR-0021 targets (same prerequisites) |
+| `npm run perf` | Performance on the W0 3,000-node fixture against the ADR-0021 targets: open, typing, undo/redo, structural edits, drag activation and movement; typing during an event-heavy run (informational). `MYRPA_PERF_TOLERANCE` scales the targets on slower machines (CI: 2). Same prerequisites |
+| `npm run a11y` | Accessibility (W8, ADR-0034): axe-core in 9 states (light and dark), failing on serious or critical violations, plus keyboard-only authoring. Same prerequisites |
 
 ## What it does
 

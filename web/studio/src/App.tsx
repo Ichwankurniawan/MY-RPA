@@ -274,6 +274,8 @@ function Toolbar() {
   );
 }
 
+const descriptionId = (type: string) => `activity-description-${type.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+
 function Toolbox() {
   const studio = useStudio();
   const activities = useStudioState((s) => s.activities);
@@ -314,19 +316,24 @@ function Toolbox() {
                 <ul aria-label={category}>
                   {members.map((a) => (
                     <li key={a.type}>
+                      {/* The accessible name ("Insert Log (Core.Log)") contains the visible text; the description is outside. */}
                       <button
                         type="button"
                         className="insert"
                         data-activity={a.type}
                         title={a.description}
                         aria-label={`Insert ${a.displayName} (${a.type})`}
-                        aria-describedby="toolbox-hint"
+                        aria-describedby={a.description ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
                         disabled={refusal !== undefined}
                         onClick={() => studio.insertActivity(a.type)}
                       >
-                        <span>{a.displayName}</span> <small>{a.type}</small>
-                        {a.description && <small className="description">{a.description}</small>}
+                        <span>{a.displayName}</span> <small>({a.type})</small>
                       </button>
+                      {a.description && (
+                        <small className="description" id={descriptionId(a.type)}>
+                          {a.description}
+                        </small>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -644,10 +651,10 @@ function WorkflowTree() {
 
   if (document === undefined) {
     return (
-      <section className="designer" aria-labelledby="designer-heading">
+      <main className="designer" aria-labelledby="designer-heading">
         <h2 id="designer-heading">Workflow</h2>
         <p className="hint">Choose a workflow and press Open.</p>
-      </section>
+      </main>
     );
   }
 
@@ -680,7 +687,7 @@ function WorkflowTree() {
 
   const root = document.root;
   return (
-    <section className="designer" aria-labelledby="designer-heading">
+    <main className="designer" aria-labelledby="designer-heading">
       <h2 id="designer-heading">Workflow</h2>
       <PluginNotice />
       <EditBar />
@@ -689,7 +696,7 @@ function WorkflowTree() {
       <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown} className={showsRun ? 'shows-run' : undefined}>
         {isObject(root) && <TreeNode node={root} depth={1} />}
       </ul>
-    </section>
+    </main>
   );
 }
 
@@ -790,9 +797,18 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
   const key = keyOf(node);
   const id = typeof node.id === 'string' ? node.id : undefined;
   const type = typeof node.type === 'string' ? node.type : undefined;
-  const selected = useStudioState((s) => s.selectedKey === key);
-  const hasError = useStudioState((s) => id !== undefined && s.errorNodeIds.has(id));
-  const status = useStudioState((s) => (id === undefined ? undefined : s.nodeStatus.get(id)));
+  // One subscription for everything per-node that changes often (selection, error, run state, picked zone): with
+  // 3,000 nodes each extra subscription is 3,000 more listener calls per keystroke. The snapshot is a string, so the
+  // store's identity check stays exact. Fields are separated by NUL (never in ids, statuses or slot names).
+  const view = useStudioState(
+    (s) =>
+      `${s.selectedKey === key ? 1 : 0}\0${id !== undefined && s.errorNodeIds.has(id) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}`,
+  );
+  const [selectedFlag, errorFlag, statusText, pickedText] = view.split('\0');
+  const selected = selectedFlag === '1';
+  const hasError = errorFlag === '1';
+  const status = statusText === '' ? undefined : statusText;
+  const picked = pickedText === '' ? undefined : pickedText;
   const activity = useStudioState((s) => (type === undefined ? undefined : s.catalog.get(type)));
   const children = childSteps(node);
   // Containers (a list or slots) get a visible boundary; empty ones say so in the card (not as tree items).
@@ -801,8 +817,6 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
   const presentSlots = isObject(node.slots) ? node.slots : {};
   const missingSlots = activity?.slots.filter((s) => !s.prefix && !(s.name in presentSlots)) ?? [];
   const prefixSlots = activity?.slots.filter((s) => s.prefix) ?? [];
-  // The zone picked for the next insert, when it belongs to this node (a string, so the selector stays cheap).
-  const picked = useStudioState((s) => (s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : undefined));
 
   return (
     <li

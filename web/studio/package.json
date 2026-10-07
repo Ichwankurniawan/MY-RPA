@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "smoke": "node scripts/smoke.mjs",
-    "perf": "node scripts/perf.mjs"
+    "perf": "node scripts/perf.mjs",
+    "a11y": "node scripts/a11y.mjs"
   },
   "dependencies": {
     "react": "19.2.8",
@@ -26,6 +27,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",
+    "axe-core": "4.14.0",
     "jsdom": "27.4.0",
     "playwright-core": "1.63.0",
     "typescript": "5.9.3",

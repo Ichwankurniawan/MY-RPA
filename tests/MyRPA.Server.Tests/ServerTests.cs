@@ -305,6 +305,26 @@ public sealed class ProjectAndCatalogTests
         Assert.Equal(ServerHarness.Logs(1), File.ReadAllText(Path.Combine(h.ProjectRoot, "sub", "b.json")));
     }
 
+    [Theory]
+    [InlineData("""{ "to": "b.json" }""")]
+    [InlineData("""{ "from": "a.json" }""")]
+    [InlineData("""{ "from": "a.json", "to": "sub\\b.json" }""")]
+    [InlineData("""{ "from": "a.json", "to": ".hidden/b.json" }""")]
+    [InlineData("""{ "from": 5, "to": "b.json" }""")]
+    [InlineData("""not json""")]
+    public async Task Move_RejectsMalformedRequests_AndLeavesTheFile(string body)
+    {
+        await using var h = await ServerHarness.StartAsync();
+        h.WriteWorkflow("a.json", ServerHarness.Logs(1));
+        using var request = h.Unsafe(HttpMethod.Post, $"/api/projects/{h.ProjectName}/move", rawJson: body);
+        request.Headers.TryAddWithoutValidation("If-Match", "\"x\"");
+
+        using var response = await h.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True(File.Exists(Path.Combine(h.ProjectRoot, "a.json")));
+    }
+
     [Fact]
     public async Task Move_NeedsTheSession_AndTheAntiForgeryHeader()
     {

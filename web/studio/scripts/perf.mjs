@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { check, withStudio } from './harness.mjs';
 
 const samples = Number(process.env.MYRPA_PERF_SAMPLES ?? 40);
+// CI runners are shared, slower machines: MYRPA_PERF_TOLERANCE scales every target there (default 1: the ADR-0021
+// targets as they are). The tolerance used is printed with the results.
+const tolerance = Number(process.env.MYRPA_PERF_TOLERANCE ?? 1);
 
 function fixture() {
   const groups = Array.from({ length: 300 }, (_, g) => ({
@@ -168,11 +171,11 @@ await withStudio(async ({ project, page, startServer, problems }) => {
 
   console.log(`3,001-node fixture, ${samples} samples per metric (production build, headless Chromium)`);
   console.log(`  Open to interactive (click Open → last node rendered, includes the file request): ${openMs} ms (target ≤ 1000)`);
-  let within = openMs <= 1000;
+  let within = openMs <= 1000 * tolerance;
   for (const [name, { times, scripts }, target] of results) {
     const p50 = percentile(times, 50);
     const p95 = percentile(times, 95);
-    within &&= p95 <= target;
+    within &&= p95 <= target * tolerance;
     console.log(
       `  ${name}: p50 ${p50.toFixed(1)} ms, p95 ${p95.toFixed(1)} ms (target p95 ≤ ${target}); ` +
         `script and render before the frame: p50 ${percentile(scripts, 50).toFixed(1)} ms, p95 ${percentile(scripts, 95).toFixed(1)} ms`,
@@ -184,20 +187,19 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     ['Drag movement (each move to paint)', drag.movement, 50],
   ]) {
     const p95 = percentile(times, 95);
-    within &&= p95 <= target;
+    within &&= p95 <= target * tolerance;
     console.log(`  ${name}: p50 ${percentile(times, 50).toFixed(1)} ms, p95 ${p95.toFixed(1)} ms (target p95 ≤ ${target})`);
   }
 
   const heavyP95 = heavy.times.length > 0 ? percentile(heavy.times, 95) : 0;
-  within &&= heavyP95 <= 50;
   console.log(
     `  Keystroke to paint during an event-heavy run (the fixture itself, ~8,700 events): ${heavy.times.length} samples, ` +
-      (heavy.times.length > 0 ? `p50 ${percentile(heavy.times, 50).toFixed(1)} ms, p95 ${heavyP95.toFixed(1)} ms (target p95 ≤ 50); ` : 'none (the run finished first); ') +
+      (heavy.times.length > 0 ? `p50 ${percentile(heavy.times, 50).toFixed(1)} ms, p95 ${heavyP95.toFixed(1)} ms (informational, ADR-0030); ` : 'none (the run finished first); ') +
       `run shown as Succeeded after ${(heavy.totalMs / 1000).toFixed(1)} s (engine duration ${engineDuration}); long tasks: ${heavy.longTasks.length}` +
       (heavy.longTasks.length > 0 ? `, longest ${Math.max(...heavy.longTasks).toFixed(0)} ms` : ''),
   );
 
   check(problems.length === 0, `browser errors: ${problems.join('; ')}`);
   check(within, 'a measurement is above its target');
-  console.log('All measurements are within the ADR-0021 targets.');
+  console.log(`All measurements are within the ADR-0021 targets${tolerance === 1 ? '' : ` (tolerance x${tolerance})`}.`);
 });

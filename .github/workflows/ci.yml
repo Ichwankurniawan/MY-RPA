@@ -63,8 +63,12 @@ jobs:
 
   web-studio:
     # ADR-0028: the Web Studio (web/studio) is an npm project outside the .NET solution.
-    name: Web Studio (typecheck, tests, build)
-    runs-on: ubuntu-latest
+    name: Web Studio (typecheck, tests, build; ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: web/studio
@@ -88,3 +92,63 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  web-studio-e2e:
+    # W8 (ADR-0034): the real system end to end — the Release server serving the built Studio, driven by headless
+    # Chromium: the smoke test, the accessibility check (axe-core, no serious or critical violations, keyboard-only
+    # authoring) and the performance targets of ADR-0021 on the 3,000-node fixture. CI runners are shared machines, so
+    # the performance targets are scaled by MYRPA_PERF_TOLERANCE (the factor is printed with the results).
+    name: Web Studio end to end (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      MYRPA_PERF_TOLERANCE: '2'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/studio/package-lock.json
+
+      # The Studio first: the server's build bundles web/studio/dist as its default web root (ADR-0031).
+      - name: Build the Web Studio
+        working-directory: web/studio
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the solution
+        run: dotnet build MyRPA.sln --configuration Release
+
+      - name: Install Playwright Chromium (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./plugins/MyRPA.Browser.Playwright/bin/Release/net10.0/playwright.ps1 install chromium
+
+      - name: Install Playwright Chromium and system dependencies (Linux)
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: ./plugins/MyRPA.Browser.Playwright/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Smoke test
+        working-directory: web/studio
+        run: npm run smoke
+
+      - name: Accessibility check
+        working-directory: web/studio
+        run: npm run a11y
+
+      - name: Performance
+        working-directory: web/studio
+        run: npm run perf
