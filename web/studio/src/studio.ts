@@ -6,11 +6,10 @@ import {
   createNode,
   deleteRefusal,
   indexDocument,
-  insertNode,
-  insertionPoint,
   isObject,
   keyOf,
   moveNode,
+  nodeAt,
   moveRefusal,
   openWorkflow,
   removeNode,
@@ -25,6 +24,19 @@ import { RunEventStream, type EventSourceFactory, type StreamStatus } from './ev
 import { createStore, type Store } from './store';
 import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
+import {
+  moveTo,
+  moveToRefusal,
+  parseNodes,
+  place,
+  placeRefusal,
+  prepareForPaste,
+  resolveTarget,
+  selectionTarget,
+  serializeNodes,
+  type KeyedTarget,
+  type Target,
+} from './placement';
 
 export interface OpenFile {
   readonly project: string;
@@ -137,6 +149,8 @@ export interface StudioState {
   readonly dialog?: StudioDialog;
   /** Loaded plugins and their load diagnostics (`GET /api/plugins`). */
   readonly plugins?: PluginReport;
+  /** The empty slot or list gap picked in the designer for the next insert or paste (W7). */
+  readonly insertTarget?: KeyedTarget;
   /** A request to show an argument or variable row (from the Problems list); `seq` makes repeats distinct. */
   readonly rowFocus?: { readonly list: DataList; readonly index: number; readonly seq: number };
 }
@@ -348,14 +362,27 @@ function editRefusal(state: StudioState): string | undefined {
 
 /** Why an activity cannot be inserted at the selection now (undefined when it can). */
 export function insertRefusal(state: StudioState): string | undefined {
-  const path = selectedPath(state);
+  const target = insertionTargetOf(state);
+  return typeof target === 'string' ? target : undefined;
+}
+
+/**
+ * Where an insert, paste or toolbox drop with no explicit place goes now: the empty slot or list gap the user picked
+ * in the designer, else the place the selection implies (W7, `selectionTarget`); or the reason there is none.
+ */
+export function insertionTargetOf(state: StudioState): Target | string {
   const refusal = editRefusal(state);
-  if (refusal !== undefined || path === undefined) {
-    return refusal ?? 'Select where to insert.';
+  if (refusal !== undefined) {
+    return refusal;
   }
 
-  const placement = insertionPoint(state.document!, path, state.catalog);
-  return typeof placement === 'string' ? placement : undefined;
+  const picked = state.insertTarget ? resolveTarget(state.document!, state.insertTarget) : undefined;
+  if (picked) {
+    return placeRefusal(state.document!, picked, state.catalog) ?? picked;
+  }
+
+  const path = selectedPath(state);
+  return path === undefined ? 'Select where to insert.' : selectionTarget(state.document!, path, state.catalog);
 }
 
 /** Why the selected node cannot be deleted now (undefined when it can). */
@@ -379,6 +406,8 @@ export class Studio {
   /** Argument texts per file (`project/path`), remembered for the session. */
   private readonly argumentDrafts = new Map<string, Record<string, string>>();
   private lastTimeoutMs?: number;
+  /** What this tab copied last (Paste without system clipboard text, e.g. the Paste button). */
+  private clipboard?: string;
   /** Events received since the last flush, applied together (ADR-0030: one store update per frame). */
   private pending: ExecutionEvent[] = [];
 
@@ -549,10 +578,15 @@ export class Studio {
   }
 
   select(key: string): void {
-    if (this.state.selectedKey !== key) {
+    if (this.state.selectedKey !== key || this.state.insertTarget !== undefined) {
       this.mergeKey = undefined;
-      this.store.set({ selectedKey: key });
+      this.store.set({ selectedKey: key, insertTarget: undefined });
     }
+  }
+
+  /** Picks an empty slot or list gap as the place for the next insert or paste (W7); undefined clears it. */
+  setInsertTarget(target: KeyedTarget | undefined): void {
+    this.store.set({ insertTarget: target });
   }
 
   /** Selects the node a diagnostic belongs to, if it names one. */
@@ -648,24 +682,123 @@ export class Studio {
   }
 
   /** Inserts a new activity of `type` at the selection (see `insertionPoint`) and selects it. */
-  insertActivity(type: string): void {
+  insertActivity(type: string, at?: Target): void {
     const state = this.state;
     const activity = state.catalog.get(type);
-    const refusal = activity === undefined ? `'${type}' is not in the activity catalog.` : insertRefusal(state);
-    if (activity === undefined || refusal !== undefined) {
+    const target = at ?? insertionTargetOf(state);
+    const refusal =
+      activity === undefined ? `'${type}' is not in the activity catalog.`
+      : typeof target === 'string' ? target
+      : (editRefusal(state) ?? placeRefusal(state.document!, target, state.catalog));
+    if (activity === undefined || typeof target === 'string' || refusal !== undefined) {
       this.say(`Cannot insert: ${refusal}`);
       return;
     }
 
     const document = state.document!;
-    const placement = insertionPoint(document, selectedPath(state)!, state.catalog);
-    if (typeof placement === 'string') {
+    const node = createNode(document, activity);
+    this.commit(place(document, target, node).document, keyOf(node), `Insert ${activity.displayName}`);
+    this.store.set({ insertTarget: undefined });
+    this.say(`Inserted ${activity.displayName} as ${node.id as string}${'slot' in target.position ? ` into ${target.position.slot}` : ''}.`);
+  }
+
+  /** The selected activity as clipboard text (also kept for Paste in this tab); undefined when nothing is selected. */
+  copySelected(): string | undefined {
+    const state = this.state;
+    const path = selectedPath(state);
+    if (state.document === undefined || path === undefined) {
+      this.say('Select an activity to copy.');
+      return undefined;
+    }
+
+    const node = nodeAt(state.document, path);
+    this.clipboard = serializeNodes([node]);
+    this.say(`Copied ${typeof node.id === 'string' ? node.id : 'the activity'}.`);
+    return this.clipboard;
+  }
+
+  /** Copies, then deletes, the selected activity (the root cannot be cut). */
+  cutSelected(): string | undefined {
+    const refusal = deleteRefusalOf(this.state);
+    if (refusal !== undefined) {
+      this.say(`Cannot cut: ${refusal}`);
+      return undefined;
+    }
+
+    const text = this.copySelected();
+    this.deleteSelected();
+    return text;
+  }
+
+  /** Pastes activities (clipboard text, else what this tab copied last) where an insert would go; ids are renamed. */
+  paste(text: string | undefined = this.clipboard): void {
+    const nodes = text === undefined ? undefined : parseNodes(text);
+    if (nodes === undefined) {
+      this.say(text === undefined ? 'Nothing to paste: copy an activity first.' : 'The clipboard does not hold MyRPA activities.');
       return;
     }
 
-    const node = createNode(document, activity);
-    this.commit(insertNode(document, placement, node).document, keyOf(node), `Insert ${activity.displayName}`);
-    this.say(`Inserted ${activity.displayName} as ${node.id as string}.`);
+    const state = this.state;
+    const target = insertionTargetOf(state);
+    if (typeof target === 'string') {
+      this.say(`Cannot paste: ${target}`);
+      return;
+    }
+
+    if ('slot' in target.position && nodes.length > 1) {
+      this.say(`Cannot paste: the slot '${target.position.slot}' holds one activity, and the clipboard has ${nodes.length}.`);
+      return;
+    }
+
+    let document = state.document!;
+    const pasted = prepareForPaste(nodes, document);
+    let last: JsonObject | undefined;
+    pasted.forEach((node, i) => {
+      const at: Target = 'index' in target.position ? { parentPath: target.parentPath, position: { index: target.position.index + i } } : target;
+      document = place(document, at, node).document;
+      last = node;
+    });
+    this.commit(document, keyOf(last!), pasted.length === 1 ? `Paste ${pasted[0].id as string}` : `Paste ${pasted.length} activities`);
+    this.store.set({ insertTarget: undefined });
+    this.say(`Pasted ${pasted.map((n) => n.id as string).join(', ')}.`);
+  }
+
+  /** Why a new activity cannot be placed at `target` (undefined when it can). */
+  placeRefusalFor(target: Target): string | undefined {
+    const state = this.state;
+    return editRefusal(state) ?? placeRefusal(state.document!, target, state.catalog);
+  }
+
+  /** Shows a message in the status line. */
+  notify(message: string): void {
+    this.say(message);
+  }
+
+  /** Why the node with `key` cannot move to `target` (undefined when it can). */
+  moveRefusalTo(key: string, target: Target): string | undefined {
+    const state = this.state;
+    const entry = state.document ? indexDocument(state.document).byKey.get(key) : undefined;
+    return editRefusal(state) ?? (entry === undefined ? 'That activity no longer exists.' : moveToRefusal(state.document!, entry.path, target, state.catalog));
+  }
+
+  /** Moves the node with `key` (and its subtree) to `target` — across containers and into slots (W7). */
+  moveNodeTo(key: string, target: Target): void {
+    const refusal = this.moveRefusalTo(key, target);
+    const state = this.state;
+    if (refusal !== undefined) {
+      this.say(`Cannot move: ${refusal}`);
+      return;
+    }
+
+    const entry = indexDocument(state.document!).byKey.get(key)!;
+    const moved = moveTo(state.document!, entry.path, target, state.catalog);
+    const id = typeof entry.node.id === 'string' ? entry.node.id : 'the activity';
+    if (moved.document !== state.document) {
+      this.commit(moved.document, key, `Move ${id}`);
+      this.say(`Moved ${id}${'slot' in target.position ? ` into ${target.position.slot}` : ''}.`);
+    }
+
+    this.select(key);
   }
 
   /** Deletes the selected node; the next sibling, else the previous one, else the parent is selected. */

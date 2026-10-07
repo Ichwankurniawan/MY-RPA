@@ -36,3 +36,4 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0030](0030-web-studio-execution-ux.md) | Web Studio execution UX (W5) | Accepted for W5 | W5 |
 | [0031](0031-web-studio-project-and-file-management.md) | Web Studio project and file management (W6) | Accepted for W6 | W6 |
 | [0032](0032-web-studio-rich-authoring.md) | Web Studio rich authoring (W4B) | Accepted for W4B | W4B |
+| [0033](0033-web-studio-parity-authoring.md) | Web Studio parity authoring: slots, moves, clipboard, drag-and-drop (W7) | Accepted for W7 | W7 |

@@ -85,6 +85,45 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     ['Structural: delete', await measure('delete'), 100],
   ];
 
+  // W7: drag-and-drop on the 3,001-node tree with real layout and hit-testing. Activation: pointer down on a card and
+  // a move past the threshold, to the next painted frame. Movement: each move over another card, to the next frame.
+  const drag = await page.evaluate(async (count) => {
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    const visible = [...document.querySelectorAll('.designer [role="treeitem"] > .node')].filter((card) => {
+      const r = card.getBoundingClientRect();
+      return r.top > 0 && r.bottom < window.innerHeight * 0.6 && r.height > 0;
+    });
+    const at = (card, dy = 0) => {
+      const r = card.getBoundingClientRect();
+      return { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 + dy, bubbles: true, pointerId: 1, button: 0, isPrimary: true };
+    };
+    const activation = [];
+    const movement = [];
+    for (let i = 0; i < count; i++) {
+      const source = visible[i % Math.min(visible.length, 6)];
+      const start = performance.now();
+      source.dispatchEvent(new PointerEvent('pointerdown', at(source)));
+      document.dispatchEvent(new PointerEvent('pointermove', at(source, 8)));
+      await frame();
+      activation.push(performance.now() - start);
+      for (let m = 1; m <= 3; m++) {
+        const over = visible[(i + m * 3) % visible.length];
+        const t = performance.now();
+        document.dispatchEvent(new PointerEvent('pointermove', at(over, 1)));
+        await frame();
+        movement.push(performance.now() - t);
+      }
+
+      // Cancel the drag (Escape) so the fixture is unchanged.
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      document.dispatchEvent(new PointerEvent('pointerup', at(source)));
+      await frame();
+    }
+
+    return { activation, movement, cards: visible.length };
+  }, samples);
+  check(drag.cards >= 6, `too few visible cards for the drag measurement: ${drag.cards}`);
+
   // Reopen the fixture (discarding those edits in the Studio's unsaved-changes dialog), so it is valid again: Run
   // validates first.
   await page.getByRole('button', { name: 'Open', exact: true }).click();
@@ -138,6 +177,15 @@ await withStudio(async ({ project, page, startServer, problems }) => {
       `  ${name}: p50 ${p50.toFixed(1)} ms, p95 ${p95.toFixed(1)} ms (target p95 ≤ ${target}); ` +
         `script and render before the frame: p50 ${percentile(scripts, 50).toFixed(1)} ms, p95 ${percentile(scripts, 95).toFixed(1)} ms`,
     );
+  }
+
+  for (const [name, times, target] of [
+    ['Drag activation (press and first move to paint)', drag.activation, 100],
+    ['Drag movement (each move to paint)', drag.movement, 50],
+  ]) {
+    const p95 = percentile(times, 95);
+    within &&= p95 <= target;
+    console.log(`  ${name}: p50 ${percentile(times, 50).toFixed(1)} ms, p95 ${p95.toFixed(1)} ms (target p95 ≤ ${target})`);
   }
 
   const heavyP95 = heavy.times.length > 0 ? percentile(heavy.times, 95) : 0;

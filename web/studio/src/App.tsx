@@ -1,7 +1,9 @@
 import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { StudioContext, useStudio, useStudioState } from './context';
 import { DataPanel } from './DataPanel';
+import { installDragAndDrop } from './dragdrop';
 import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel } from './document';
+import type { Position } from './placement';
 import { PropertiesPanel } from './PropertyEditors';
 import {
   currentRun,
@@ -71,16 +73,51 @@ function Shell() {
         event.preventDefault();
       }
     };
+    // Ctrl+X / C / V on activities (W7) use the browser's clipboard events, so pasting needs no permission prompt. In a
+    // text field they stay the field's own cut, copy and paste.
+    const inField = () => {
+      const active = window.document.activeElement;
+      return active instanceof HTMLElement && (active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName));
+    };
+    const onCopyOrCut = (event: ClipboardEvent) => {
+      if (inField() || studio.store.get().document === undefined) {
+        return;
+      }
+
+      const text = event.type === 'cut' ? studio.cutSelected() : studio.copySelected();
+      if (text !== undefined) {
+        event.clipboardData?.setData('text/plain', text);
+        event.preventDefault();
+      }
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      if (inField() || studio.store.get().document === undefined) {
+        return;
+      }
+
+      event.preventDefault();
+      studio.paste(event.clipboardData?.getData('text/plain') || undefined);
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('beforeunload', onLeave);
+    window.addEventListener('copy', onCopyOrCut);
+    window.addEventListener('cut', onCopyOrCut);
+    window.addEventListener('paste', onPaste);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('beforeunload', onLeave);
+      window.removeEventListener('copy', onCopyOrCut);
+      window.removeEventListener('cut', onCopyOrCut);
+      window.removeEventListener('paste', onPaste);
     };
   }, [studio]);
 
+  // Drag-and-drop (W7): one controller on the root, by event delegation; it renders nothing while dragging.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => (root.current ? installDragAndDrop(root.current, studio) : undefined), [studio]);
+
   return (
-    <div className="studio">
+    <div className="studio" ref={root}>
       <Toolbar />
       {connection === 'ready' ? (
         <>
@@ -280,6 +317,7 @@ function Toolbox() {
                       <button
                         type="button"
                         className="insert"
+                        data-activity={a.type}
                         title={a.description}
                         aria-label={`Insert ${a.displayName} (${a.type})`}
                         aria-describedby="toolbox-hint"
@@ -706,6 +744,8 @@ function EditBar() {
   const moveUp = useStudioState((s) => moveRefusalOf(s, -1));
   const moveDown = useStudioState((s) => moveRefusalOf(s, 1));
   const remove = useStudioState(deleteRefusalOf);
+  const hasSelection = useStudioState((s) => s.document !== undefined && s.selectedKey !== undefined && indexDocument(s.document).byKey.has(s.selectedKey));
+  const pasteRefusal = useStudioState(insertRefusal);
 
   return (
     <div className="editbar" role="toolbar" aria-label="Edit">
@@ -724,8 +764,24 @@ function EditBar() {
       <button type="button" onClick={() => studio.deleteSelected()} disabled={remove !== undefined} title={remove ?? 'Delete the selected activity (Delete)'}>
         Delete
       </button>
+      <button type="button" onClick={() => toSystemClipboard(studio.cutSelected())} disabled={remove !== undefined} title={remove ?? 'Cut the selected activity (Ctrl+X)'}>
+        Cut
+      </button>
+      <button type="button" onClick={() => toSystemClipboard(studio.copySelected())} disabled={!hasSelection} title={hasSelection ? 'Copy the selected activity (Ctrl+C)' : 'Select an activity to copy'}>
+        Copy
+      </button>
+      <button type="button" onClick={() => studio.paste()} disabled={pasteRefusal !== undefined} title={pasteRefusal ?? 'Paste what was copied in this tab (Ctrl+V pastes the clipboard)'}>
+        Paste
+      </button>
     </div>
   );
+}
+
+/** Also puts copied activities on the system clipboard (allowed on a click, without a prompt); failures are ignored. */
+function toSystemClipboard(text: string | undefined): void {
+  if (text !== undefined) {
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+  }
 }
 
 /** One node. Memoized on the node object: an edit re-renders only the edited node and its ancestors. */
@@ -744,6 +800,9 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
   const emptyList = activity?.allowsChildren === true && !(Array.isArray(node.children) && node.children.length > 0);
   const presentSlots = isObject(node.slots) ? node.slots : {};
   const missingSlots = activity?.slots.filter((s) => !s.prefix && !(s.name in presentSlots)) ?? [];
+  const prefixSlots = activity?.slots.filter((s) => s.prefix) ?? [];
+  // The zone picked for the next insert, when it belongs to this node (a string, so the selector stays cheap).
+  const picked = useStudioState((s) => (s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : undefined));
 
   return (
     <li
@@ -767,13 +826,14 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
         {hasError && <span className="badge error">error</span>}
         {status !== undefined && <span className={`badge status-${status.toLowerCase()}`}>{status}</span>}
         {activity === undefined && type !== undefined && <span className="badge">not in catalog</span>}
-        {(emptyList || missingSlots.length > 0) && (
-          <span className="node-hints">
-            {emptyList && <span>No activities yet: select it and insert from Activities.</span>}
+        {(emptyList || missingSlots.length > 0 || prefixSlots.length > 0) && (
+          <span className="zones">
+            {emptyList && <Zone parentKey={key} position={{ index: 0 }} label="Empty list: insert here" picked={picked} />}
             {missingSlots.map((s) => (
-              <span key={s.name} className={s.required ? 'required-slot' : undefined}>
-                {s.name}: empty{s.required ? ' (required)' : ''}
-              </span>
+              <Zone key={s.name} parentKey={key} position={{ slot: s.name }} label={`${s.name}: empty${s.required ? ' (required)' : ''}`} required={s.required} picked={picked} />
+            ))}
+            {prefixSlots.map((s) => (
+              <CaseZone key={s.name} parentKey={key} prefix={s.name} picked={picked} />
             ))}
           </span>
         )}
@@ -788,6 +848,64 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
     </li>
   );
 });
+
+/**
+ * An empty slot or an empty list inside a card (W7): clicking it (or Enter) picks it as the place for the next insert
+ * or paste; it is also a drop target (`data-drop-*`, see dragdrop.ts).
+ */
+function Zone({ parentKey, position, label, required, picked }: { parentKey: string; position: Position; label: string; required?: boolean; picked: string | undefined }) {
+  const studio = useStudio();
+  const isPicked = picked === JSON.stringify(position);
+  return (
+    <button
+      type="button"
+      className={`drop-zone${required ? ' required-slot' : ''}${isPicked ? ' picked' : ''}`}
+      data-drop-parent={parentKey}
+      data-drop-index={'index' in position ? position.index : undefined}
+      data-drop-slot={'slot' in position ? position.slot : undefined}
+      aria-pressed={isPicked}
+      title={isPicked ? 'The next insert or paste goes here' : 'Insert or paste here next'}
+      onClick={(event) => {
+        event.stopPropagation();
+        studio.setInsertTarget(isPicked ? undefined : { parentKey, position });
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** A new prefix slot (Switch `case:<value>`): type the value, then pick it as the place for the next insert or drop. */
+function CaseZone({ parentKey, prefix, picked }: { parentKey: string; prefix: string; picked: string | undefined }) {
+  const studio = useStudio();
+  const [value, setValue] = useState('');
+  const slot = `${prefix}${value.trim()}`;
+  const pickedSlot = picked === undefined ? undefined : (JSON.parse(picked) as Position);
+  const isPicked = pickedSlot !== undefined && 'slot' in pickedSlot && pickedSlot.slot.startsWith(prefix);
+  const pick = () => value.trim() !== '' && studio.setInsertTarget({ parentKey, position: { slot } });
+  return (
+    <span className={`drop-zone case-zone${isPicked ? ' picked' : ''}`} data-drop-parent={value.trim() !== '' ? parentKey : undefined} data-drop-slot={value.trim() !== '' ? slot : undefined} onClick={(e) => e.stopPropagation()}>
+      + {prefix}
+      <input
+        className="code"
+        aria-label={`New ${prefix.replace(/:$/, '')} value`}
+        value={value}
+        placeholder="value"
+        spellCheck={false}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') {
+            pick();
+          }
+        }}
+      />
+      <button type="button" className="small" disabled={value.trim() === ''} onClick={pick} title={`Insert or paste into ${slot} next`}>
+        Pick
+      </button>
+    </span>
+  );
+}
 
 /** The lower area: workflow data (problems, variables, arguments) beside the execution of runs. */
 function OutputPanel() {

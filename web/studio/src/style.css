@@ -117,8 +117,18 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 .node .slot { color: var(--accent); font-weight: 600; }
 .node .label { font-weight: 600; }
 .node .type, .node .id { color: var(--muted); font-size: 12px; }
-.node .node-hints { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--muted); }
-.node .required-slot { color: var(--error); }
+/* Empty slots and lists (W7): places to insert, paste or drop. */
+.node .zones { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.drop-zone { font-size: 12px; padding: 2px 8px; border: 1px dashed var(--border-strong); border-radius: 4px; background: var(--panel); color: var(--muted); }
+.drop-zone.required-slot { border-color: var(--error); color: var(--error); }
+.drop-zone.picked, .drop-zone[aria-pressed='true'] { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--info-bg); }
+.case-zone { display: inline-flex; gap: 4px; align-items: center; }
+.case-zone input { width: 8em; padding: 0 4px; font-size: 12px; }
+/* While dragging: one indicator line (before/after) or outline (a zone), positioned by dragdrop.ts. */
+.dragging, .dragging * { cursor: grabbing; user-select: none; }
+.dragging.drop-refused, .dragging.drop-refused * { cursor: not-allowed; }
+.drop-indicator { position: fixed; z-index: 10; height: 3px; margin-top: -2px; background: var(--accent); border-radius: 2px; pointer-events: none; }
+.drop-indicator.zone { margin-top: 0; background: none; border: 2px solid var(--accent); border-radius: 6px; }
 .badge { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--border); }
 .badge.error, .badge.status-failed { background: var(--error-bg); color: var(--error); }
 .badge.status-succeeded { background: var(--ok-bg); color: var(--ok); }

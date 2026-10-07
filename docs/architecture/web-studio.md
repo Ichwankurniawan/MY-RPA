@@ -87,6 +87,15 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 - **Toolbox:** the catalog (`/api/activities`, built-in and plugin activities) grouped by category (collapsible), with a
   search over names, types, categories and descriptions. Each entry is an Insert button.
 - **Themes:** light and dark, following the system setting.
+- **Slots, moves, clipboard and drag-and-drop** (W7, ADR-0033):
+  - Empty slots and empty lists show inside their card as buttons: clicking one picks it for the next insert or paste.
+    A Switch has a "+ case:" zone that takes the case value. Without a picked place, an insert or paste goes into the
+    selected node's list, else its first empty slot, else after it.
+  - Cut, Copy, Paste (buttons, Ctrl+X/C/V outside text fields): the clipboard holds readable workflow JSON
+    (`{"myrpaNodes":"1.0","nodes":[…]}`); pasting renames ids already in use; it works across documents and tabs.
+  - Drag an activity card to a gap between cards (upper or lower half) or onto an empty-slot or empty-list zone to move
+    it, also across containers; drag a toolbox entry to insert. A refused place shows the not-allowed cursor; Esc
+    cancels. Each drop is one undo step.
 - **Structural editing** (W4A, ADR-0029):
   - Insert: after the selected activity, or at the end of a selected Sequence. The new node is `{ id, type }` with a
     unique id (`log-1`) and is selected. Nothing is inserted into slots yet.
@@ -150,6 +159,8 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `src/context.ts` | The Studio context and slice-subscription hooks |
 | `src/PropertyEditors.tsx` | Properties: node and workflow editors, one per property kind, raw JSON |
 | `src/DataPanel.tsx` | Problems, Variables and Arguments tabs |
+| `src/placement.ts` | Targets (list index or slot), placing, moving across containers, insert/paste targets, the clipboard format and id renaming |
+| `src/dragdrop.ts` | Drag-and-drop by pointer hit-testing (no library), one indicator element |
 | `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save; runs (validate first, run dialog, recent runs, Stop, per-frame event batching); files (new, rename, delete, save as, unsaved prompt, conflicts, recovery) |
 | `src/App.tsx` | Layout: toolbar (Save as, Run, Stop, status), Files panel, toolbox (Insert), edit bar (Undo, Redo, Move, Delete), tree, properties, problems, Execution panel, run and file dialogs, status bar |
 | `scripts/harness.mjs` | Shared by the browser scripts: throwaway project, real server with `--web`, headless Chromium |

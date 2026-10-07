@@ -359,6 +359,59 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check(greeterLogs.join('|') === '[Information] Hello, World', `logs ${greeterLogs}`);
   step('W4B-3. Saved, reloaded and reopened (all preserved); ran with the default argument: "Hello, World"');
 
+  // W7: parity authoring on the Greeter workflow: insert into slots, drag-and-drop (real pointer hit-testing),
+  // copy/paste with id renaming, cut. Every change is checked in the document, then saved.
+  const editButton = (name) => page.getByRole('toolbar', { name: 'Edit' }).getByRole('button', { name, exact: true });
+  const zone = (id, name) => row(id).getByRole('button', { name, exact: true });
+  // `at` is where on the target to drop, as a fraction of its height (a card's lower half means "after it").
+  const dragTo = async (from, to, at = 0.5) => {
+    const a = await from.boundingBox();
+    const b = await to.boundingBox();
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + 10, { steps: 3 });
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height * at, { steps: 8 });
+    await page.mouse.up();
+  };
+  await row('log-1').click();
+  await page.getByRole('button', { name: 'Insert If (Core.If)' }).click();
+  await expectTree('main,assign-1,log-1,if-1', 'If inserted after the Log');
+  await zone('if-1', 'then: empty (required)').click();
+  await page.getByRole('button', { name: 'Insert Log (Core.Log)' }).click();
+  await expectTree('main,assign-1,log-1,if-1,log-2', 'Log inserted into then');
+  check((await page.locator('[role=treeitem][data-node-id="log-2"] .slot').first().textContent()) === 'then:', 'log-2 is in the then slot');
+  step('W7-1. Insert into slots: If after the Log, then a Log into its required then slot through the slot zone');
+
+  await dragTo(row('assign-1'), zone('if-1', 'else: empty'));
+  await expectTree('main,log-1,if-1,log-2,assign-1', 'Assign dragged into else');
+  await dragTo(row('log-1'), row('if-1'), 0.8);
+  await expectTree('main,if-1,log-2,assign-1,log-1', 'Log dragged below the If');
+  step('W7-2. Drag-and-drop: Assign into the If\'s else slot (across containers), the Log below the If (real pointer hit-testing)');
+
+  await row('log-1').click();
+  await editButton('Copy').click();
+  await editButton('Paste').click();
+  await expectTree('main,if-1,log-2,assign-1,log-1,log-3', 'pasted copy with a new id');
+  await editButton('Cut').click();
+  await expectTree('main,if-1,log-2,assign-1,log-1', 'cut removed the copy');
+  await page.keyboard.press('Control+z');
+  await expectTree('main,if-1,log-2,assign-1,log-1,log-3', 'undo restored the cut copy');
+  await page.keyboard.press('Control+y');
+  await expectTree('main,if-1,log-2,assign-1,log-1', 'redo cut it again');
+  step('W7-3. Copy/paste (the copy got id log-3), cut, and undo/redo of each');
+
+  await row('if-1').click();
+  await properties.getByLabel(/^condition/).fill('len(who) > 0');
+  await row('log-2').click();
+  await properties.getByLabel(/^message/).fill("'Hello from then'");
+  await click('Save');
+  await titleIs('greeter.json');
+  const parity = JSON.parse(onDisk('greeter.json'));
+  check(parity.root.children.map((c) => c.id).join(',') === 'if-1,log-1' && parity.root.children[0].slots.then.id === 'log-2' && parity.root.children[0].slots.else.id === 'assign-1', `saved ${JSON.stringify(parity.root)}`);
+  await runWithDefaults();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  step('W7-4. Saved the nested workflow (If with then/else slots) exactly as authored; it runs');
+
   // W6: project and file management. All through the Files panel and in-app dialogs, against the real file system.
 
   // W6-1: New… creates a valid workflow (in a new folder) and opens it.
