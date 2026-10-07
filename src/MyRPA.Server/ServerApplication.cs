@@ -45,7 +45,7 @@ internal static class ServerApplication
 {
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        if (ServerCommandLine.Parse(args, out var usageError) is not { } options)
+        if (ServerCommandLine.Parse(args, out var usageError, Path.Combine(AppContext.BaseDirectory, "wwwroot")) is not { } options)
         {
             await error.WriteLineAsync($"Error: {usageError}\nUsage: {ServerCommandLine.Usage}").ConfigureAwait(false);
             return 2;
@@ -76,6 +76,7 @@ internal static class ServerApplication
 
         await using var server = await StartAsync(options, plugins, cancellationToken).ConfigureAwait(false);
         await output.WriteLineAsync($"MyRPA Server (local mode) listening on {server.BaseUri}").ConfigureAwait(false);
+        await output.WriteLineAsync(options.WebRoot is { } webRoot ? $"Web Studio: {webRoot}" : "Web Studio: not built (run 'npm run build' in web/studio, then build the server, or pass --web <dir>)").ConfigureAwait(false);
         await output.WriteLineAsync($"Open this link in your browser (valid once): {server.StartUri}").ConfigureAwait(false);
         await server.App.WaitForShutdownAsync(cancellationToken).ConfigureAwait(false);
         return 0;
@@ -193,6 +194,8 @@ internal static class ServerApplication
             mode = "local",
             workflowSchemaVersions = new[] { MyRPA.Workflow.WorkflowSchemaVersion.Current.ToString() },
             projects = options.Projects.Select(p => p.Name),
+            // The workflow named on the command line (--open), which the Studio opens after connecting (W6).
+            open = options.Open is { } open ? new { project = open.Project, path = open.Path } : null,
         }));
 
         api.MapGet("/activities", (IActivityCatalog catalog) => Results.Text(ActivityCatalogJson.Write(catalog.Descriptors), "application/json"));
@@ -288,6 +291,40 @@ internal static class ServerApplication
             {
                 FileWriteOutcome.Deleted => Results.NoContent(),
                 FileWriteOutcome.NotFound => NotFound($"'{path}' does not exist."),
+                FileWriteOutcome.PreconditionRequired => Problem(StatusCodes.Status428PreconditionRequired, "Send If-Match with the file's ETag."),
+                _ => Problem(StatusCodes.Status412PreconditionFailed, "The file changed since it was read."),
+            };
+        });
+
+        // Rename or move within a project (W6, ADR-0031): atomic, conditional on the source's ETag, never overwrites.
+        api.MapPost("/projects/{project}/move", async (string project, MoveRequest request, ProjectStore store, HttpContext context) =>
+        {
+            if (!store.TryResolve(project, request.From, out var from, out var fromError))
+            {
+                return BadRequest($"'from': {fromError}");
+            }
+
+            if (!store.TryResolve(project, request.To, out var to, out var toError))
+            {
+                return BadRequest($"'to': {toError}");
+            }
+
+            if (string.Equals(from, to, StringComparison.Ordinal))
+            {
+                return BadRequest("'from' and 'to' are the same file.");
+            }
+
+            var (outcome, etag) = await store.MoveAsync(from, to, context.Request.Headers.IfMatch.FirstOrDefault(), context.RequestAborted).ConfigureAwait(false);
+            if (etag is not null)
+            {
+                context.Response.Headers.ETag = etag;
+            }
+
+            return outcome switch
+            {
+                FileWriteOutcome.Moved => Results.Json(new { path = request.To }),
+                FileWriteOutcome.NotFound => NotFound($"'{request.From}' does not exist."),
+                FileWriteOutcome.TargetExists => Problem(StatusCodes.Status409Conflict, $"'{request.To}' already exists."),
                 FileWriteOutcome.PreconditionRequired => Problem(StatusCodes.Status428PreconditionRequired, "Send If-Match with the file's ETag."),
                 _ => Problem(StatusCodes.Status412PreconditionFailed, "The file changed since it was read."),
             };
@@ -506,6 +543,9 @@ internal static class ServerApplication
 
     private static IResult Problem(int status, string message) => Results.Json(new { error = message }, statusCode: status);
 }
+
+/// <summary>Body of <c>POST /api/projects/{project}/move</c>: project-relative paths.</summary>
+internal sealed record MoveRequest(string? From, string? To);
 
 /// <summary>Body of <c>POST /api/validate</c>.</summary>
 internal sealed record ValidateRequest(JsonElement? Document);

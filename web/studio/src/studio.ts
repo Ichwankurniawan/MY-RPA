@@ -20,6 +20,7 @@ import {
   setProperty,
   type Step,
 } from './document';
+import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
 import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, JsonObject, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
@@ -131,6 +132,48 @@ export interface StudioState {
   readonly treeShowsRun: boolean;
   readonly stream: StreamStatus;
   readonly runDialog?: RunDialogState;
+  /** The open in-app dialog of file management (W6), if any. */
+  readonly dialog?: StudioDialog;
+}
+
+/**
+ * In-app dialogs of file management (W6, ADR-0031); they replace `window.confirm`.
+ * - `unsaved`: the open document has unsaved changes and another file is about to be opened.
+ * - `name`: a path for a new file, a rename (`from`) or Save as; `error` is the server's answer to the last try.
+ * - `delete`: confirm deleting a file (`dirty`: it is open with unsaved changes).
+ * - `conflict`: saving found the file changed on disk (412).
+ * - `recover`: a draft of unsaved changes was found for the file just opened (`stale`: the file changed since).
+ */
+export type StudioDialog =
+  | { readonly kind: 'unsaved'; readonly path: string; readonly next: string }
+  | { readonly kind: 'name'; readonly purpose: 'new' | 'rename' | 'save-as'; readonly from?: string; readonly initial: string; readonly error?: string }
+  | { readonly kind: 'delete'; readonly path: string; readonly dirty: boolean }
+  | { readonly kind: 'conflict'; readonly path: string }
+  | { readonly kind: 'recover'; readonly path: string; readonly savedAt: string; readonly stale: boolean };
+
+export interface StudioOptions {
+  /** Where unsaved documents are kept for crash recovery (the browser's local storage by default). */
+  readonly drafts?: DraftStore;
+  /** How long typing pauses before the draft is written (ms). */
+  readonly draftDelayMs?: number;
+}
+
+/** A new workflow's document: valid, with an empty root Sequence; its id comes from the file name. */
+export function newWorkflowText(path: string): string {
+  const name = path.split('/').at(-1)!.replace(/\.json$/i, '');
+  const id = name.replace(/[^A-Za-z0-9\-_.:]/g, '-').slice(0, 128) || 'workflow';
+  return serialize({ schemaVersion: '1.0', id, name: name || id, version: '1.0.0', root: { id: 'main', type: 'Core.Sequence' } });
+}
+
+/** Why `path` is not a usable workflow path (undefined when it is); the server checks the rest. */
+export function pathRefusal(path: string): string | undefined {
+  if (!/\.json$/i.test(path)) {
+    return 'The file name must end in .json.';
+  }
+
+  return path.startsWith('/') || path.includes('\\') || path.split('/').some((s) => s === '' || s === '.' || s === '..' || s.startsWith('.'))
+    ? "Use a path inside the project, with '/' between folders, and no '.', '..' or hidden names."
+    : undefined;
 }
 
 /** Events kept per run. */
@@ -329,11 +372,18 @@ export class Studio {
   /** Events received since the last flush, applied together (ADR-0030: one store update per frame). */
   private pending: ExecutionEvent[] = [];
 
+  private readonly drafts: DraftStore;
+  private readonly draftDelayMs: number;
+  private draftTimer?: ReturnType<typeof setTimeout>;
+
   constructor(
     private readonly api: StudioApi,
     createSource: EventSourceFactory,
     private readonly schedule: Scheduler = nextFrame,
+    options: StudioOptions = {},
   ) {
+    this.drafts = options.drafts ?? storageDrafts();
+    this.draftDelayMs = options.draftDelayMs ?? 1000;
     this.store = createStore<StudioState>({
       connection: 'connecting',
       activities: [],
@@ -355,6 +405,36 @@ export class Studio {
       (message) => this.say(message),
       (stream) => this.store.set({ stream }),
     );
+
+    // Crash recovery: a changed document is written as a draft once typing pauses; saving or discarding removes it.
+    let document = this.state.document;
+    this.store.subscribe(() => {
+      if (this.state.document !== document) {
+        document = this.state.document;
+        clearTimeout(this.draftTimer);
+        this.draftTimer = setTimeout(() => this.writeDraft(), this.draftDelayMs);
+      }
+    });
+  }
+
+  /** Writes (or, when the document is clean again, removes) the open file's draft now. */
+  writeDraft(): void {
+    clearTimeout(this.draftTimer);
+    const { file, document, saved, dialog } = this.state;
+    if (file === undefined || document === undefined || file.readOnlyReason !== undefined || dialog?.kind === 'recover') {
+      return;
+    }
+
+    if (document === saved) {
+      this.drafts.remove(file.project, file.path);
+    } else {
+      this.drafts.put(file.project, file.path, { text: serialize(document), etag: file.etag, savedAt: new Date().toISOString() });
+    }
+  }
+
+  private dropDraft(project: string, path: string): void {
+    clearTimeout(this.draftTimer);
+    this.drafts.remove(project, path);
   }
 
   private get state(): StudioState {
@@ -376,7 +456,11 @@ export class Studio {
         catalog: new Map(activities.map((activity) => [activity.type, activity])),
         message: `Connected to ${info.name} (${info.mode} mode).`,
       });
-      if (info.projects.length > 0) {
+      if (info.open) {
+        // Named on the server's command line (--open): open it right away.
+        await this.selectProject(info.open.project);
+        await this.open(info.open.path);
+      } else if (info.projects.length > 0) {
         await this.selectProject(info.projects[0]);
       }
     } catch (error) {
@@ -413,6 +497,13 @@ export class Studio {
         return;
       }
 
+      // A draft left by a closed tab or a crash is offered back, unless it holds exactly what is on disk.
+      let draft = opened.readOnlyReason === undefined ? this.drafts.get(project, path) : undefined;
+      if (draft !== undefined && draft.text === serialize(opened.document)) {
+        this.drafts.remove(project, path);
+        draft = undefined;
+      }
+
       const root = opened.document.root;
       this.mergeKey = undefined;
       this.store.set({
@@ -426,6 +517,7 @@ export class Studio {
         diagnostics: undefined,
         validated: undefined,
         errorNodeIds: new Set(),
+        dialog: draft ? { kind: 'recover', path, savedAt: draft.savedAt, stale: draft.etag !== etag } : undefined,
         message: opened.readOnlyReason ? `Opened ${path} read-only: ${opened.readOnlyReason}` : `Opened ${path}.`,
       });
       this.store.set(treeView);
@@ -610,13 +702,262 @@ export class Studio {
     try {
       const etag = await this.api.saveWorkflow(file.project, file.path, serialize(document), file.etag);
       this.store.set((state) => ({ busy: undefined, file: { ...file, etag }, saved: document, message: `Saved ${file.path}${state.document === document ? '' : ' (newer edits are not saved yet)'}.` }));
+      this.writeDraft();
     } catch (error) {
-      const message =
-        error instanceof ApiError && error.status === 412
-          ? `Not saved: ${file.path} changed on disk since it was opened. Reopen it to see the current version.`
-          : `Not saved: ${(error as Error).message}`;
-      this.store.set({ busy: undefined, message });
+      if (error instanceof ApiError && error.status === 412) {
+        // Changed on disk since it was opened: the user chooses (reload, overwrite, save as); edits are kept meanwhile.
+        this.store.set({ busy: undefined, dialog: { kind: 'conflict', path: file.path }, message: `Not saved: ${file.path} changed on disk since it was opened.` });
+      } else {
+        this.store.set({ busy: undefined, message: `Not saved: ${(error as Error).message}` });
+      }
     }
+  }
+
+  /** Whether the last save left the document clean (for actions that continue after saving). */
+  private get savedClean(): boolean {
+    return this.state.document === this.state.saved;
+  }
+
+  closeDialog(): void {
+    this.store.set({ dialog: undefined });
+  }
+
+  /** Opens a file of the current project; with unsaved changes, asks first (Save, Discard, Cancel). */
+  async requestOpen(path: string): Promise<void> {
+    const { file } = this.state;
+    if (isDirty(this.state) && file !== undefined) {
+      this.store.set({ dialog: { kind: 'unsaved', path: file.path, next: path } });
+      return;
+    }
+
+    await this.open(path);
+  }
+
+  async resolveUnsaved(choice: 'save' | 'discard' | 'cancel'): Promise<void> {
+    const dialog = this.state.dialog;
+    const file = this.state.file;
+    if (dialog?.kind !== 'unsaved' || file === undefined) {
+      return;
+    }
+
+    this.closeDialog();
+    if (choice === 'cancel') {
+      return;
+    }
+
+    if (choice === 'save') {
+      await this.save();
+      if (!this.savedClean) {
+        return; // Not saved (a conflict or an error says why): stay on this file.
+      }
+    } else {
+      this.dropDraft(file.project, file.path);
+    }
+
+    await this.open(dialog.next);
+  }
+
+  /** The current ETag of a project file: the open one's, else read from the server. */
+  private async etagOf(path: string): Promise<string> {
+    const { file, project } = this.state;
+    return file?.project === project && file?.path === path ? file.etag : (await this.api.readWorkflow(project!, path)).etag;
+  }
+
+  private async refreshFiles(): Promise<void> {
+    if (this.state.project !== undefined) {
+      await this.selectProject(this.state.project);
+    }
+  }
+
+  /** New, Rename and Save as ask for a path first. */
+  startName(purpose: 'new' | 'rename' | 'save-as', from?: string): void {
+    const taken = new Set(this.state.files.map((f) => f.path.toLowerCase()));
+    const unique = (base: string) => {
+      for (let i = 1; ; i++) {
+        const candidate = i === 1 ? `${base}.json` : `${base}-${i}.json`;
+        if (!taken.has(candidate.toLowerCase())) {
+          return candidate;
+        }
+      }
+    };
+    const current = from ?? this.state.file?.path;
+    const initial = purpose === 'new' ? unique('new-workflow') : purpose === 'save-as' && current ? unique(current.replace(/\.json$/i, '') + '-copy') : (current ?? '');
+    this.store.set({ dialog: { kind: 'name', purpose, from: purpose === 'rename' ? current : undefined, initial } });
+  }
+
+  /** Carries out New, Rename or Save as with the path the user entered; a refusal keeps the dialog with the reason. */
+  async submitName(path: string): Promise<void> {
+    const dialog = this.state.dialog;
+    const project = this.state.project;
+    if (dialog?.kind !== 'name' || project === undefined) {
+      return;
+    }
+
+    const target = path.trim();
+    const refusal = pathRefusal(target);
+    if (refusal !== undefined) {
+      this.store.set({ dialog: { ...dialog, error: refusal } });
+      return;
+    }
+
+    try {
+      if (dialog.purpose === 'new') {
+        await this.api.createWorkflow(project, target, newWorkflowText(target));
+        this.closeDialog();
+        await this.refreshFiles();
+        await this.requestOpen(target);
+        this.say(`Created ${target}.`);
+      } else if (dialog.purpose === 'rename') {
+        await this.rename(dialog.from!, target);
+      } else {
+        await this.saveAs(target);
+      }
+    } catch (error) {
+      // Create answers 412 when the target exists; move answers 409 for that and 412 when the source changed on disk.
+      const reason =
+        error instanceof ApiError && error.status === 409 ? `'${target}' already exists.`
+        : error instanceof ApiError && error.status === 412 ? (dialog.purpose === 'rename' ? `'${dialog.from}' changed on disk since it was read; reopen it first.` : `'${target}' already exists.`)
+        : (error as Error).message;
+      this.store.set({ dialog: { ...dialog, error: reason } });
+    }
+  }
+
+  private async rename(from: string, to: string): Promise<void> {
+    const project = this.state.project!;
+    const etag = await this.etagOf(from);
+    const newEtag = await this.api.moveWorkflow(project, from, to, etag);
+    this.closeDialog();
+    const file = this.state.file;
+    if (file?.project === project && file.path === from) {
+      this.dropDraft(project, from);
+      this.store.set({ file: { ...file, path: to, etag: newEtag } });
+      this.writeDraft();
+    }
+
+    await this.refreshFiles();
+    this.say(`Renamed ${from} to ${to}.`);
+  }
+
+  /** Saves the open document as a new file, which becomes the open file; the old file keeps its saved content. */
+  private async saveAs(to: string): Promise<void> {
+    const { document, file } = this.state;
+    if (document === undefined || file === undefined) {
+      return;
+    }
+
+    if (file.readOnlyReason !== undefined) {
+      throw new Error(`The workflow is read-only: ${file.readOnlyReason}`);
+    }
+
+    const etag = await this.api.createWorkflow(file.project, to, serialize(document));
+    this.closeDialog();
+    this.dropDraft(file.project, file.path);
+    this.store.set({ file: { project: file.project, path: to, etag }, saved: document });
+    await this.refreshFiles();
+    this.say(`Saved as ${to}.`);
+  }
+
+  startDelete(path: string): void {
+    const { file } = this.state;
+    this.store.set({ dialog: { kind: 'delete', path, dirty: file?.path === path && isDirty(this.state) } });
+  }
+
+  /** Deletes the file (as last read: If-Match). Deleting the open file closes it. */
+  async confirmDelete(): Promise<void> {
+    const dialog = this.state.dialog;
+    const project = this.state.project;
+    if (dialog?.kind !== 'delete' || project === undefined) {
+      return;
+    }
+
+    this.closeDialog();
+    try {
+      await this.api.deleteWorkflow(project, dialog.path, await this.etagOf(dialog.path));
+    } catch (error) {
+      this.say(
+        error instanceof ApiError && error.status === 412
+          ? `Not deleted: ${dialog.path} changed on disk since it was read.`
+          : `Not deleted: ${(error as Error).message}`,
+      );
+      return;
+    }
+
+    this.dropDraft(project, dialog.path);
+    const file = this.state.file;
+    if (file?.project === project && file.path === dialog.path) {
+      this.mergeKey = undefined;
+      this.store.set({ file: undefined, document: undefined, saved: undefined, selectedKey: undefined, undo: [], redo: [], diagnostics: undefined, validated: undefined, errorNodeIds: new Set() });
+      this.store.set(treeView);
+    }
+
+    await this.refreshFiles();
+    this.say(`Deleted ${dialog.path}.`);
+  }
+
+  /** After a save conflict: reload the disk version, overwrite it with this one, or save this one as another file. */
+  async resolveConflict(choice: 'reload' | 'overwrite' | 'save-as' | 'cancel'): Promise<void> {
+    const { dialog, file } = this.state;
+    if (dialog?.kind !== 'conflict' || file === undefined) {
+      return;
+    }
+
+    this.closeDialog();
+    if (choice === 'reload') {
+      this.dropDraft(file.project, file.path);
+      await this.open(file.path);
+    } else if (choice === 'overwrite') {
+      try {
+        const { etag } = await this.api.readWorkflow(file.project, file.path);
+        this.store.set({ file: { ...file, etag } });
+        await this.save();
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          // Deleted on disk meanwhile: write it again.
+          const etag = await this.api.createWorkflow(file.project, file.path, serialize(this.state.document!));
+          this.store.set({ file: { ...file, etag }, saved: this.state.document });
+          this.writeDraft();
+          await this.refreshFiles();
+          this.say(`Saved ${file.path} (it had been deleted on disk).`);
+        } else {
+          this.say(`Not saved: ${(error as Error).message}`);
+        }
+      }
+    } else if (choice === 'save-as') {
+      this.startName('save-as');
+    }
+  }
+
+  /** The recovery dialog: restore the draft as unsaved edits on top of the file as opened, or discard it. */
+  resolveRecovery(choice: 'restore' | 'discard'): void {
+    const { dialog, file, document } = this.state;
+    if (dialog?.kind !== 'recover' || file === undefined || document === undefined) {
+      return;
+    }
+
+    const draft = this.drafts.get(file.project, file.path);
+    this.closeDialog();
+    if (choice === 'discard' || draft === undefined) {
+      this.dropDraft(file.project, file.path);
+      this.say(`Discarded the unsaved changes of ${file.path}.`);
+      return;
+    }
+
+    const recovered = openWorkflow(draft.text);
+    if (!recovered.ok) {
+      this.dropDraft(file.project, file.path);
+      this.say(`The unsaved changes of ${file.path} could not be read: ${recovered.error}`);
+      return;
+    }
+
+    // The restored version is one edit on top of the opened file: dirty, and Undo returns to the file on disk.
+    const root = recovered.document.root;
+    this.store.set({
+      document: recovered.document,
+      selectedKey: isObject(root) ? keyOf(root) : undefined,
+      undo: [{ document, selectedKey: this.state.selectedKey, label: 'Restore unsaved changes' }],
+      redo: [],
+      message: `Restored the unsaved changes of ${file.path} from ${new Date(draft.savedAt).toLocaleString()}.`,
+    });
   }
 
   runRefusal(): string | undefined {

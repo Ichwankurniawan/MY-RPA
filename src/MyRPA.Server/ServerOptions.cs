@@ -20,6 +20,9 @@ internal sealed record ServerOptions
     /// <summary>The built Web Studio (<c>web/studio/dist</c>), served at <c>/</c> (ADR-0022); null serves no UI.</summary>
     public string? WebRoot { get; init; }
 
+    /// <summary>A workflow the Studio opens after connecting (<c>--open</c>, like the WPF Studio's file argument).</summary>
+    public OpenWorkflow? Open { get; init; }
+
     /// <summary>Loopback port; 0 picks a free one.</summary>
     public int Port { get; init; } = 5310;
 
@@ -54,24 +57,32 @@ internal sealed record ServerOptions
     public Action<Execution.Hosting.ExecutionHostOptions>? ConfigureHosting { get; init; }
 }
 
+/// <summary>A workflow named on the command line: its project and project-relative path (with <c>/</c>).</summary>
+internal sealed record OpenWorkflow(string Project, string Path);
+
 /// <summary>
-/// <c>MyRPA.Server --project &lt;dir&gt; [--project &lt;dir&gt;]... [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--web &lt;dir&gt;] [--port &lt;n&gt;]</c>.
+/// <c>MyRPA.Server --project &lt;dir&gt;... [--open &lt;file&gt;] [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--web &lt;dir&gt;] [--port &lt;n&gt;]</c>.
 /// </summary>
 internal static class ServerCommandLine
 {
-    public const string Usage = "MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]";
+    public const string Usage = "MyRPA.Server --project <dir> [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]";
 
-    public static ServerOptions? Parse(IReadOnlyList<string> args, out string? error)
+    /// <summary>Parses the command line.</summary>
+    /// <param name="args">Arguments.</param>
+    /// <param name="error">The usage error, if any.</param>
+    /// <param name="bundledWebRoot">The Web Studio copied next to the server by its build; used when there is no <c>--web</c>.</param>
+    public static ServerOptions? Parse(IReadOnlyList<string> args, out string? error, string? bundledWebRoot = null)
     {
         var projects = new List<ProjectRoot>();
         var plugins = new List<string>();
         string? config = null;
         string? web = null;
+        string? open = null;
         var port = 5310;
         for (var i = 0; i < args.Count; i++)
         {
             var name = args[i];
-            if (name is not ("--project" or "--plugin" or "--plugin-config" or "--web" or "--port"))
+            if (name is not ("--project" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port"))
             {
                 error = $"Unexpected argument '{name}'.";
                 return null;
@@ -103,6 +114,18 @@ internal static class ServerCommandLine
 
                     projects.Add(new ProjectRoot(projectName, root));
                     break;
+                case "--open" when open is null:
+                    open = Path.GetFullPath(value);
+                    if (!File.Exists(open) || !open.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        error = $"Workflow file '{open}' does not exist or is not a .json file.";
+                        return null;
+                    }
+
+                    break;
+                case "--open":
+                    error = "--open may be given once.";
+                    return null;
                 case "--plugin":
                     plugins.Add(value);
                     break;
@@ -133,13 +156,37 @@ internal static class ServerCommandLine
             }
         }
 
+        // Opening a file alone is enough: its folder becomes the project (one command, like the WPF Studio's argument).
+        if (projects.Count == 0 && open is not null)
+        {
+            var folder = Path.GetDirectoryName(open)!;
+            if (!string.IsNullOrEmpty(Path.GetFileName(folder)))
+            {
+                projects.Add(new ProjectRoot(Path.GetFileName(folder), folder));
+            }
+        }
+
         if (projects.Count == 0)
         {
-            error = "At least one --project folder is required.";
+            error = "At least one --project folder (or an --open workflow) is required.";
             return null;
         }
 
+        OpenWorkflow? openWorkflow = null;
+        if (open is not null)
+        {
+            var project = projects.FirstOrDefault(p => open.StartsWith(p.Root + Path.DirectorySeparatorChar, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+            if (project is null)
+            {
+                error = $"Workflow file '{open}' is not inside a --project folder.";
+                return null;
+            }
+
+            openWorkflow = new OpenWorkflow(project.Name, Path.GetRelativePath(project.Root, open).Replace('\\', '/'));
+        }
+
+        web ??= bundledWebRoot is not null && File.Exists(Path.Combine(bundledWebRoot, "index.html")) ? bundledWebRoot : null;
         error = null;
-        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port };
+        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow };
     }
 }

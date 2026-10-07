@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { createContext, memo, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { childSteps, editability, indexDocument, isObject, keyOf, nodeLabel } from './document';
 import { useStore } from './store';
 import {
@@ -13,9 +13,10 @@ import {
   type RunDialogState,
   type RunView,
   type Studio,
+  type StudioDialog,
   type StudioState,
 } from './studio';
-import type { Diagnostic, ExecutionEvent, Json, JsonObject, PropertyDescriptor } from './types';
+import type { Diagnostic, ExecutionEvent, Json, JsonObject, PropertyDescriptor, WorkflowFile } from './types';
 
 const StudioContext = createContext<Studio | null>(null);
 
@@ -94,11 +95,15 @@ function Shell() {
       <Toolbar />
       {connection === 'ready' ? (
         <>
-          <Toolbox />
+          <div className="sidebar">
+            <FilesPanel />
+            <Toolbox />
+          </div>
           <WorkflowTree />
           <PropertiesPanel />
           <OutputPanel />
           <RunDialogHost />
+          <StudioDialogHost />
         </>
       ) : (
         <ConnectionPanel />
@@ -169,13 +174,20 @@ function Toolbar() {
   const stopRefusal = useStudioState((s) => stopRefusalOf(currentRun(s)));
   const run = useStudioState(currentRun);
   const [choice, setChoice] = useState('');
+  const openPath = file?.path;
 
-  const open = () => {
-    if (choice === '' || (dirty && !window.confirm('Discard the unsaved changes?'))) {
-      return;
+  // The choice follows the open file, however it was opened (Files panel, --open, rename, Save as).
+  useEffect(() => {
+    if (openPath !== undefined) {
+      setChoice(openPath);
     }
+  }, [openPath]);
 
-    void studio.open(choice);
+  // With unsaved changes, the Studio asks in its own dialog (Save, Discard, Cancel).
+  const open = () => {
+    if (choice !== '') {
+      void studio.requestOpen(choice);
+    }
   };
 
   const ready = connection === 'ready';
@@ -211,6 +223,14 @@ function Toolbar() {
       </button>
       <button type="button" onClick={() => void studio.save()} disabled={!dirty || file?.readOnlyReason !== undefined || busy !== undefined} title="Ctrl+S">
         Save
+      </button>
+      <button
+        type="button"
+        onClick={() => studio.startName('save-as')}
+        disabled={!hasDocument || file?.readOnlyReason !== undefined || busy !== undefined}
+        title={file?.readOnlyReason ? `The workflow is read-only: ${file.readOnlyReason}` : 'Save the workflow as a new file'}
+      >
+        Save as…
       </button>
       <button type="button" onClick={() => void studio.validate()} disabled={!hasDocument || busy !== undefined}>
         Validate
@@ -263,6 +283,289 @@ function Toolbox() {
         ))}
       </ul>
     </aside>
+  );
+}
+
+interface FolderNode {
+  readonly name: string;
+  readonly path: string;
+  readonly folders: FolderNode[];
+  readonly files: WorkflowFile[];
+}
+
+/** The project's files as folders (sorted by name) with their files. */
+function fileTree(files: readonly WorkflowFile[]): FolderNode {
+  const root: FolderNode = { name: '', path: '', folders: [], files: [] };
+  for (const file of files) {
+    let folder = root;
+    for (const segment of file.path.split('/').slice(0, -1)) {
+      let next = folder.folders.find((f) => f.name === segment);
+      if (!next) {
+        next = { name: segment, path: folder.path ? `${folder.path}/${segment}` : segment, folders: [], files: [] };
+        folder.folders.push(next);
+        folder.folders.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      folder = next;
+    }
+
+    folder.files.push(file);
+  }
+
+  return root;
+}
+
+/** The files in display order (each folder's subfolders first, then its files). */
+function displayOrder(folder: FolderNode): string[] {
+  return [...folder.folders.flatMap(displayOrder), ...folder.files.map((f) => f.path)];
+}
+
+/** The project's workflow files as a tree. Click selects, double-click or Enter opens, F2 renames, Delete deletes. */
+function FilesPanel() {
+  const studio = useStudio();
+  const files = useStudioState((s) => s.files);
+  const project = useStudioState((s) => s.project);
+  const openPath = useStudioState((s) => s.file?.path);
+  const [selected, setSelected] = useState<string>();
+  const list = useRef<HTMLUListElement>(null);
+  const tree = useMemo(() => fileTree(files), [files]);
+  const order = useMemo(() => displayOrder(tree), [tree]);
+  const target = selected !== undefined && order.includes(selected) ? selected : openPath;
+
+  const select = (path: string) => {
+    setSelected(path);
+    // Compared, not interpolated into a selector: paths may contain quotes or brackets.
+    [...(list.current?.querySelectorAll<HTMLElement>('[data-path]') ?? [])].find((item) => item.dataset.path === path)?.focus();
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+    const at = target === undefined ? -1 : order.indexOf(target);
+    const next =
+      event.key === 'ArrowDown' ? order[Math.min(at + 1, order.length - 1)]
+      : event.key === 'ArrowUp' ? order[Math.max(at - 1, 0)]
+      : event.key === 'Home' ? order[0]
+      : event.key === 'End' ? order.at(-1)
+      : undefined;
+    if (next !== undefined) {
+      event.preventDefault();
+      select(next);
+    } else if (target !== undefined && event.key === 'Enter') {
+      event.preventDefault();
+      void studio.requestOpen(target);
+    } else if (target !== undefined && event.key === 'F2') {
+      event.preventDefault();
+      studio.startName('rename', target);
+    } else if (target !== undefined && event.key === 'Delete') {
+      event.preventDefault();
+      studio.startDelete(target);
+    }
+  };
+
+  const renderFolder = (folder: FolderNode, depth: number) => (
+    <>
+      {folder.folders.map((sub) => (
+        <li key={`folder:${sub.path}`} role="treeitem" aria-level={depth} aria-expanded={true} aria-selected={false} className="folder">
+          <span className="folder-name">{sub.name}/</span>
+          <ul role="group">{renderFolder(sub, depth + 1)}</ul>
+        </li>
+      ))}
+      {folder.files.map((file) => {
+        const name = file.path.split('/').at(-1);
+        return (
+          <li
+            key={file.path}
+            role="treeitem"
+            aria-level={depth}
+            aria-selected={file.path === target}
+            aria-current={file.path === openPath ? 'true' : undefined}
+            tabIndex={file.path === target || (target === undefined && file.path === order[0]) ? 0 : -1}
+            data-path={file.path}
+            className={`file${file.path === target ? ' selected' : ''}${file.path === openPath ? ' open' : ''}`}
+            onClick={() => select(file.path)}
+            onDoubleClick={() => void studio.requestOpen(file.path)}
+          >
+            {name}
+          </li>
+        );
+      })}
+    </>
+  );
+
+  return (
+    <section className="files" aria-labelledby="files-heading">
+      <div className="files-header">
+        <h2 id="files-heading">Files</h2>
+        <div className="editbar" role="toolbar" aria-label="Files">
+          <button type="button" onClick={() => studio.startName('new')} disabled={project === undefined} title="Create a new workflow in the project">
+            New…
+          </button>
+          <button type="button" onClick={() => target && studio.startName('rename', target)} disabled={target === undefined} title={target ? `Rename or move ${target} (F2)` : 'Select a file'}>
+            Rename…
+          </button>
+          <button type="button" onClick={() => target && studio.startDelete(target)} disabled={target === undefined} title={target ? `Delete ${target} (Delete)` : 'Select a file'}>
+            Delete…
+          </button>
+        </div>
+      </div>
+      <p className="hint">Double-click or Enter opens a file.</p>
+      <ul role="tree" aria-label="Workflow files" ref={list} onKeyDown={onKeyDown}>
+        {renderFolder(tree, 1)}
+      </ul>
+    </section>
+  );
+}
+
+/** A modal dialog (native `<dialog>`, CSP-safe); Esc calls `onCancel`. */
+function Modal({ title, onCancel, children }: { title: string; onCancel: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const id = useId();
+  useEffect(() => {
+    const element = ref.current;
+    if (element && !element.open) {
+      if (typeof element.showModal === 'function') {
+        element.showModal();
+      } else {
+        element.setAttribute('open', '');
+      }
+    }
+  }, []);
+
+  return (
+    <dialog
+      ref={ref}
+      className="run-dialog"
+      aria-labelledby={id}
+      onCancel={(e) => {
+        e.preventDefault();
+        onCancel();
+      }}
+    >
+      <h2 id={id}>{title}</h2>
+      {children}
+    </dialog>
+  );
+}
+
+/** The file-management dialogs (W6): unsaved changes, a path, delete, save conflict, recovery. */
+function StudioDialogHost() {
+  const dialog = useStudioState((s) => s.dialog);
+  return dialog ? <StudioDialogView key={`${dialog.kind}:${'purpose' in dialog ? dialog.purpose : ''}`} dialog={dialog} /> : null;
+}
+
+function StudioDialogView({ dialog }: { dialog: StudioDialog }) {
+  const studio = useStudio();
+  const close = () => studio.closeDialog();
+  switch (dialog.kind) {
+    case 'unsaved':
+      return (
+        <Modal title="Unsaved changes" onCancel={() => void studio.resolveUnsaved('cancel')}>
+          <p>
+            {dialog.path} has unsaved changes. Save them before opening {dialog.next}?
+          </p>
+          <div className="dialog-buttons">
+            <button type="button" onClick={() => void studio.resolveUnsaved('save')}>
+              Save
+            </button>
+            <button type="button" onClick={() => void studio.resolveUnsaved('discard')}>
+              Discard
+            </button>
+            <button type="button" onClick={() => void studio.resolveUnsaved('cancel')}>
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      );
+    case 'name':
+      return <NameDialog dialog={dialog} />;
+    case 'delete':
+      return (
+        <Modal title={`Delete ${dialog.path}`} onCancel={close}>
+          <p>
+            Delete {dialog.path} from the project?{dialog.dirty ? ' It is open with unsaved changes, which will be lost.' : ''} This cannot be undone.
+          </p>
+          <div className="dialog-buttons">
+            <button type="button" onClick={() => void studio.confirmDelete()}>
+              Delete
+            </button>
+            <button type="button" onClick={close}>
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      );
+    case 'conflict':
+      return (
+        <Modal title="The file changed on disk" onCancel={() => void studio.resolveConflict('cancel')}>
+          <p>{dialog.path} was changed outside this Studio since it was opened. Your changes are kept until you choose.</p>
+          <div className="dialog-buttons">
+            <button type="button" onClick={() => void studio.resolveConflict('reload')}>
+              Reload from disk
+            </button>
+            <button type="button" onClick={() => void studio.resolveConflict('overwrite')}>
+              Overwrite with mine
+            </button>
+            <button type="button" onClick={() => void studio.resolveConflict('save-as')}>
+              Save mine as…
+            </button>
+            <button type="button" onClick={() => void studio.resolveConflict('cancel')}>
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      );
+    case 'recover':
+      return (
+        <Modal title="Recover unsaved changes" onCancel={close}>
+          <p>
+            Unsaved changes to {dialog.path} from {new Date(dialog.savedAt).toLocaleString()} were found in this browser.
+            {dialog.stale ? ' The file has changed on disk since then: restoring replaces those changes when you save.' : ''}
+          </p>
+          <div className="dialog-buttons">
+            <button type="button" onClick={() => studio.resolveRecovery('restore')}>
+              Restore
+            </button>
+            <button type="button" onClick={() => studio.resolveRecovery('discard')}>
+              Discard
+            </button>
+          </div>
+        </Modal>
+      );
+  }
+}
+
+function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }> }) {
+  const studio = useStudio();
+  const id = useId();
+  const [path, setPath] = useState(dialog.initial);
+  const title = dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
+  const action = dialog.purpose === 'new' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
+  return (
+    <Modal title={title} onCancel={() => studio.closeDialog()}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void studio.submitName(path);
+        }}
+      >
+        <div className="field">
+          <label className="field-label" htmlFor={id}>
+            Path in the project
+          </label>
+          <input id={id} value={path} spellCheck={false} aria-invalid={dialog.error !== undefined} aria-describedby={`${id}-error`} onChange={(e) => setPath(e.target.value)} />
+          <span id={`${id}-error`} className="field-error" role="status">
+            {dialog.error}
+          </span>
+        </div>
+        <div className="dialog-buttons">
+          <button type="submit" disabled={path.trim() === ''}>
+            {action}
+          </button>
+          <button type="button" onClick={() => studio.closeDialog()}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

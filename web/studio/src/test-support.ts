@@ -101,6 +101,8 @@ export class FakeApi implements StudioApi {
   startFailure?: ApiError;
   cancelFailure?: ApiError;
   validations = 0;
+  /** The server's `--open` workflow, if any. */
+  openOnStart?: { project: string; path: string };
   subscriptions: { streamId: string; runId: string; afterSequence: number }[] = [];
   streamsCreated = 0;
   signedIn = true;
@@ -113,7 +115,7 @@ export class FakeApi implements StudioApi {
       throw new ApiError(401, 'Open the server with the start link it printed.');
     }
 
-    return { name: 'MyRPA.Server', mode: 'local', workflowSchemaVersions: ['1.0'], projects: ['demo'] };
+    return { name: 'MyRPA.Server', mode: 'local', workflowSchemaVersions: ['1.0'], projects: ['demo'], open: this.openOnStart };
   }
 
   async activities() {
@@ -143,6 +145,47 @@ export class FakeApi implements StudioApi {
     file.text = text;
     file.etag++;
     return `"${file.etag}"`;
+  }
+
+  async createWorkflow(_project: string, path: string, text: string) {
+    if (this.files.has(path)) {
+      throw new ApiError(412, 'The file changed since it was read (or already exists).');
+    }
+
+    this.files.set(path, { text, etag: 1 });
+    return '"1"';
+  }
+
+  async deleteWorkflow(_project: string, path: string, etag: string) {
+    const file = this.files.get(path);
+    if (!file) {
+      throw new ApiError(404, `'${path}' does not exist.`);
+    }
+
+    if (`"${file.etag}"` !== etag) {
+      throw new ApiError(412, 'The file changed since it was read.');
+    }
+
+    this.files.delete(path);
+  }
+
+  async moveWorkflow(_project: string, from: string, to: string, etag: string) {
+    const file = this.files.get(from);
+    if (!file) {
+      throw new ApiError(404, `'${from}' does not exist.`);
+    }
+
+    if (`"${file.etag}"` !== etag) {
+      throw new ApiError(412, 'The file changed since it was read.');
+    }
+
+    if (this.files.has(to)) {
+      throw new ApiError(409, `'${to}' already exists.`);
+    }
+
+    this.files.delete(from);
+    this.files.set(to, file);
+    return etag;
   }
 
   async validate() {

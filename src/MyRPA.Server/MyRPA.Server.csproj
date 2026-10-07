@@ -19,6 +19,14 @@
     <ProjectReference Include="..\MyRPA.Contracts\MyRPA.Contracts.csproj" />
     <ProjectReference Include="..\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
   </ItemGroup>
+  <!--
+    W6 (ADR-0031): the built Web Studio (web/studio/dist, from 'npm run build') is copied next to the server as wwwroot,
+    its default web root, so 'MyRPA.Server -project <dir>' serves the Studio with no -web. The .NET build never runs
+    npm: without a built dist nothing is copied and the server starts without a UI (and says so).
+  -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\web\studio\dist\index.html')">
+    <None Include="$(MSBuildThisFileDirectory)..\..\web\studio\dist\**\*" Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="MyRPA.Server.Tests" />
     <InternalsVisibleTo Include="MyRPA.Architecture.Tests" />

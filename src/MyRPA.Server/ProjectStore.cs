@@ -15,6 +15,8 @@ internal enum FileWriteOutcome
     Created,
     Updated,
     Deleted,
+    Moved,
+    TargetExists,
     NotFound,
     PreconditionFailed,
     PreconditionRequired,
@@ -187,6 +189,47 @@ internal sealed class ProjectStore(ServerOptions options) : IDisposable
 
             File.Delete(fullPath);
             return FileWriteOutcome.Deleted;
+        }
+        finally
+        {
+            _writes.Release();
+        }
+    }
+
+    /// <summary>
+    /// Renames or moves a file within its project if its current ETag matches. Never overwrites: an existing target is
+    /// refused. The content (and so the ETag) is unchanged. A change of letter case only is allowed on Windows.
+    /// </summary>
+    public async Task<(FileWriteOutcome Outcome, string? ETag)> MoveAsync(string fromPath, string toPath, string? ifMatch, CancellationToken cancellationToken)
+    {
+        await _writes.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!File.Exists(fromPath))
+            {
+                return (FileWriteOutcome.NotFound, null);
+            }
+
+            if (ifMatch is null)
+            {
+                return (FileWriteOutcome.PreconditionRequired, null);
+            }
+
+            var etag = ETagOf(await File.ReadAllBytesAsync(fromPath, cancellationToken).ConfigureAwait(false));
+            if (etag != ifMatch)
+            {
+                return (FileWriteOutcome.PreconditionFailed, null);
+            }
+
+            var caseOnly = OperatingSystem.IsWindows() && string.Equals(fromPath, toPath, StringComparison.OrdinalIgnoreCase);
+            if (!caseOnly && (File.Exists(toPath) || Directory.Exists(toPath)))
+            {
+                return (FileWriteOutcome.TargetExists, null);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(toPath)!);
+            File.Move(fromPath, toPath, overwrite: false);
+            return (FileWriteOutcome.Moved, etag);
         }
         finally
         {

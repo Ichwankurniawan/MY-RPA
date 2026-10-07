@@ -1,6 +1,7 @@
 # MyRPA.Server (local mode)
 
-Status: Web Studio W2; `--web` added in W3 ([ADR-0028](../adr/0028-web-studio-first-slice.md)). Decisions:
+Status: Web Studio W2; `--web` added in W3 ([ADR-0028](../adr/0028-web-studio-first-slice.md)); `--open`, the bundled
+Studio and `move` added in W6 ([ADR-0031](../adr/0031-web-studio-project-and-file-management.md)). Decisions:
 - [ADR-0022](../adr/0022-server-control-plane-and-project-structure.md): control plane;
 - [ADR-0023](../adr/0023-first-class-execution-events.md): execution events;
 - [ADR-0024](../adr/0024-execution-event-streaming-sse.md): streaming;
@@ -15,14 +16,20 @@ activities, storage and plugin host as the CLI, plus `MyRPA.Execution.Hosting`, 
 ## Start
 
 ```bash
-dotnet run --project src/MyRPA.Server -- --project samples --port 0
-dotnet run --project src/MyRPA.Server -- --project samples --web web/studio/dist --port 0   # with the Web Studio
+# once: build the Studio, then the server (the server's build copies web/studio/dist next to it as wwwroot)
+(cd web/studio && npm ci && npm run build) && dotnet build MyRPA.sln -c Release
+# then one command:
+dotnet run --project src/MyRPA.Server -c Release --no-build -- --project samples          # Studio included
+dotnet run --project src/MyRPA.Server -c Release --no-build -- --open samples/hello-world.json   # project = its folder
 ```
 
-Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]`.
+Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]`.
 - **Port:** the default is 5310; `0` picks a free port.
-- **Web Studio:** `--web <dir>` serves the built Studio (`web/studio/dist`, must contain `index.html`). Without it,
-  `GET /` returns a short text and no UI is served.
+- **Web Studio:** the server serves the Studio its build bundled (`wwwroot` next to it, copied from `web/studio/dist`
+  when that was built first). `--web <dir>` serves another build instead (must contain `index.html`). Without either,
+  `GET /` returns a short text, no UI is served, and the server says so at startup. The .NET build never runs npm.
+- **Open a workflow** (`--open <file>`, the WPF Studio's file argument): the file must be inside a `--project` folder;
+  given alone, its folder becomes the project. `/api/info` names it and the Studio opens it after connecting.
 - **Plugins:** loaded exactly as in the CLI (ADR-0014, ADR-0019). A plugin that fails to load stops startup with exit code 5.
 - **Start link:** the server prints a one-time link, `http://127.0.0.1:<port>/?token=…`. Opening it creates the browser
   session. The server does not open a browser itself: starting a process is a banned API (ADR-0012).
@@ -56,7 +63,7 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>
 |---|---|
 | `GET /` | With a `token`: the start link (session cookie, redirect to `/`). Otherwise the Web Studio's `index.html` (`--web`), or a short text |
 | `GET /<file>` | With `--web`: the Studio's static assets. No session needed; hidden and unknown file types are not served |
-| `GET /api/info` | Server name, version, `mode: "local"`, supported workflow schema versions, project names |
+| `GET /api/info` | Server name, version, `mode: "local"`, supported workflow schema versions, project names, and `open` (`{ project, path }` from `--open`, else null) |
 | `GET /api/activities` | The activity catalog snapshot (ADR-0020 format), built-in and plugin activities |
 | `GET /api/plugins` | Loaded plugins (id, name, version, SHA-256, activities) and their load diagnostics |
 | `GET /api/projects` | Registered projects |
@@ -64,6 +71,7 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--plugin <dir>
 | `GET /api/projects/{project}/workflows/{path}` | The file's JSON; `ETag` header |
 | `PUT /api/projects/{project}/workflows/{path}` | Create (`If-None-Match: *`) or update (`If-Match: <etag>`). The body must be a JSON object. Returns 201 or 204 with the new `ETag`; 412 on a conflict; 428 without a precondition. Invalid workflows can be saved; validation is separate. |
 | `DELETE /api/projects/{project}/workflows/{path}` | Delete; `If-Match` required |
+| `POST /api/projects/{project}/move` | `{ from, to }` with `If-Match` (the source's ETag): renames or moves a file within the project, atomically, content unchanged → 200 `{ path }` and the `ETag`. 409 if `to` exists (never overwrites), 412 on a stale ETag, 428 without `If-Match`, 404 if `from` is gone, 400 for paths the store refuses or `from` = `to` (W6) |
 | `POST /api/validate` | `{ document }` → `{ valid, diagnostics: [{ code, severity, message, path, nodeId }] }` from the engine's `WorkflowLoader`. `…properties.<name>` in a path names the property (ADR-0026). |
 | `POST /api/runs` | `{ project, path, document?, arguments?, argumentText?, timeoutMs? }` → 202 `{ runId }`. See below. |
 | `GET /api/runs/{runId}` | `{ runId, state, lastSequence, result? }`. The result has status, ids, duration, outputs and error. |

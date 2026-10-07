@@ -33,7 +33,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.getByRole('button', { name: 'Open', exact: true }).click();
   await page.locator('[role=treeitem][data-node-id="log-299-8"]').waitFor();
   const openMs = Date.now() - openStart;
-  const nodes = await page.locator('[role=treeitem]').count();
+  const nodes = await page.locator('[role=treeitem][data-node-id]').count();
   check(nodes === 3001, `fixture nodes: ${nodes}`);
   await page.locator('[role=treeitem][data-node-id="log-150-4"] > .node').click();
 
@@ -85,9 +85,10 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     ['Structural: delete', await measure('delete'), 100],
   ];
 
-  // Reopen the fixture (discarding those edits), so it is valid again: Run validates first.
-  page.once('dialog', (dialog) => dialog.accept());
+  // Reopen the fixture (discarding those edits in the Studio's unsaved-changes dialog), so it is valid again: Run
+  // validates first.
   await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Discard', exact: true }).click();
   await page.getByTestId('document-title').filter({ hasText: /^flat-3000\.json$/ }).waitFor();
   await page.locator('[role=treeitem][data-node-id="log-150-4"] > .node').click();
 

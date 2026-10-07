@@ -17,7 +17,7 @@ backend work may start in parallel once authorized; see ADR-0021 "Consequences")
 | **W4A** | Structural editing | ✅ Done (`62f2d05`, approved 2026-09-25) |
 | **W4B** | Rich authoring | ⬜ Open (needs authorization) |
 | **W5** | Execution UX | ✅ Done (2026-10-07; authorized before W4B; ADR-0030) |
-| **W6** | Project/file management | ⬜ |
+| **W6** | Project/file management | ✅ Done (2026-10-07; ADR-0031) |
 | **W7** | Advanced authoring / parity | ⬜ |
 | **W8** | Performance + accessibility + hardening | ⬜ |
 | **W9** | WPF exit criteria + migration | ⬜ |
@@ -37,11 +37,11 @@ Numbers refer to ADR-0021 "Exit criteria for deleting WPF".
 | 6 | Copy/paste | — | Cut/copy/paste within and across documents with id renaming; keyboard paste without a permission prompt | W7 |
 | 7 | Execution | Run; status, outputs; error with failing node; per-node states; unsaved buffer; stream re-creation; W5: validate before run, typed argument input (`argumentText`), timeout, Stop with Cancelling…, concurrent runs, reconnect proven end to end (smoke) | — | W5 |
 | 8 | Logs, output, errors | Level and node id; bounded (1,000); run id; no internals; W5: per-run logs with times, Select failed node, not-started reasons | Clear; execution and correlation ids visible | later slice |
-| 9 | Projects and files | Open project (server `--project`); file list; save conflict (412); `beforeunload` | File tree; create/rename/delete; in-app unsaved prompt (not `window.confirm`); crash recovery; command-line equivalents of the WPF startup options | W6 |
+| 9 | Projects and files | Open project (server `--project`); file list; save conflict (412); `beforeunload`; W6: file tree; create, rename (server `move`), delete, save-as; in-app unsaved prompt; conflict resolution (reload, overwrite, save as); crash recovery (local drafts); `--open <file>` | — | W6 |
 | 10 | Keyboard and accessibility | Tree and commands by keyboard; Ctrl+S/Z/Y, Del, F5; ARIA tree; announced status | Ctrl+X/C/V, Shift+F5; every operation without a mouse; automated accessibility check; screen-reader smoke test | W5, W7, W8 |
 | 11 | Performance | Open, edit, undo/redo, insert/delete/move within targets on the flat 3,000-node fixture (`npm run perf`, local) | Nested fixture; drag activation/move; validation ≤ 500 ms; measured in CI | W4B, W7, W8 |
 | 12 | Automated tests | 74 Vitest tests; server API/security/SSE tests; browser smoke test; Linux web job (unit tests, build) | TS coverage of every Studio.Core behavior group; corpus conformance against `WorkflowLoader`; e2e for PRD 5.5 and the manual script; CI green on Linux and Windows incl. smoke | W8, W9 |
-| 13 | Former WPF-only capabilities | Title and dirty marker; status line | Plugin load failures shown in the Studio; visible (non-headless) browser runs in local mode; single-command local start | W5, W6 |
+| 13 | Former WPF-only capabilities | Title and dirty marker; status line; W6: single-command local start (the server bundles the Studio; `--open <file>` alone is enough) | Plugin load failures shown in the Studio; visible (non-headless) browser runs in local mode | later slice |
 | 14 | Process | — | Docs; a human runs the manual script; owner signs off the exit review | W9 |
 
 ## Slices (proposed contents)

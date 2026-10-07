@@ -30,15 +30,18 @@ export async function withStudio(body) {
   const project = join(workspace, 'demo');
   mkdirSync(project);
 
-  let server;
+  const servers = [];
   let browser;
-  let serverOutput = '';
   let failed = false;
   try {
-    const startServer = () => {
-      server = spawn(process.env.MYRPA_DOTNET ?? 'dotnet', [serverDll, '--project', project, '--web', join(studioDir, 'dist'), '--port', '0'], {
+    // Default: the project folder and the built Studio (--web). `args` replaces those arguments (W6: a single-command
+    // start uses the Studio bundled next to the server, with no --web).
+    const startServer = (args = ['--project', project, '--web', join(studioDir, 'dist')]) => {
+      let serverOutput = '';
+      const server = spawn(process.env.MYRPA_DOTNET ?? 'dotnet', [serverDll, ...args, '--port', '0'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
+      servers.push(server);
       return new Promise((resolveLink, reject) => {
         const timer = setTimeout(() => reject(new Error(`The server printed no start link:\n${serverOutput}`)), 30_000);
         server.stdout.on('data', (data) => {
@@ -71,7 +74,7 @@ export async function withStudio(body) {
     console.error(error);
   } finally {
     await browser?.close();
-    if (server) {
+    for (const server of servers) {
       server.kill();
       await new Promise((done) => (server.exitCode !== null ? done() : server.once('exit', done)));
     }

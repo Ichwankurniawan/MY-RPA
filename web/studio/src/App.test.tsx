@@ -28,7 +28,7 @@ describe('App', () => {
   it('renders the workflow as a tree and shows the selected node in Properties', async () => {
     await renderStudio();
 
-    const tree = screen.getByRole('tree');
+    const tree = screen.getByRole('tree', { name: 'Workflow' });
     expect(within(tree).getAllByRole('treeitem').map((item) => item.dataset.nodeId)).toEqual(['main', 'build-greeting', 'log-greeting']);
     expect(treeItem('main').getAttribute('aria-selected')).toBe('true');
 

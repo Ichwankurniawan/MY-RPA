@@ -19,9 +19,9 @@ async function renderStudio(api = new FakeApi()) {
 }
 
 const treeItem = (nodeId: string) => document.querySelector<HTMLElement>(`[role="treeitem"][data-node-id="${nodeId}"]`)!;
-const treeIds = () => within(screen.getByRole('tree')).getAllByRole('treeitem').map((item) => item.dataset.nodeId);
+const treeIds = () => within(screen.getByRole('tree', { name: 'Workflow' })).getAllByRole('treeitem').map((item) => item.dataset.nodeId);
 const editButton = (name: string) => within(screen.getByRole('toolbar', { name: 'Edit' })).getByRole('button', { name }) as HTMLButtonElement;
-const selectedId = () => document.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]')?.dataset.nodeId;
+const selectedId = () => document.querySelector<HTMLElement>('[role="treeitem"][data-node-id][aria-selected="true"]')?.dataset.nodeId;
 
 beforeEach(() => {
   FakeEventSource.instances = [];

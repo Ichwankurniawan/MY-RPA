@@ -10,6 +10,8 @@ export interface ServerInfo {
   mode: string;
   workflowSchemaVersions: string[];
   projects: string[];
+  /** The workflow named on the server's command line (`--open`), opened after connecting. */
+  open?: { project: string; path: string } | null;
 }
 
 /** Property kinds of the activity catalog (ADR-0020, workflow-format.md §3). */

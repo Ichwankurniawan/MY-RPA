@@ -110,7 +110,7 @@ describe('Execution UI', () => {
     expect(screen.getByTestId('run-elapsed')).toBeTruthy();
     expect(node('wait').dataset.runStatus).toBe('Running');
     expect(node('after').dataset.runStatus).toBeUndefined(); // not executed (yet)
-    expect(screen.getByRole('tree').classList.contains('shows-run')).toBe(true);
+    expect(screen.getByRole('tree', { name: 'Workflow' }).classList.contains('shows-run')).toBe(true);
 
     await emit(nodeCompleted(4, 'wait', 'Succeeded'), nodeStarted(5, 'after'), nodeCompleted(6, 'after', 'Succeeded'), nodeCompleted(7, 'main', 'Succeeded'), completed(8, 'Succeeded'));
     expect(status()).toContain('Succeeded');

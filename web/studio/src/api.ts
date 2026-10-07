@@ -36,6 +36,12 @@ export interface StudioApi {
   readWorkflow(project: string, path: string): Promise<{ text: string; etag: string }>;
   /** Saves over the version with `etag` (If-Match); returns the new ETag. 412 when the file changed meanwhile. */
   saveWorkflow(project: string, path: string, text: string, etag: string): Promise<string>;
+  /** Creates a new file (If-None-Match: *); returns its ETag. 412 when the file already exists. */
+  createWorkflow(project: string, path: string, text: string): Promise<string>;
+  /** Deletes the version with `etag` (If-Match). 412 when the file changed meanwhile, 404 when it is gone. */
+  deleteWorkflow(project: string, path: string, etag: string): Promise<void>;
+  /** Renames or moves the version with `etag` within the project; returns its ETag (unchanged). 409 when `to` exists. */
+  moveWorkflow(project: string, from: string, to: string, etag: string): Promise<string>;
   validate(document: JsonObject): Promise<ValidationResult>;
   /** Runs the saved file, or `options.document` as if it were saved at `path`. 422 (invalid) and 400 mean not started. */
   startRun(project: string, path: string, options?: StartRunOptions): Promise<string>;
@@ -104,6 +110,17 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
     async saveWorkflow(project, path, text, etag) {
       const response = await send('PUT', filePath(project, path), text, { 'If-Match': etag });
       return response.headers.get('ETag') ?? '';
+    },
+    async createWorkflow(project, path, text) {
+      const response = await send('PUT', filePath(project, path), text, { 'If-None-Match': '*' });
+      return response.headers.get('ETag') ?? '';
+    },
+    async deleteWorkflow(project, path, etag) {
+      await send('DELETE', filePath(project, path), undefined, { 'If-Match': etag });
+    },
+    async moveWorkflow(project, from, to, etag) {
+      const response = await send('POST', `/api/projects/${encodeURIComponent(project)}/move`, JSON.stringify({ from, to }), { 'If-Match': etag });
+      return response.headers.get('ETag') ?? etag;
     },
     validate: async (document) => (await send('POST', '/api/validate', JSON.stringify({ document }))).json() as Promise<ValidationResult>,
     async startRun(project, path, options = {}) {

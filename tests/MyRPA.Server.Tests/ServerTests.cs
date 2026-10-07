@@ -195,6 +195,133 @@ public sealed class ProjectAndCatalogTests
     }
 
     [Fact]
+    public void CommandLine_Open_NamesAWorkflowInAProject_OrMakesItsFolderTheProject()
+    {
+        var folder = Directory.CreateTempSubdirectory("myrpa-open-");
+        var outside = Directory.CreateTempSubdirectory("myrpa-outside-");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(folder.FullName, "flows"));
+            var file = Path.Combine(folder.FullName, "flows", "main.json");
+            File.WriteAllText(file, "{}");
+            File.WriteAllText(Path.Combine(outside.FullName, "other.json"), "{}");
+
+            var withProject = ServerCommandLine.Parse(["--project", folder.FullName, "--open", file], out var error);
+            var alone = ServerCommandLine.Parse(["--open", file], out var aloneError);
+
+            Assert.Null(error);
+            Assert.Equal(new OpenWorkflow(folder.Name, "flows/main.json"), withProject!.Open);
+            Assert.Null(aloneError);
+            Assert.Equal("flows", Assert.Single(alone!.Projects).Name);
+            Assert.Equal(new OpenWorkflow("flows", "main.json"), alone.Open);
+            Assert.Null(ServerCommandLine.Parse(["--project", folder.FullName, "--open", Path.Combine(outside.FullName, "other.json")], out var notInside));
+            Assert.Contains("not inside", notInside, StringComparison.Ordinal);
+            Assert.Null(ServerCommandLine.Parse(["--project", folder.FullName, "--open", Path.Combine(folder.FullName, "missing.json")], out _));
+            Assert.Null(ServerCommandLine.Parse(["--open", file, "--open", file], out _));
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+            outside.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CommandLine_UsesTheBundledStudio_UnlessWebIsGiven()
+    {
+        var project = Directory.CreateTempSubdirectory("myrpa-project-");
+        var bundled = Directory.CreateTempSubdirectory("myrpa-bundled-");
+        var other = Directory.CreateTempSubdirectory("myrpa-web-");
+        try
+        {
+            Assert.Null(ServerCommandLine.Parse(["--project", project.FullName], out _, bundled.FullName)!.WebRoot); // not built: no UI
+            File.WriteAllText(Path.Combine(bundled.FullName, "index.html"), "<!doctype html>");
+            File.WriteAllText(Path.Combine(other.FullName, "index.html"), "<!doctype html>");
+
+            Assert.Equal(bundled.FullName, ServerCommandLine.Parse(["--project", project.FullName], out _, bundled.FullName)!.WebRoot);
+            Assert.Equal(other.FullName, ServerCommandLine.Parse(["--project", project.FullName, "--web", other.FullName], out _, bundled.FullName)!.WebRoot);
+        }
+        finally
+        {
+            project.Delete(recursive: true);
+            bundled.Delete(recursive: true);
+            other.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Info_NamesTheWorkflowToOpen()
+    {
+        await using var h = await ServerHarness.StartAsync(o => o with { Open = new OpenWorkflow(o.Projects[0].Name, "flows/main.json") });
+
+        var info = await ServerHarness.JsonAsync(await h.Client.GetAsync("/api/info", Token));
+
+        Assert.Equal(h.ProjectName, info.GetProperty("open").GetProperty("project").GetString());
+        Assert.Equal("flows/main.json", info.GetProperty("open").GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public async Task Move_RenamesAtomically_WithTheETag_AndNeverOverwrites()
+    {
+        await using var h = await ServerHarness.StartAsync();
+        h.WriteWorkflow("a.json", ServerHarness.Logs(1));
+        h.WriteWorkflow("taken.json", ServerHarness.Logs(2));
+        var files = $"/api/projects/{h.ProjectName}/workflows";
+        var move = $"/api/projects/{h.ProjectName}/move";
+        using var read = await h.Client.GetAsync($"{files}/a.json", Token);
+        var etag = read.Headers.ETag!.Tag;
+        HttpRequestMessage Move(string from, string to, string? ifMatch)
+        {
+            var request = h.Unsafe(HttpMethod.Post, move, new { from, to });
+            if (ifMatch is not null)
+            {
+                request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+            }
+
+            return request;
+        }
+
+        using var noPrecondition = await h.SendAsync(Move("a.json", "b.json", null));
+        using var stale = await h.SendAsync(Move("a.json", "b.json", "\"stale\""));
+        using var overwrite = await h.SendAsync(Move("a.json", "taken.json", etag));
+        using var missing = await h.SendAsync(Move("nope.json", "b.json", etag));
+        using var outside = await h.SendAsync(Move("a.json", "../escape.json", etag));
+        using var notJson = await h.SendAsync(Move("a.json", "b.txt", etag));
+        using var same = await h.SendAsync(Move("a.json", "a.json", etag));
+        using var moved = await h.SendAsync(Move("a.json", "sub/b.json", etag));
+
+        Assert.Equal(HttpStatusCode.PreconditionRequired, noPrecondition.StatusCode);
+        Assert.Equal(HttpStatusCode.PreconditionFailed, stale.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, overwrite.StatusCode);
+        Assert.Equal(ServerHarness.Logs(2), File.ReadAllText(Path.Combine(h.ProjectRoot, "taken.json")));
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, outside.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, notJson.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, same.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, moved.StatusCode);
+        Assert.Equal(etag, moved.Headers.ETag!.Tag); // the content is unchanged
+        Assert.Equal("sub/b.json", (await ServerHarness.JsonAsync(moved)).GetProperty("path").GetString());
+        Assert.False(File.Exists(Path.Combine(h.ProjectRoot, "a.json")));
+        Assert.Equal(ServerHarness.Logs(1), File.ReadAllText(Path.Combine(h.ProjectRoot, "sub", "b.json")));
+    }
+
+    [Fact]
+    public async Task Move_NeedsTheSession_AndTheAntiForgeryHeader()
+    {
+        await using var h = await ServerHarness.StartAsync();
+        h.WriteWorkflow("a.json", ServerHarness.Logs(1));
+        var move = $"/api/projects/{h.ProjectName}/move";
+        using var stranger = ServerHarness.NewClient(h.BaseUri);
+        using var withoutSession = h.Unsafe(HttpMethod.Post, move, new { from = "a.json", to = "b.json" });
+        using var withoutHeader = h.Unsafe(HttpMethod.Post, move, new { from = "a.json", to = "b.json" });
+        withoutHeader.Headers.Remove("X-MyRPA-Request");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await stranger.SendAsync(withoutSession, Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await h.SendAsync(withoutHeader)).StatusCode);
+        Assert.True(File.Exists(Path.Combine(h.ProjectRoot, "a.json")));
+    }
+
+    [Fact]
     public async Task Info_AndCatalog_DescribeTheServer()
     {
         await using var h = await ServerHarness.StartAsync();

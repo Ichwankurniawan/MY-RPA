@@ -1,12 +1,13 @@
 # Web Studio
 
-Status: Web Studio W5 (execution UX; on W3 and W4A). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
+Status: Web Studio W6 (project and file management; on W3, W4A and W5). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
 [ADR-0022](../adr/0022-server-control-plane-and-project-structure.md) (server serves the Studio),
 [ADR-0024](../adr/0024-execution-event-streaming-sse.md) (one event stream per tab),
 [ADR-0025](../adr/0025-local-mode-security.md) (local-mode security),
 [ADR-0028](../adr/0028-web-studio-first-slice.md) (W3 slice),
 [ADR-0029](../adr/0029-web-studio-structural-editing.md) (structural editing and undo/redo),
-[ADR-0030](../adr/0030-web-studio-execution-ux.md) (execution UX).
+[ADR-0030](../adr/0030-web-studio-execution-ux.md) (execution UX),
+[ADR-0031](../adr/0031-web-studio-project-and-file-management.md) (project and file management).
 
 The Web Studio is a React + TypeScript + Vite app in `web/studio`, outside the .NET solution. It talks only to its own
 `MyRPA.Server` origin through the API in [server.md](server.md). It is not at WPF parity yet; the ADR-0021 exit
@@ -19,9 +20,15 @@ cd web/studio
 npm ci
 npm run build                     # → web/studio/dist
 cd ../..
-dotnet run --project src/MyRPA.Server -- --project samples --web web/studio/dist --port 0
+dotnet build MyRPA.sln -c Release # the server's build bundles dist as its wwwroot (W6)
+dotnet run --project src/MyRPA.Server -c Release --no-build -- --project samples --port 0
+# or, opening one workflow (its folder becomes the project):
+dotnet run --project src/MyRPA.Server -c Release --no-build -- --open samples/hello-world.json --port 0
 # open the printed start link (it works once)
 ```
+
+`--web web/studio/dist` still serves a specific build (for example right after `npm run build`, without rebuilding the
+server).
 
 Development with hot reload: start the server on its default port (`--port 5310`, or set `MYRPA_SERVER`), run
 `npm run dev` in `web/studio`, and open the server's start link with the host and port changed to `127.0.0.1:5173`.
@@ -38,7 +45,23 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 ## What it does
 
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
-- **Open:** choose a project and a workflow file, then Open. The file is parsed into the document model.
+- **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
+  file named with the server's `--open` opens after connecting. The file is parsed into the document model.
+- **Files** (W6, ADR-0031): the Files panel shows the project's `.json` files as folders and files (click selects).
+  - **New…** asks for a path (a free name is suggested) and creates a valid workflow with an empty root Sequence.
+  - **Rename…** (F2) renames or moves the file in the project (server `move`, atomic, never overwrites); an open
+    document follows it, unsaved edits included.
+  - **Delete…** (Delete key) asks first, and says when the file is open with unsaved changes; deleting the open file
+    closes it.
+  - **Save as…** (toolbar) writes the document to a new file, which becomes the open file; the old file keeps its saved
+    content.
+  - Refusals (a taken name, a path outside the project) are shown in the dialog.
+- **Unsaved changes:** opening another file with unsaved changes asks in the Studio's own dialog: Save (then open),
+  Discard, or Cancel. Leaving the page still triggers the browser's own prompt.
+- **Save conflicts:** if the file changed on disk since it was opened, saving offers Reload from disk, Overwrite with
+  mine, or Save mine as…; the edits stay until the choice.
+- **Crash recovery:** unsaved edits are kept in this browser (local storage) a second after typing pauses. Opening the
+  file again offers them back (Restore, as one undoable step, or Discard), noting when the file changed on disk since.
 - **Tree:** the workflow as an ARIA tree (children, then named slots), with the selected node highlighted.
   - Keyboard: ↑ ↓ Home End move the selection.
   - Badges show nodes with validation errors and each node's run state.
@@ -97,8 +120,9 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `src/document.ts` | Document model: immutable v1.0 JSON, client keys (`WeakMap`), index, path-copying edits, structural edits and their refusals, lossy-file detection, editability |
 | `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation, stream status |
 | `src/store.ts` | A minimal external store with slice subscriptions |
-| `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save; runs (validate first, run dialog, recent runs, Stop, per-frame event batching) |
-| `src/App.tsx` | Layout: toolbar (Run, Stop, status), toolbox (Insert), edit bar (Undo, Redo, Move, Delete), tree, properties, problems, Execution panel, run dialog, status bar |
+| `src/drafts.ts` | Crash-recovery drafts in local storage (guarded; in memory for tests) |
+| `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save; runs (validate first, run dialog, recent runs, Stop, per-frame event batching); files (new, rename, delete, save as, unsaved prompt, conflicts, recovery) |
+| `src/App.tsx` | Layout: toolbar (Save as, Run, Stop, status), Files panel, toolbox (Insert), edit bar (Undo, Redo, Move, Delete), tree, properties, problems, Execution panel, run and file dialogs, status bar |
 | `scripts/harness.mjs` | Shared by the browser scripts: throwaway project, real server with `--web`, headless Chromium |
 | `scripts/smoke.mjs` | End-to-end smoke test |
 | `scripts/perf.mjs` | 3,000-node performance measurement |
@@ -128,7 +152,16 @@ nothing about the client.
 - `ExecutionUi.test.tsx` (W5): the run dialog (required, defaults, timeout, Cancel), the lifecycle and node states on
   the tree, Stop and Shift+F5, failure explanation and Select failed node, not-started labels, recent runs, the
   reconnecting and missing-events notices.
-- `scripts/smoke.mjs`: the full demo against the real server and engine: open, insert, move (keyboard), edit, undo,
+- `files.test.ts` (W6): new-workflow documents and path refusals, New (free name, create, open), the unsaved prompt
+  (Cancel, Discard, Save, Save with a conflict), rename (open and other files, refusals), Save as, delete (open file
+  closes; stale ETag refused), the four conflict choices, crash recovery (restore as an undoable step, stale drafts,
+  identical drafts dropped, removal on save, write after a pause), and `--open` on connect.
+- `FilesUi.test.tsx` (W6): the Files tree (folders, double-click, keyboard, F2, Delete), New with a refused name, the
+  in-app unsaved prompt (never `window.confirm`), the conflict dialog, the recovery dialog.
+- `src/test-setup.ts` clears local storage before every test.
+- `scripts/smoke.mjs`: the full demo against the real server and engine (W6 scenarios: New, rename with F2, the
+  unsaved prompt, a save conflict made on disk and overwritten, Save as, recovery after a page reload, delete with the
+  Delete key, and a single-command start with `--open` only and the bundled Studio); open, insert, move (keyboard), edit, undo,
   redo, delete, undo the delete, validate, save, reload, run with events and logs, an error case (validated before
   run; no run request), and W5: the run dialog with typed arguments, the running view (current node, start time,
   node states), a failure with Select failed node, cancellation (Cancelling… then Cancelled), two concurrent runs, and
@@ -147,7 +180,8 @@ nothing about the client.
   editors; CodeMirror expression editing with live syntax feedback; assignment-target suggestions.
 - **Running:** persistent run history (only recent runs of this tab are kept); plugin load diagnostics in the Studio;
   visible (non-headless) browser runs; searching by execution or correlation id.
-- **Files:** create, rename, delete, save-as; recovery after a crash.
+- **Files:** folder operations; moving files between projects; noticing outside changes before saving; recovery across
+  browsers or machines.
 - **Round-trip:** files with comments or trailing commas; formatting preservation; every number form; duplicate JSON
   keys.
 - **Tooling:** OpenAPI-generated types (ADR-0028 decision 6); the smoke test in CI, and the web job on Windows; the

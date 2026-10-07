@@ -3,7 +3,7 @@
 // browser (headless Chromium). It works on a throwaway copy of samples/hello-world.json, so it never edits the repository
 // and can run repeatedly. Checks use roles, labels and data attributes, never pixels. See harness.mjs for prerequisites.
 
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, repo, results, withStudio } from './harness.mjs';
 
@@ -63,8 +63,8 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const edit = (name) => page.getByRole('toolbar', { name: 'Edit' }).getByRole('button', { name, exact: true });
   const item = (id) => page.locator(`[role=treeitem][data-node-id="${id}"]`);
   const row = (id) => page.locator(`[role=treeitem][data-node-id="${id}"] > .node`);
-  const treeIds = () => page.locator('[role=treeitem]').evaluateAll((items) => items.map((i) => i.dataset.nodeId).join(','));
-  const selected = () => page.locator('[role=treeitem][aria-selected=true]').getAttribute('data-node-id');
+  const treeIds = () => page.locator('[role=treeitem][data-node-id]').evaluateAll((items) => items.map((i) => i.dataset.nodeId).join(','));
+  const selected = () => page.locator('[role=treeitem][data-node-id][aria-selected=true]').getAttribute('data-node-id');
   const expectTree = async (expected, what) => check((await treeIds()) === expected, `${what}: tree ${await treeIds()}`);
   const openWorkflow = async (name) => {
     await page.getByRole('combobox', { name: 'Workflow' }).selectOption(name);
@@ -292,6 +292,105 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check(streamConnections.length >= 2 && new URL(streamConnections.at(-1)).pathname !== streamUrl.pathname, 'a new stream was created');
   check((await page.getByTestId('stream-reconnecting').count()) === 0, 'the reconnecting notice is gone');
   step(`W5-6. Stream lost mid-run: re-created and resumed; sequences 1..${sequences.length} without duplicates or loss; both logs`);
+
+  // W6: project and file management. All through the Files panel and in-app dialogs, against the real file system.
+  const filesTree = page.getByRole('tree', { name: 'Workflow files' });
+  const fileRow = (path) => filesTree.locator(`[data-path="${path}"]`);
+  const dialogButton = (name) => dialog.getByRole('button', { name, exact: true });
+  const titleIs = (text) => title.filter({ hasText: new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$`) }).waitFor();
+  const onDisk = (path) => readFileSync(join(project, ...path.split('/')), 'utf8');
+  const exists = (path) => existsSync(join(project, ...path.split('/')));
+
+  // W6-1: New… creates a valid workflow (in a new folder) and opens it.
+  await page.getByRole('button', { name: 'New…', exact: true }).click();
+  await dialog.getByLabel('Path in the project').fill('flows/w6-created.json');
+  await dialogButton('Create').click();
+  await titleIs('flows/w6-created.json');
+  const created = JSON.parse(onDisk('flows/w6-created.json'));
+  check(created.id === 'w6-created' && created.root?.type === 'Core.Sequence', `created ${JSON.stringify(created)}`);
+  await click('Validate');
+  await page.getByTestId('no-problems').waitFor();
+  step('W6-1. New…: created flows/w6-created.json (a valid workflow: the server finds no problems) and opened it');
+
+  // W6-2: Rename (F2 in the Files panel) moves the file on disk; the open document follows it.
+  await fileRow('flows/w6-created.json').click();
+  await page.keyboard.press('F2');
+  await dialog.getByLabel('Path in the project').fill('flows/w6-renamed.json');
+  await dialogButton('Rename').click();
+  await titleIs('flows/w6-renamed.json');
+  check(exists('flows/w6-renamed.json') && !exists('flows/w6-created.json'), 'renamed on disk');
+  step('W6-2. Rename (F2): flows/w6-created.json → flows/w6-renamed.json on disk; the open document followed');
+
+  // W6-3: Unsaved changes: the Studio asks in its own dialog; Cancel stays, Save saves and then opens the other file.
+  await page.getByLabel('Display name').fill('Renamed workflow root');
+  await titleIs('flows/w6-renamed.json •');
+  await fileRow('hello-world.json').dblclick();
+  await page.getByRole('dialog', { name: 'Unsaved changes' }).waitFor();
+  await dialogButton('Cancel').click();
+  await titleIs('flows/w6-renamed.json •');
+  await fileRow('hello-world.json').dblclick();
+  await dialogButton('Save').click();
+  await titleIs('hello-world.json');
+  check(JSON.parse(onDisk('flows/w6-renamed.json')).root.displayName === 'Renamed workflow root', 'saved before opening the other file');
+  step('W6-3. Unsaved changes: in-app dialog (no window.confirm); Cancel stayed, Save saved the file, then hello-world.json opened');
+
+  // W6-4: A save conflict (the file changed on disk meanwhile): Overwrite with mine.
+  await row('log-greeting').click();
+  await message.fill("'mine'");
+  const theirs = JSON.parse(onDisk('hello-world.json'));
+  writeFileSync(join(project, 'hello-world.json'), JSON.stringify({ ...theirs, version: '9.9.9' }, null, 2));
+  await click('Save');
+  await page.getByRole('dialog', { name: 'The file changed on disk' }).waitFor();
+  await page.screenshot({ path: join(results, 'studio-save-conflict.png') });
+  await dialogButton('Overwrite with mine').click();
+  await titleIs('hello-world.json');
+  check(onDisk('hello-world.json').includes("'mine'"), 'overwritten with this version');
+  step('W6-4. Save conflict (file changed on disk): dialog offered Reload / Overwrite / Save as; Overwrite wrote this version');
+
+  // W6-5: Save as… writes a new file, which becomes the open file; the original is unchanged.
+  const original5 = onDisk('hello-world.json');
+  await message.fill("'only in the copy'");
+  await click('Save as…');
+  await dialog.getByLabel('Path in the project').fill('copy-of-hello.json');
+  await dialogButton('Save').click();
+  await titleIs('copy-of-hello.json');
+  check(onDisk('copy-of-hello.json').includes("'only in the copy'") && onDisk('hello-world.json') === original5, 'save as kept the original');
+  step('W6-5. Save as…: copy-of-hello.json has the edit and is open; hello-world.json is unchanged');
+
+  // W6-6: Crash recovery: unsaved edits survive a reload of the page and are offered back.
+  await row('log-greeting').click();
+  await message.fill("'recover me'");
+  await titleIs('copy-of-hello.json •');
+  await page.waitForTimeout(1500); // the draft is written once typing pauses (1 s)
+  page.once('dialog', (beforeUnload) => beforeUnload.accept());
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await fileRow('copy-of-hello.json').dblclick();
+  await page.getByRole('dialog', { name: 'Recover unsaved changes' }).waitFor();
+  await dialogButton('Restore').click();
+  await titleIs('copy-of-hello.json •');
+  await row('log-greeting').click();
+  check((await message.inputValue()) === "'recover me'", `recovered ${await message.inputValue()}`);
+  await click('Save');
+  await titleIs('copy-of-hello.json');
+  step('W6-6. Crash recovery: after a page reload, the unsaved edit was offered back, restored and saved');
+
+  // W6-7: Delete (Delete key in the Files panel) after confirmation.
+  await fileRow('flows/w6-renamed.json').click();
+  await page.keyboard.press('Delete');
+  await page.getByRole('dialog', { name: 'Delete flows/w6-renamed.json' }).waitFor();
+  await dialogButton('Delete').click();
+  await fileRow('flows/w6-renamed.json').waitFor({ state: 'detached' });
+  check(!exists('flows/w6-renamed.json'), 'deleted on disk');
+  step('W6-7. Delete (Delete key): confirmed in the Studio; the file is gone from disk and from the Files panel');
+
+  // W6-8: Single-command start: only --open <file> (no --project, no --web). The server serves the Studio bundled
+  // next to it, makes the file's folder the project, and the Studio opens the file.
+  const singleLink = await startServer(['--open', join(project, 'hello-world.json')]);
+  await page.goto(singleLink);
+  await titleIs('hello-world.json');
+  check((await page.getByRole('combobox', { name: 'Project' }).inputValue()) === 'demo', 'the file’s folder is the project');
+  step('W6-8. Single command (MyRPA.Server --open <file>): bundled Studio served, the file’s folder became the project, the file opened');
 
   // The deleted stream answers the browser's automatic retry with a 404 (JSON), which Chromium reports on the console.
   const expected = (text) => /EventSource's response has a MIME type/.test(text);
