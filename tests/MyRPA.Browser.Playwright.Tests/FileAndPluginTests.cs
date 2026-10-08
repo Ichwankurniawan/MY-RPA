@@ -42,10 +42,17 @@ public sealed class FileTests(BrowserHost host) : IClassFixture<BrowserHost>
         Assert.Equal("a.txt:5,b.txt:2", result.Outputs["files"]);
     }
 
+    // An absolute path outside the file root on this OS ("C:/myrpa-outside.txt" or "/myrpa-outside.txt"): on Linux a
+    // Windows path like "C:/Windows/win.ini" is relative, so it would point inside the root.
+    public static TheoryData<string, string> RefusedUploads() => new()
+    {
+        { "../outside.txt", ErrorTypes.FileAccessDenied },
+        { Json(Path.GetPathRoot(Path.GetTempPath())!) + "myrpa-outside.txt", ErrorTypes.FileAccessDenied },
+        { "missing.txt", ErrorTypes.FileNotFound },
+    };
+
     [Theory]
-    [InlineData("../outside.txt", ErrorTypes.FileAccessDenied)]
-    [InlineData("C:/Windows/win.ini", ErrorTypes.FileAccessDenied)]
-    [InlineData("missing.txt", ErrorTypes.FileNotFound)]
+    [MemberData(nameof(RefusedUploads))]
     public async Task Upload_OutsideTheRootOrMissing_IsRefused(string path, string errorType)
     {
         var result = await host.RunAsync(host.Open() + ", " + Node("Browser.UploadFile", $"\"selector\": \"#file\", \"files\": \"'{path}'\""));
@@ -158,8 +165,9 @@ public sealed class BrowserPluginTests
     [Fact]
     public async Task Plugin_UnloadsAfterItsBrowsersAreClosed()
     {
-        // Observed behaviour (ADR-0016): after the browser and the plugin are disposed, a plugin context is released once a
-        // later load has happened; the most recent context may stay reachable a while longer, but they never accumulate.
+        // ADR-0016: after the browser and the plugin are disposed, the plugin context is released. The most recent context
+        // may stay reachable a while longer, and the System.Text.Json accessor cache needs later JSON work to let go of it
+        // (TouchSystemTextJsonCache), but contexts never accumulate.
         var first = await LoadRunAndDisposeAsync();
         var second = await LoadRunAndDisposeAsync();
 
@@ -168,6 +176,7 @@ public sealed class BrowserPluginTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             await Task.Delay(50, TestContext.Current.CancellationToken);
+            TouchSystemTextJsonCache(i);
         }
 
         Assert.False(first.IsAlive, "The first browser plugin context was not unloaded.");
@@ -189,6 +198,22 @@ public sealed class BrowserPluginTests
         await services.DisposeAsync();
         await plugins.DisposeAsync();
         return context;
+    }
+
+    public sealed record EvictionProbe(int Value);
+
+    /// <summary>
+    /// System.Text.Json keeps a process-wide cache of reflection-emitted property accessors. Its entries for the plugin's
+    /// (Playwright's) types reference the plugin's LoaderAllocator, and expired entries (about a second unused) are only
+    /// evicted when the cache is used again; until then they keep an unloaded plugin context alive (found with a heap
+    /// dump: the cache was the only strong root). Serializing with fresh options uses the cache, as any later JSON work in
+    /// the process would, so the test does not depend on unrelated activity. A leak of the plugin itself still fails it.
+    /// </summary>
+    private static void TouchSystemTextJsonCache(int value)
+    {
+#pragma warning disable CA1869 // A fresh options instance is the point: it rebuilds metadata through the shared cache.
+        _ = System.Text.Json.JsonSerializer.Serialize(new EvictionProbe(value), new System.Text.Json.JsonSerializerOptions());
+#pragma warning restore CA1869
     }
 
     private static PluginHostOptions Options(PluginSource source)

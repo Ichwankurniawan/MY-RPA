@@ -105,7 +105,7 @@ flowchart LR
 | Integrity | Each assembly is opened with read-only sharing, re-hashed, compared with the digest taken at discovery, and loaded from its path while still open (ADR-0016). A file changed after verification is refused. On Windows the open handle blocks writers, so the loaded file is the verified file; on Linux/macOS sharing is advisory and a small window remains. |
 | `Assembly.Location` | Real path inside the plugin directory, so libraries that find companion files next to themselves (Playwright's driver) work. Loaded files stay locked on Windows until the context unloads. |
 | Size limits | 2,048 files / 256 MB per plugin directory. Plugins that bundle native runtimes are built per platform (the Playwright plugin: 124 files, 104 MB on Windows x64). |
-| Unloadability | Contexts are collectible and unloaded after disposal. Unloading completes when nothing references plugin code; plugins that leave threads, timers or static roots behind cannot be unloaded. |
+| Unloadability | Contexts are collectible and unloaded after disposal. Unloading completes when nothing references plugin code; plugins that leave threads, timers or static roots behind cannot be unloaded. Known runtime delay: System.Text.Json caches reflection-emitted accessors for the plugin's types process-wide and evicts expired entries (about a second unused) only on its next use, so an unloaded context can stay in memory until later JSON work happens (found by heap dump in Phase 5; plugins unload only at shutdown today, so this costs nothing in practice). |
 | Banned APIs | Only `PluginLoadContext` may call `AssemblyLoadContext.LoadFrom*` or `Assembly.GetType(string)` (architecture tests). |
 
 ## Trust model (summary of ADR-0015)
