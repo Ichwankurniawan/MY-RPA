@@ -54,7 +54,7 @@ public sealed class ExecutionHostTests
 
         var started = await reader.ReadUntilAsync(e => e.Kind == ExecutionEventKinds.NodeStarted);
         Assert.Equal(ExecutionRunState.Running, handle.State);
-        h.Time.Advance(TimeSpan.FromSeconds(5));
+        await h.Time.AdvanceUntilAsync(TimeSpan.FromSeconds(5), handle.Completion);
         var completed = await reader.ReadUntilAsync(e => e.Kind == ExecutionEventKinds.ExecutionCompleted);
 
         Assert.Equal("wait", started.NodeId);
@@ -165,7 +165,7 @@ public sealed class ExecutionHostTests
         Assert.Equal(("execution.completed", "Cancelled"), (only.Kind, only.Status));
         Assert.Equal(ExecutionRunState.Queued, queued.State);
 
-        h.Time.Advance(TimeSpan.FromSeconds(1));
+        await h.Time.AdvanceUntilAsync(TimeSpan.FromSeconds(1), first.Completion);
         Assert.Equal(ExecutionStatus.Succeeded, (await first.Completion.WaitAsync(Token)).Status);
         Assert.Equal(ExecutionStatus.Succeeded, (await queued.Completion.WaitAsync(Token)).Status);
         Assert.Contains(await queued.ReadAllAsync(), e => e.Kind == ExecutionEventKinds.Log);
