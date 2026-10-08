@@ -70,6 +70,17 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   values. Containers collapse and expand (the card's toggle, ArrowLeft/ArrowRight, Expand all / Collapse all); a
   selection inside a collapsed container expands it. Zoom 50–200 % with Ctrl+= / Ctrl+- / Ctrl+0, the zoom buttons
   and fit to width (CSS `zoom` set through the CSSOM). While dragging, one transparent overlay carries the cursor.
+- **Flowcharts (G-2, ADR-0037):** a `Core.Flowchart` (any catalog activity with `childLayout: Graph`) shows its steps on
+  a canvas: step cards at their `layout` positions (placed in rows from the start step when they have none), the start
+  step marked, SVG arrows for transitions with their labels (or conditions). Drag a card to move it (one undo step);
+  drag from a card's handle to another step to add a transition; click an arrow to edit it; drop an activity from the
+  panel on the canvas to add a step there. Properties shows a selected step's **Transitions** (go to, condition, label,
+  check earlier/later, remove, add, Set as start step): the keyboard way to do everything the arrows do. **List view**
+  (on the flowchart's card) shows the steps as ordinary cards with their transitions. A step that holds activities
+  opens in the designer (**Open**, back with **Whole workflow**); selecting something inside a step opens it. Deleting
+  or moving a step out removes the transitions to it; pasted steps keep the transitions among themselves. Adding the
+  first flowchart (or transitions, or positions) to a 1.0 file raises it to 1.1 in the same undo step. While a run of
+  the file is shown, the arrow taken last is highlighted (from consecutive step events; there is no transition event).
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
@@ -176,7 +187,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 |---|---|
 | `src/types.ts` | Wire types (hand-written for W3, ADR-0028 decision 6) |
 | `src/preferences.ts` | Per-browser UI preferences (UX-2): favorites, recent activities, panel sizes; guarded storage, in-memory store for tests |
-| `src/icons.tsx` | The MyRPA icon set (UX-1, UX-3): 47 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
+| `src/icons.tsx` | The MyRPA icon set (UX-1, UX-3, G-2): 50 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
 | `src/api.ts` | Fetch client: anti-forgery header on state changes, ETags, error bodies |
 | `src/document.ts` | Document model: immutable v1.0 JSON, client keys (`WeakMap`), index, path-copying edits, structural edits and their refusals, lossy-file detection, editability |
 | `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation, stream status |
@@ -187,12 +198,13 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `src/PropertyEditors.tsx` | Properties: node and workflow editors, one per property kind, raw JSON; the selected card's inline editors |
 | `src/DataPanel.tsx` | Problems, Variables and Arguments tabs |
 | `src/placement.ts` | Targets (list index or slot), placing, moving across containers, insert/paste targets, the clipboard format and id renaming |
-| `src/dragdrop.ts` | Drag-and-drop by pointer hit-testing (no library), one indicator element and one cursor overlay |
+| `src/dragdrop.ts` | Drag-and-drop by pointer hit-testing (no library), one indicator element and one cursor overlay; drops on a flowchart canvas get a position |
+| `src/graph.ts` | Flowcharts (G-2): transition and step edits with refusal reasons, detaching steps, the 1.1 schema raise, canvas positions, arrow shapes, the transition taken last |
 | `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save; runs (validate first, run dialog, recent runs, Stop, per-frame event batching); files (new, rename, delete, save as, unsaved prompt, conflicts, recovery) |
 | `src/App.tsx` | Layout: command bar, Files panel, toolbox (Insert), the card designer (cards, card menu, collapse, zoom), properties, bottom tabs, Execution panel, run and file dialogs, status bar |
 | `scripts/harness.mjs` | Shared by the browser scripts: throwaway project, real server with `--web`, headless Chromium |
 | `scripts/smoke.mjs` | End-to-end smoke test |
-| `scripts/perf.mjs` | 3,000-node performance measurement |
+| `scripts/perf.mjs` | 3,000-node and 200-step flowchart performance measurement |
 
 The Web Studio owns the editing model. The server owns projects, files, validation and execution. The engine knows
 nothing about the client.
@@ -225,6 +237,12 @@ nothing about the client.
 - `PanelsUi.test.tsx` (UX-2): namespaces, favorites (pin, remember, unknown types ignored), recent activities (order,
   insert from there), the bottom tab strip (automatic tabs, keyboard), splitters (keyboard, limits, remembered sizes,
   the grid), hiding and showing panels, malformed stored settings.
+- `graph.test.ts` (G-2): adding (and refusing) transitions, editing, removing and reordering them, positions, the start
+  step, detaching a step, the schema raise, paste with renamed targets, canvas positions, arrow shapes, the transition
+  taken last.
+- `FlowchartUi.test.tsx` (G-2): the canvas (positioned tree items, start step, arrows and labels), the Transitions
+  editor and undo, Set as start step, deleting a step, moving a card and drawing an arrow by pointer, clicking an arrow,
+  the list view and keyboard, opening a step, the arrow taken in a run, the schema raise on insert.
 - `DesignerUi.test.tsx` (UX-3): card summaries and inline editors (editing on a card does not move the selection),
   card names, the card menu by keyboard, collapse with reveal of the selection, Expand all / Collapse all,
   ArrowLeft/ArrowRight, zoom state and limits.
@@ -250,10 +268,14 @@ nothing about the client.
   redo, delete, undo the delete, validate, save, reload, run with events and logs, an error case (validated before
   run; no run request), and W5: the run dialog with typed arguments, the running view (current node, start time,
   node states), a failure with Select failed node, cancellation (Cancelling… then Cancelled), two concurrent runs, and
-  a stream lost mid-run and resumed without duplicates. Also one SSE connection per page and no browser errors or CSP
-  violations. It writes screenshots to `web/studio/test-results/`.
+  a stream lost mid-run and resumed without duplicates; UX-3 cards and zoom; and G-2: a flowchart built in Chromium
+  (inserted into a 1.0 file, steps dropped on the canvas, an arrow drawn, transitions added by keyboard, a step moved,
+  saved as 1.1, run, the arrow taken highlighted, list view). Also one SSE connection per page and no browser errors or
+  CSP violations. It writes screenshots to `web/studio/test-results/`.
+- `scripts/a11y.mjs`: axe in every main state (including the flowchart canvas, its dark theme and the list view) and
+  keyboard-only passes (the tree; a flowchart's steps and transitions).
 - `scripts/perf.mjs`: measured, not asserted in CI (see ADR-0029 and ADR-0030 for the numbers), including typing
-  during an event-heavy run.
+  during an event-heavy run, and a 200-step flowchart (open, typing, moving a card, drawing an arrow).
 - Architecture test `WebStudioRulesTests`: no dnd-kit or other drag-and-drop framework in `package.json` or
   `package-lock.json`.
 

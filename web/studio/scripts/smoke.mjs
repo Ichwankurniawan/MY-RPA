@@ -528,6 +528,95 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check((await treeIds()) === before, `expanded again: ${await treeIds()} (was ${before})`);
   step('UX-3. Cards: the selected card edits inline (same value as Properties), summaries, CSS zoom 110% in Chromium, collapse and expand all');
 
+  // G-2: a flowchart built from scratch in Chromium, by pointer (toolbox drops on the canvas, a connection drawn from a
+  // step's handle, a step moved) and by keyboard (Properties: transitions); saved as 1.1, run, the arrow taken shown.
+  writeFileSync(join(project, 'g2.json'), `${JSON.stringify({ schemaVersion: '1.0', id: 'g2', name: 'G2', version: '1.0.0', variables: [{ name: 'n', type: 'Int', default: 0 }], root: { id: 'main', type: 'Core.Sequence' } }, null, 2)}\n`);
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await openWorkflow('g2.json');
+  const panel = page.getByRole('complementary', { name: 'Properties' });
+  const canvas = page.locator('.flow-canvas');
+  const stepCard = (id) => page.locator(`.flow-step[data-node-id="${id}"] > .node`);
+  const center = async (locator) => {
+    const box = await locator.boundingBox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const pointerDrag = async (from, to) => {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 12, from.y + 12, { steps: 3 });
+    await page.mouse.move(to.x, to.y, { steps: 10 });
+    await page.mouse.up();
+  };
+  await row('main').click();
+  await page.getByRole('button', { name: 'Insert Flowchart (Core.Flowchart)' }).click();
+  await page.getByRole('button', { name: 'Empty flowchart: insert the start step here' }).click();
+  await page.getByRole('button', { name: 'Insert Assign (Core.Assign)' }).click();
+  await panel.getByLabel(/^to/).fill('n');
+  await panel.getByLabel(/^value/).fill('n + 1');
+  check((await canvas.count()) === 1 && (await page.locator('.flow-step').count()) === 1, 'the flowchart shows its start step on a canvas');
+  await canvas.scrollIntoViewIfNeeded();
+  // A toolbox entry dropped on the canvas becomes a step where it was dropped.
+  const dropOnCanvas = async (name, dx, dy) => {
+    const entry = page.getByRole('button', { name, exact: true });
+    await entry.scrollIntoViewIfNeeded();
+    await canvas.scrollIntoViewIfNeeded();
+    const box = await canvas.boundingBox();
+    await pointerDrag(await center(entry), { x: box.x + dx, y: box.y + dy });
+  };
+  await dropOnCanvas('Insert Decision (Core.Decision)', 150, 260);
+  await stepCard('decision-1').waitFor({ timeout: 5000 }).catch(async (error) => {
+    await page.screenshot({ path: join(results, 'g2-drop-failed.png') });
+    throw new Error(`${error.message}; status: ${await page.locator('.segment.message').textContent().catch(() => '?')}`);
+  });
+  await dropOnCanvas('Insert Log (Core.Log)', 430, 260);
+  await stepCard('log-1').waitFor({ timeout: 5000 });
+  await panel.getByLabel(/^message/).fill("'done after ' + n");
+  // Pointer: an arrow from assign-1 to decision-1, drawn from assign-1's handle.
+  await pointerDrag(await center(page.locator('.flow-step[data-node-id="assign-1"] .connect-handle')), await center(stepCard('decision-1')));
+  await page.locator('.flow-arrows g.arrow').first().waitFor({ state: 'attached', timeout: 5000 }).catch(async (error) => {
+    await page.screenshot({ path: join(results, 'g2-connect-failed.png') });
+    throw new Error(`${error.message}; status: ${await page.locator('.segment.message').textContent().catch(() => '?')}`);
+  });
+  // Keyboard way: Properties of decision-1, two transitions (the first with a condition).
+  await stepCard('decision-1').click();
+  if ((await selected()) !== 'decision-1') {
+    await page.screenshot({ path: join(results, 'g2-select-failed.png') });
+    const hit = await page.evaluate(async (box) => document.elementFromPoint(box.x, box.y)?.outerHTML.slice(0, 200), await center(stepCard('decision-1')));
+    throw new Error(`Check failed: clicked decision-1 but ${await selected()} is selected; element at its centre: ${hit}`);
+  }
+  await panel.getByLabel('Add a transition to').selectOption('assign-1');
+  await panel.getByRole('button', { name: 'Add transition', exact: true }).click();
+  await panel.getByRole('group', { name: /^Transition 1/ }).getByLabel('Condition').fill('n < 3');
+  await panel.getByLabel('Add a transition to').selectOption('log-1');
+  await panel.getByRole('button', { name: 'Add transition', exact: true }).click();
+  check((await page.locator('.flow-arrows g.arrow').count()) === 3, `three arrows: ${await page.locator('.flow-arrows g.arrow').count()}`);
+  // Pointer: move log-1 down by 160 px.
+  const logBefore = await stepCard('log-1').boundingBox();
+  await pointerDrag(await center(stepCard('log-1')), { x: logBefore.x + logBefore.width / 2, y: logBefore.y + logBefore.height / 2 + 160 });
+  const logAfter = await stepCard('log-1').boundingBox();
+  check(Math.abs(logAfter.y - logBefore.y - 160) < 2, `log-1 moved ${logAfter.y - logBefore.y} px`);
+  await page.getByTestId('status-validation').filter({ hasNotText: 'Checking' }).waitFor();
+  await click('Validate');
+  await page.getByTestId('status-validation').filter({ hasText: /No problems/ }).waitFor();
+  await page.keyboard.press('Control+s');
+  await title.filter({ hasText: /^g2\.json$/ }).waitFor();
+  const g2Saved = JSON.parse(readFileSync(join(project, 'g2.json'), 'utf8'));
+  const flow = g2Saved.root.children[0];
+  check(g2Saved.schemaVersion === '1.1', `saved schema ${g2Saved.schemaVersion}`);
+  check(JSON.stringify(flow.children.map((c) => [c.id, c.transitions ?? []])) === JSON.stringify([['assign-1', [{ to: 'decision-1' }]], ['decision-1', [{ to: 'assign-1', when: 'n < 3' }, { to: 'log-1' }]], ['log-1', []]]), `saved transitions ${JSON.stringify(flow.children)}`);
+  check(flow.children.every((c) => Number.isInteger(c.layout?.x ?? 0)) && typeof flow.children[2].layout?.y === 'number', 'positions saved as whole numbers');
+  await click('Run');
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  const taken = await page.locator('.flow-arrows g.arrow.taken').evaluateAll((gs) => gs.map((g) => g.dataset.arrow));
+  const decisionKey = await page.locator('.flow-step[data-node-id="decision-1"]').getAttribute('data-key');
+  check(JSON.stringify(taken) === JSON.stringify([`${decisionKey}:1`]), `arrow taken last ${JSON.stringify(taken)}`);
+  check((await page.locator('.events .log').allTextContents()).some((l) => l.includes('done after 3')), 'the flowchart looped three times');
+  await page.screenshot({ path: join(results, 'g2-flowchart.png') });
+  await page.getByRole('button', { name: 'List view', exact: true }).click();
+  check((await item('decision-1').locator('.transitions-summary').textContent()) === '→ assign-1 when n < 3→ log-1', 'the list view shows the transitions');
+  step('G-2. Flowchart built in Chromium: Flowchart inserted (file raised to 1.1), steps dropped on the canvas, an arrow drawn, transitions added by keyboard, a step moved; saved, valid, ran 3 loops; the arrow taken is highlighted; list view');
+
   // W6-8: Single-command start: only --open <file> (no --project, no --web). The server serves the Studio bundled
   // next to it, makes the file's folder the project, and the Studio opens the file.
   const singleLink = await startServer(['--open', join(project, 'hello-world.json')]);

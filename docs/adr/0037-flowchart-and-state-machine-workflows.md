@@ -124,6 +124,15 @@ Refinements made while implementing the engine slice ([plan](../architecture/gra
 - Corpus: `tests/corpus/diag-graph*.json`. Their expected placements are hand-written (the WPF Studio is archived),
   marked with `source`, and `CorpusDiagnosticsTests` checks them against the real CLI.
 
+## Implementation notes (G-2, 2026-10-08)
+- The keyboard-equivalent view (§5) is a flowchart's **List view** (its steps as designer cards with their
+  transitions) together with the **Transitions** editor in Properties (go to, condition, label, order, remove, add,
+  Set as start step). Canvas steps are tree items, so the tree's keyboard navigation reaches them in both views.
+- The Studio raises a 1.0 file to 1.1 in the same undo step that adds a graph container, transitions or a position
+  (`withGraphSchema` on every commit); it never lowers it.
+- Deleting a step, or moving it out of its flowchart, also removes the transitions that went to it (and its own);
+  pasted steps keep the transitions among themselves (renamed with their ids), others are dropped.
+
 ## Owner decisions (2026-10-08)
 1. Schedule: after the Studio UX slice (UX-1 to UX-3), before Phase 6.
 2. Format 1.1 (`transitions`, `layout`) and SDK 1.1 (`ChildLayout`, `ExecuteStepAsync`): approved.

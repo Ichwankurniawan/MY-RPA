@@ -1,9 +1,10 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { StudioContext, useStudio, useStudioState } from './context';
 import { BottomPanel } from './DataPanel';
 import { installDragAndDrop } from './dragdrop';
 import { Icon, type IconName } from './icons';
 import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel, type Step } from './document';
+import { arrowShape, arrowText, canvasPositions, canvasSize, isGraphActivity, isGraphNode, lastTaken, stepEntries, stepSize, transitionsOf, type Point } from './graph';
 import type { Position } from './placement';
 import { InlineProperties, PropertiesPanel } from './PropertyEditors';
 import {
@@ -539,10 +540,7 @@ const namespaceLabel = (namespace: string) => (namespace === 'Core' ? 'Built-in'
 
 function Toolbox() {
   const studio = useStudio();
-  const all = useStudioState((s) => s.activities);
-  // Graph containers (Core.Flowchart, ADR-0037) need the flowchart canvas, which comes with G-2: until then they are
-  // not offered here (a 1.1 file that has one still opens, validates, runs and round-trips).
-  const activities = useMemo(() => all.filter((a) => a.childLayout !== 'Graph'), [all]);
+  const activities = useStudioState((s) => s.activities);
   const catalog = useStudioState((s) => s.catalog);
   const favorites = useStudioState((s) => s.favorites);
   const recent = useStudioState((s) => s.recentActivities);
@@ -969,6 +967,9 @@ function WorkflowTree() {
   const showsRun = useStudioState((s) => s.treeShowsRun);
   const collapsed = useStudioState((s) => s.collapsed);
   const zoom = useStudioState((s) => s.zoom);
+  const scopeKey = useStudioState((s) => s.designerScope);
+  const graphLists = useStudioState((s) => s.graphLists);
+  const catalog = useStudioState((s) => s.catalog);
   const tree = useRef<HTMLUListElement>(null);
   const designer = useRef<HTMLElement>(null);
   const refocus = useRef(false);
@@ -990,6 +991,11 @@ function WorkflowTree() {
   useEffect(() => {
     tree.current?.style.setProperty('zoom', zoom === 1 ? '' : String(zoom));
   }, [zoom, document]);
+
+  // A graph container shows its steps on a canvas unless the user chose its list view (G-2).
+  const isCanvas = (node: JsonObject) => isGraphNode(node, catalog) && !graphLists.has(keyOf(node));
+  const scope = document === undefined || scopeKey === undefined ? undefined : indexDocument(document).byKey.get(scopeKey);
+  const inScope = (path: readonly Step[]) => scope === undefined || (path.length >= scope.path.length && JSON.stringify(path.slice(0, scope.path.length)) === JSON.stringify(scope.path));
 
   if (document === undefined) {
     return (
@@ -1018,11 +1024,12 @@ function WorkflowTree() {
       return;
     }
 
-    // Visible items only: the children of a collapsed container are skipped.
-    const visible = indexDocument(document).entries.filter((e) => !hiddenByCollapse(document, e.path, collapsed));
+    // Visible items only: inside the opened step, without the children of a collapsed container or of a canvas step.
+    const visible = indexDocument(document).entries.filter((e) => inScope(e.path) && !hiddenInDesigner(document, e.path, collapsed, isCanvas));
     const at = visible.findIndex((e) => e.key === selectedKey);
     const current = visible[at];
-    const expandable = current !== undefined && current.path.length > 0 && childSteps(current.node).length > 0;
+    const onCanvas = current !== undefined && current.path.length > 0 && isCanvas(nodeAt(document, current.path.slice(0, -1)));
+    const expandable = current !== undefined && current.path.length > 0 && !onCanvas && childSteps(current.node).length > 0;
     if (expandable && ((event.key === 'ArrowRight' && collapsed.has(current.key)) || (event.key === 'ArrowLeft' && !collapsed.has(current.key)))) {
       event.preventDefault();
       studio.toggleCollapsed(current.key);
@@ -1081,9 +1088,20 @@ function WorkflowTree() {
           </button>
         </div>
       </div>
+      {scope !== undefined && scope.path.length > 0 && (
+        <div className="scope-bar">
+          <button type="button" className="with-icon small" onClick={() => studio.closeScope()}>
+            <Icon name="chevron-left" size={14} />
+            <span>Whole workflow</span>
+          </button>
+          <span>
+            Showing <strong>{nodeLabel(scope.node, typeof scope.node.type === 'string' ? catalog.get(scope.node.type) : undefined)}</strong>, a flowchart step.
+          </span>
+        </div>
+      )}
       {/* While a run of this file is shown, nodes without a run state were not executed (styled as such). */}
       <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown} className={showsRun ? 'shows-run' : undefined}>
-        {isObject(root) && <TreeNode node={root} depth={1} />}
+        {scope !== undefined ? <TreeNode key={scope.key} node={scope.node} depth={1} /> : isObject(root) && <TreeNode node={root} depth={1} />}
       </ul>
       <div className="zoom-controls" role="toolbar" aria-label="Zoom">
         <button type="button" onClick={() => studio.setZoom(zoom - zoomLimits.step)} disabled={zoom <= zoomLimits.min} aria-label="Zoom out" title="Zoom out (Ctrl+-)">
@@ -1103,14 +1121,14 @@ function WorkflowTree() {
   );
 }
 
-/** Whether a node is inside a collapsed container (any container above it), so it is not shown. */
-function hiddenByCollapse(document: JsonObject, path: readonly Step[], collapsed: ReadonlySet<string>): boolean {
-  if (collapsed.size === 0) {
-    return false;
-  }
-
+/**
+ * Whether a node is not shown in the designer: inside a collapsed container (any container above it), or inside a
+ * flowchart step on a canvas (a step shows only its card there; Open shows its contents).
+ */
+function hiddenInDesigner(document: JsonObject, path: readonly Step[], collapsed: ReadonlySet<string>, isCanvas: (node: JsonObject) => boolean): boolean {
   for (let depth = 0; depth < path.length; depth++) {
-    if (collapsed.has(keyOf(nodeAt(document, path.slice(0, depth))))) {
+    const ancestor = nodeAt(document, path.slice(0, depth));
+    if (collapsed.has(keyOf(ancestor)) || (depth + 1 < path.length && isCanvas(ancestor))) {
       return true;
     }
   }
@@ -1223,6 +1241,8 @@ const typeIcons: Record<string, IconName> = {
   'Core.Log': 'log',
   'Core.Delay': 'recent',
   'Core.InvokeWorkflow': 'invoke',
+  'Core.Flowchart': 'flowchart',
+  'Core.Decision': 'decision',
 };
 
 const activityIcon = (type: string | undefined): IconName => (type === undefined ? 'activity' : (typeIcons[type] ?? (type.startsWith('Browser.') ? 'browser' : 'activity')));
@@ -1259,7 +1279,7 @@ export function propertySummary(node: JsonObject, activity: ActivityDescriptor |
 // The inner function has its own name on purpose: a function expression named TreeNode would bind that name inside
 // itself, so the children below would render the un-memoized function and every card would re-render whenever the
 // root does (any document change: typing, undo, insert). Children must render the memo wrapper.
-const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonObject; depth: number; slot?: string }) {
+const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node: JsonObject; depth: number; slot?: string; step?: 'start' | 'step' }) {
   const studio = useStudio();
   const key = keyOf(node);
   const id = typeof node.id === 'string' ? node.id : undefined;
@@ -1269,9 +1289,9 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonO
   // the store's identity check stays exact. Fields are separated by NUL (never in ids, statuses or slot names).
   const view = useStudioState(
     (s) =>
-      `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}\0${s.collapsed.has(key) ? 1 : 0}`,
+      `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}\0${s.collapsed.has(key) ? 1 : 0}\0${s.graphLists.has(key) ? 1 : 0}`,
   );
-  const [selectedFlag, errorFlag, statusText, pickedText, collapsedFlag] = view.split('\0');
+  const [selectedFlag, errorFlag, statusText, pickedText, collapsedFlag, listFlag] = view.split('\0');
   const selected = selectedFlag === '1';
   const hasError = errorFlag === '1';
   const status = statusText === '' ? undefined : statusText;
@@ -1289,6 +1309,10 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonO
   const collapsed = collapsible && collapsedFlag === '1';
   const label = nodeLabel(node, activity);
   const summary = selected ? '' : propertySummary(node, activity);
+  // A flowchart (G-2) shows its steps on a canvas, or as this list of cards (the keyboard-first view).
+  const graph = isGraphActivity(activity);
+  const listView = listFlag === '1';
+  const transitions = step === undefined ? [] : transitionsOf(node);
 
   return (
     <li
@@ -1297,7 +1321,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonO
       aria-selected={selected}
       aria-expanded={children.length > 0 ? !collapsed : undefined}
       tabIndex={selected ? 0 : -1}
-      className={`item${container ? ' container-item' : ''}${selected ? ' selected' : ''}`}
+      className={`item${container ? ' container-item' : ''}${graph ? ' graph-item' : ''}${selected ? ' selected' : ''}`}
       data-key={key}
       data-node-id={id}
       onClick={(event) => {
@@ -1332,10 +1356,36 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonO
             {status !== undefined && <span className={`badge status-${status.toLowerCase()}`}>{status}</span>}
             {activity === undefined && type !== undefined && ' '}
             {activity === undefined && type !== undefined && <span className="badge">not in catalog</span>}
+            {step === 'start' && ' '}
+            {step === 'start' && <span className="badge start">start</span>}
           </span>
+          {graph && (
+            <button
+              type="button"
+              className="card-view small"
+              aria-pressed={listView}
+              title={listView ? 'Show the steps on the canvas' : 'Show the steps as a list (keyboard friendly)'}
+              onClick={(event) => {
+                event.stopPropagation();
+                studio.toggleGraphView(key);
+              }}
+            >
+              List view
+            </button>
+          )}
           {selected && <CardMenu label={label} />}
         </div>
         {selected ? <InlineProperties nodeKey={key} /> : summary !== '' && <p className="summary">{summary}</p>}
+        {transitions.length > 0 && (
+          <p className="transitions-summary">
+            {transitions.map((t, i) => (
+              <span key={i}>
+                → {typeof t.to === 'string' ? t.to : '?'}
+                {t.when !== undefined && ` when ${typeof t.when === 'string' ? t.when : JSON.stringify(t.when)}`}
+              </span>
+            ))}
+          </p>
+        )}
         {collapsed && (
           <p className="collapsed-note">
             {children.length} activit{children.length === 1 ? 'y' : 'ies'} inside (collapsed)
@@ -1343,7 +1393,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonO
         )}
         {(emptyList || missingSlots.length > 0 || prefixSlots.length > 0) && (
           <span className="zones">
-            {emptyList && <Zone parentKey={key} position={{ index: 0 }} label="Empty list: insert here" picked={picked} />}
+            {emptyList && <Zone parentKey={key} position={{ index: 0 }} label={graph ? 'Empty flowchart: insert the start step here' : 'Empty list: insert here'} picked={picked} />}
             {missingSlots.map((s) => (
               <Zone key={s.name} parentKey={key} position={{ slot: s.name }} label={`${s.name}: empty${s.required ? ' (required)' : ''}`} required={s.required} picked={picked} />
             ))}
@@ -1353,13 +1403,286 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonO
           </span>
         )}
       </div>
-      {children.length > 0 && !collapsed && (
+      {children.length > 0 && !collapsed && graph && !listView && <FlowchartCanvas graph={node} graphKey={key} depth={depth + 1} />}
+      {children.length > 0 && !collapsed && !(graph && !listView) && (
         <ul role="group" className={Array.isArray(node.children) && node.children.length > 0 ? 'flow' : 'branches'}>
-          {children.map((child) => (
-            <TreeNode key={keyOf(child.node)} node={child.node} depth={depth + 1} slot={child.slot} />
+          {children.map((child, i) => (
+            <TreeNode key={keyOf(child.node)} node={child.node} depth={depth + 1} slot={child.slot} step={graph && child.slot === undefined ? (i === 0 ? 'start' : 'step') : undefined} />
           ))}
         </ul>
       )}
+    </li>
+  );
+});
+
+/** A gesture on the canvas: moving a step, or drawing an arrow from one (G-2). */
+interface CanvasGesture {
+  readonly kind: 'move' | 'connect';
+  readonly key: string;
+  readonly pointerId: number;
+  readonly start: Point;
+  /** From the step's corner to the pointer, so the step does not jump under it. */
+  readonly offset: Point;
+  moved: boolean;
+}
+
+/**
+ * A flowchart's steps on a canvas (G-2, ADR-0037): step cards at their `layout` positions (placed in rows from the start
+ * step when they have none), SVG arrows for transitions (attributes only: CSP), drag a card to move it, drag from its
+ * handle to another card to connect them, click an arrow to edit it in Properties. Steps stay tree items, so the tree's
+ * keyboard navigation reaches them; the list view and the Transitions editor are the keyboard way to edit.
+ */
+const FlowchartCanvas = memo(function FlowchartCanvasView({ graph, graphKey, depth }: { graph: JsonObject; graphKey: string; depth: number }) {
+  const studio = useStudio();
+  const surface = useRef<HTMLDivElement>(null);
+  const gesture = useRef<CanvasGesture | undefined>(undefined);
+  const suppressClick = useRef(false);
+  const [drag, setDrag] = useState<{ key: string; at: Point } | undefined>();
+  const [draft, setDraft] = useState<{ from: string; to: Point } | undefined>();
+  const markers = useId().replace(/[^A-Za-z0-9_-]/g, '');
+  const selectedKey = useStudioState((s) => s.selectedKey);
+  const zoom = useStudioState((s) => s.zoom);
+  const editable = useStudioState((s) => editRefusal(s) === undefined);
+  const steps = useMemo(() => stepEntries(graph), [graph]);
+  const placed = canvasPositions(graph);
+  const stepIds = useMemo(() => new Set(steps.flatMap((s) => (s.id === undefined ? [] : [s.id]))), [steps]);
+  const taken = useStudioState((s) => (s.treeShowsRun ? lastTaken(currentRun(s)?.events ?? [], stepIds) : ''));
+  const keyById = new Map(steps.flatMap((s) => (s.id === undefined ? [] : [[s.id, s.key] as const])));
+  const position = (key: string): Point => (drag?.key === key ? drag.at : (placed.get(key) ?? { x: 0, y: 0 }));
+  const size = canvasSize(steps.map((s) => position(s.key)));
+  const [takenFrom, takenTo] = taken.split('\0');
+
+  useLayoutEffect(() => {
+    surface.current?.style.setProperty('width', `${size.width}px`);
+    surface.current?.style.setProperty('height', `${size.height}px`);
+  }, [size.width, size.height]);
+
+  const arrows = steps.flatMap((s) =>
+    transitionsOf(s.node).flatMap((t, index) => {
+      const toKey = typeof t.to === 'string' ? keyById.get(t.to) : undefined;
+      if (toKey === undefined) {
+        return [];
+      }
+
+      const shape = arrowShape(position(s.key), position(toKey), toKey === s.key);
+      const isTaken = s.id !== undefined && s.id === takenFrom && t.to === takenTo;
+      return [{ id: `${s.key}:${index}`, fromKey: s.key, index, ...shape, text: arrowText(t), selected: s.key === selectedKey, taken: isTaken }];
+    }),
+  );
+
+  const local = (event: { clientX: number; clientY: number }): Point => {
+    const rect = surface.current!.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom };
+  };
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    // A drag ends without a click when the pointer was released elsewhere: a new press is never part of it.
+    suppressClick.current = false;
+    const target = event.target as Element;
+    const item = target.closest<HTMLElement>('[data-step-key]');
+    if (event.button !== 0 || !editable || item === null || target.closest('button, input, select, textarea')) {
+      return;
+    }
+
+    const key = item.dataset.stepKey!;
+    const at = local(event);
+    const corner = position(key);
+    gesture.current = {
+      kind: target.closest('.connect-handle') ? 'connect' : 'move',
+      key,
+      pointerId: event.pointerId,
+      start: at,
+      offset: { x: at.x - corner.x, y: at.y - corner.y },
+      moved: false,
+    };
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
+    if (g === undefined || event.pointerId !== g.pointerId) {
+      return;
+    }
+
+    const at = local(event);
+    if (!g.moved && Math.hypot(at.x - g.start.x, at.y - g.start.y) < 4) {
+      return;
+    }
+
+    if (!g.moved) {
+      // Captured only once it is a drag: a plain click must still reach the step card (capture retargets the click).
+      g.moved = true;
+      try {
+        surface.current?.setPointerCapture?.(event.pointerId);
+      } catch {
+        // No active pointer with that id (a synthetic event): the gesture still works without capture.
+      }
+    }
+
+    if (g.kind === 'move') {
+      setDrag({ key: g.key, at: { x: Math.max(0, at.x - g.offset.x), y: Math.max(0, at.y - g.offset.y) } });
+    } else {
+      setDraft({ from: g.key, to: at });
+    }
+  };
+
+  const finish = (event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const g = gesture.current;
+    if (g === undefined || event.pointerId !== g.pointerId) {
+      return;
+    }
+
+    gesture.current = undefined;
+    setDrag(undefined);
+    setDraft(undefined);
+    if (!g.moved || cancelled) {
+      return;
+    }
+
+    suppressClick.current = true;
+    const at = local(event);
+    if (g.kind === 'move') {
+      studio.moveStep(g.key, { x: at.x - g.offset.x, y: at.y - g.offset.y });
+      return;
+    }
+
+    const under = event.currentTarget.ownerDocument.elementsFromPoint?.(event.clientX, event.clientY) ?? [];
+    const toKey = under.map((e) => e.closest<HTMLElement>('[data-step-key]')).find((e) => e !== null && surface.current?.contains(e))?.dataset.stepKey;
+    const toId = toKey === undefined ? undefined : steps.find((s) => s.key === toKey)?.id;
+    if (toId === undefined) {
+      studio.notify('Not connected: release the arrow on a step of the same flowchart.');
+    } else {
+      studio.addTransition(g.key, toId);
+    }
+  };
+
+  const draftFrom = draft === undefined ? undefined : position(draft.from);
+  return (
+    <div className="flow-canvas" data-drop-parent={graphKey} data-drop-index={steps.length} data-drop-canvas="">
+      <div
+        ref={surface}
+        className="flow-surface"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(event) => finish(event, false)}
+        onPointerCancel={(event) => finish(event, true)}
+        onClickCapture={(event) => {
+          if (suppressClick.current) {
+            suppressClick.current = false;
+            event.stopPropagation();
+            event.preventDefault();
+          }
+        }}
+      >
+        <svg className="flow-arrows" width={size.width} height={size.height} aria-hidden="true" focusable="false">
+          <defs>
+            {(['plain', 'selected', 'taken'] as const).map((kind) => (
+              <marker key={kind} id={`${markers}-${kind}`} className={`arrowhead ${kind}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0L10 5L0 10z" />
+              </marker>
+            ))}
+          </defs>
+          {arrows.map((a) => (
+            <g key={a.id} className={`arrow${a.selected ? ' selected' : ''}${a.taken ? ' taken' : ''}`} data-arrow={a.id}>
+              <path
+                className="arrow-hit"
+                d={a.d}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  studio.focusTransition(a.fromKey, a.index);
+                }}
+              />
+              <path className="arrow-line" d={a.d} markerEnd={`url(#${markers}-${a.taken ? 'taken' : a.selected ? 'selected' : 'plain'})`} />
+              {a.text !== '' && (
+                <text className="arrow-label" x={a.labelAt.x} y={a.labelAt.y - 4} textAnchor="middle">
+                  {a.text}
+                </text>
+              )}
+            </g>
+          ))}
+          {draft !== undefined && draftFrom !== undefined && (
+            <path className="arrow-draft" d={`M${draftFrom.x + stepSize.width / 2} ${draftFrom.y + stepSize.height} L${draft.to.x} ${draft.to.y}`} markerEnd={`url(#${markers}-selected)`} />
+          )}
+        </svg>
+        <ul role="group" className="flow-steps">
+          {steps.map((s, i) => (
+            <CanvasStep key={s.key} node={s.node} depth={depth} start={i === 0} at={position(s.key)} />
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+});
+
+/** One step card on the canvas, positioned through the CSSOM (CSP). A container step can be opened in the designer. */
+const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { node: JsonObject; depth: number; start: boolean; at: Point }) {
+  const studio = useStudio();
+  const item = useRef<HTMLLIElement>(null);
+  const key = keyOf(node);
+  const id = typeof node.id === 'string' ? node.id : undefined;
+  const type = typeof node.type === 'string' ? node.type : undefined;
+  const view = useStudioState((s) => `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}`);
+  const [selectedFlag, errorFlag, statusText] = view.split('\0');
+  const selected = selectedFlag === '1';
+  const hasError = errorFlag === '1';
+  const status = statusText === '' ? undefined : statusText;
+  const activity = useStudioState((s) => (type === undefined ? undefined : s.catalog.get(type)));
+  const label = nodeLabel(node, activity);
+  const summary = propertySummary(node, activity);
+  const inside = childSteps(node).length;
+
+  useLayoutEffect(() => {
+    item.current?.style.setProperty('left', `${at.x}px`);
+    item.current?.style.setProperty('top', `${at.y}px`);
+  }, [at.x, at.y]);
+
+  return (
+    <li
+      ref={item}
+      role="treeitem"
+      aria-level={depth}
+      aria-selected={selected}
+      tabIndex={selected ? 0 : -1}
+      className={`flow-step${selected ? ' selected' : ''}`}
+      data-key={key}
+      data-node-id={id}
+      data-step-key={key}
+      onClick={(event) => {
+        event.stopPropagation();
+        studio.select(key);
+      }}
+    >
+      <div className={`node step-card${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
+        <div className="card-header">
+          <Icon name={activityIcon(type)} size={16} />
+          <span className="title">
+            <span className="label">{label}</span> {id !== undefined && <span className="id">#{id}</span>}
+            {start && ' '}
+            {start && <span className="badge start">start</span>}
+            {hasError && ' '}
+            {hasError && <span className="badge error">error</span>}
+            {status !== undefined && ' '}
+            {status !== undefined && <span className={`badge status-${status.toLowerCase()}`}>{status}</span>}
+          </span>
+        </div>
+        {summary !== '' && <p className="summary">{summary}</p>}
+        {inside > 0 && (
+          <p className="step-inside">
+            {inside} activit{inside === 1 ? 'y' : 'ies'} inside{' '}
+            <button
+              type="button"
+              className="link"
+              aria-label={`Open ${label}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                studio.openStep(key);
+              }}
+            >
+              Open
+            </button>
+          </p>
+        )}
+      </div>
+      <span className="connect-handle" aria-hidden="true" title="Drag to another step to add a transition" />
     </li>
   );
 });

@@ -334,3 +334,45 @@ button.command[aria-pressed='false'] .icon { color: var(--muted); }
 .run-dialog::backdrop { background: rgb(0 0 0 / 0.35); }
 .run-dialog h2 { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text); }
 .dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Flowcharts (G-2, ADR-0037). The canvas scrolls inside its card; steps and the surface size are set through the
+   CSSOM (no inline styles: CSP); arrows are SVG attributes. Steps keep the card look of the designer. */
+.designer [role='tree'] > [role='treeitem'].graph-item { max-width: none; }
+.card-view { margin-left: auto; }
+.card-view[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); }
+.flow-canvas { overflow: auto; max-height: 72vh; margin: 8px 0 4px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--bg); }
+/* Pointer gestures move steps and draw arrows: the canvas never selects text. */
+.flow-surface { position: relative; min-width: 100%; min-height: 320px; user-select: none; }
+.flow-arrows { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.flow-steps { list-style: none; margin: 0; padding: 0; }
+.flow-step { position: absolute; width: 220px; height: 84px; margin: 0; }
+.flow-step > .step-card { box-sizing: border-box; width: 100%; height: 100%; overflow: hidden; margin: 0; cursor: grab; }
+.flow-step > .step-card .summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-step:focus-visible { outline: none; }
+.flow-step:focus-visible > .step-card { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step-inside { margin: 2px 0 0; font-size: 0.85em; color: var(--muted); }
+.connect-handle { position: absolute; left: 50%; bottom: -7px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 2px solid var(--accent); background: var(--panel); cursor: crosshair; }
+.flow-step:not(:hover):not(.selected) .connect-handle { opacity: 0.35; }
+.arrow-line { fill: none; stroke: var(--border-strong); stroke-width: 1.75; }
+.arrow-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+.arrow.selected .arrow-line { stroke: var(--accent); stroke-width: 2.5; }
+.arrow.taken .arrow-line { stroke: var(--ok); stroke-width: 2.5; }
+.arrow-draft { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; }
+.arrowhead path { fill: var(--border-strong); }
+.arrowhead.selected path { fill: var(--accent); }
+.arrowhead.taken path { fill: var(--ok); }
+.arrow-label { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; }
+.arrow.selected .arrow-label { fill: var(--accent-strong); }
+.badge.start { background: var(--accent-soft); color: var(--accent-strong); }
+.transitions-summary { margin: 2px 0 0; font-size: 0.85em; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.scope-bar { display: flex; align-items: center; gap: 10px; margin: 6px 0; padding: 6px 10px; border-radius: var(--radius); background: var(--info-bg); }
+.transitions { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.transitions h3 { margin: 0 0 4px; font-size: 1em; }
+.transition-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.transition-list fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; margin: 0; }
+.transition-list fieldset.invalid { border-color: var(--error); }
+.transition-list legend { font-weight: 600; padding: 0 4px; }
+.row-actions { display: flex; gap: 6px; margin-top: 4px; }
+.add-transition { display: flex; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.add-transition .field { flex: 1; }
+.start-step { margin: 4px 0 8px; }

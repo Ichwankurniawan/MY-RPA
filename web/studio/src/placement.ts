@@ -200,9 +200,38 @@ const baseName = (type: Json | undefined) => (typeof type === 'string' ? type.sl
 
 /**
  * Gives every pasted node (and descendant) whose id is already used — in the document or earlier in the pasted set — a
- * new unique id `<type name>-N` (as the WPF DraftClipboard), so pasting never creates duplicate ids.
+ * new unique id `<type name>-N` (as the WPF DraftClipboard), so pasting never creates duplicate ids. Flowchart
+ * transitions (ADR-0037) follow the renamed ids; a transition to a step that was not copied is dropped.
  */
 export function prepareForPaste(nodes: readonly JsonObject[], document: JsonObject): JsonObject[] {
+  const renames = new Map<string, string>();
+  const renamed = renameForPaste(nodes, document, renames);
+  const retarget = (node: JsonObject): JsonObject => {
+    const copy: Record<string, Json> = { ...node };
+    if (Array.isArray(node.transitions)) {
+      const kept = node.transitions.flatMap((t) => (isObject(t) && typeof t.to === 'string' && renames.has(t.to) ? [{ ...t, to: renames.get(t.to)! }] : []));
+      if (kept.length > 0) {
+        copy.transitions = kept;
+      } else {
+        delete copy.transitions;
+      }
+    }
+
+    if (Array.isArray(node.children)) {
+      copy.children = node.children.map((c) => (isObject(c) ? retarget(c) : c));
+    }
+
+    if (isObject(node.slots)) {
+      copy.slots = Object.fromEntries(Object.entries(node.slots).map(([k, v]) => [k, isObject(v) ? retarget(v) : v]));
+    }
+
+    return copy;
+  };
+  return renamed.map(retarget);
+}
+
+/** Renames as described above; `renames` receives every pasted node's original id → its id in the document. */
+function renameForPaste(nodes: readonly JsonObject[], document: JsonObject, renames: Map<string, string>): JsonObject[] {
   const used = new Set(indexDocument(document).entries.map((entry) => entry.node.id).filter((id): id is string => typeof id === 'string'));
   const next = (type: Json | undefined) => {
     const base = baseName(type);
@@ -216,6 +245,9 @@ export function prepareForPaste(nodes: readonly JsonObject[], document: JsonObje
   const rename = (node: JsonObject): JsonObject => {
     const id = typeof node.id === 'string' && node.id !== '' && !used.has(node.id) ? node.id : next(node.type);
     used.add(id);
+    if (typeof node.id === 'string' && !renames.has(node.id)) {
+      renames.set(node.id, id);
+    }
     const copy: Record<string, Json> = { ...node, id };
     if (Array.isArray(node.children)) {
       copy.children = node.children.map((c) => (isObject(c) ? rename(c) : c));

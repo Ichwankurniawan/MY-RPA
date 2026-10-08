@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { check, withStudio } from './harness.mjs';
+import { check, repo, withStudio } from './harness.mjs';
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 const step = (text) => console.log(`  ✓ ${text}`);
@@ -107,6 +107,34 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.keyboard.press('Control+s');
   await page.getByTestId('document-title').filter({ hasText: /^a11y\.json$/ }).waitFor();
   step('Keyboard only: arrows, insert by Enter, a slot zone by Enter, typing, Ctrl+X, Ctrl+V, Ctrl+Z, Ctrl+S');
+
+  // G-2: the flowchart canvas, its list view and the Transitions editor; then the keyboard way to edit transitions.
+  writeFileSync(join(project, 'flowchart.json'), readFileSync(join(repo, 'samples', 'flowchart.json'), 'utf8'));
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await filesTree.locator('[data-path="flowchart.json"]').dblclick();
+  await page.getByTestId('document-title').filter({ hasText: /^flowchart\.json$/ }).waitFor();
+  await page.locator('.flow-step[data-node-id="check"] > .node').click();
+  await scan('Flowchart canvas, a decision selected (Transitions in Properties)');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await scan('Dark theme, flowchart canvas');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByRole('button', { name: 'List view', exact: true }).click();
+  await scan('Flowchart list view');
+  const panel = page.getByRole('complementary', { name: 'Properties' });
+  await tree.locator('[role=treeitem][aria-selected=true]').focus();
+  await page.keyboard.press('ArrowDown');
+  check((await selected()) === 'wait', `arrow keys move through the steps: ${await selected()}`);
+  const addTo = panel.getByLabel('Add a transition to');
+  await addTo.focus();
+  await page.keyboard.press('ArrowDown'); // the first step: start
+  await panel.getByRole('button', { name: 'Add transition', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  check((await panel.getByRole('group', { name: /^Transition \d/ }).count()) === 2, 'a transition was added by keyboard');
+  await panel.getByRole('button', { name: 'Set as start step', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  check((await tree.locator('[role=treeitem][data-node-id="wait"] .badge.start').count()) === 1, 'Set as start step by keyboard');
+  step('Keyboard only (flowchart): arrows through the steps in the list view, a transition added and a start step set from Properties');
 
   const blocking = findings.filter((f) => f.impact === 'serious' || f.impact === 'critical');
   check(blocking.length === 0, `${blocking.length} serious or critical accessibility violation(s)`);

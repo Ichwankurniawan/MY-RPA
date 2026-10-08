@@ -27,6 +27,24 @@ import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Js
 import { isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 import {
+  addTransition,
+  addTransitionRefusal,
+  asListNodes,
+  asPastedSteps,
+  detachStep,
+  graphParentPath,
+  isGraphNode,
+  moveTransition,
+  moveTransitionRefusal,
+  removeTransition,
+  setLayout,
+  setStart,
+  setStartRefusal,
+  updateTransition,
+  withGraphSchema,
+  type Point,
+} from './graph';
+import {
   moveTo,
   moveToRefusal,
   parseNodes,
@@ -166,6 +184,12 @@ export interface StudioState {
   readonly panes: Panes;
   /** Containers whose children are hidden in the designer (UX-3; never an ancestor of the selection). */
   readonly collapsed: ReadonlySet<string>;
+  /** Graph containers (by key) shown as a list of steps instead of the canvas (G-2): the keyboard-first view. */
+  readonly graphLists: ReadonlySet<string>;
+  /** The node the designer shows in place of the whole workflow (a flowchart step opened from the canvas, G-2). */
+  readonly designerScope?: string;
+  /** A transition to focus in Properties (an arrow was clicked on the canvas); `seq` repeats the request. */
+  readonly transitionFocus?: { readonly key: string; readonly index: number; readonly seq: number };
   /** The designer's zoom (UX-3): 1 is 100 %. */
   readonly zoom: number;
 }
@@ -454,7 +478,23 @@ export function deleteRefusalOf(state: StudioState): string | undefined {
 /** Why the selected node cannot move up (-1) or down (+1) now (undefined when it can). */
 export function moveRefusalOf(state: StudioState, delta: -1 | 1): string | undefined {
   const path = selectedPath(state);
+  if (path !== undefined && state.document !== undefined && graphParentPath(state.document, path, state.catalog) !== undefined) {
+    return 'Steps of a flowchart are placed on its canvas, and their order does not matter (except the start step: use Set as start step).';
+  }
+
   return editRefusal(state) ?? (path === undefined ? 'Select an activity to move.' : moveRefusal(state.document!, path, delta));
+}
+
+/** Why a transition from the step with `key` to the step with id `to` cannot be added now (undefined when it can). */
+export function addTransitionRefusalOf(state: StudioState, key: string, to: string): string | undefined {
+  const entry = state.document ? indexDocument(state.document).byKey.get(key) : undefined;
+  return editRefusal(state) ?? (entry === undefined ? 'That step no longer exists.' : addTransitionRefusal(state.document!, entry.path, to, state.catalog));
+}
+
+/** Why the step with `key` cannot become the start step now (undefined when it can). */
+export function setStartRefusalOf(state: StudioState, key: string): string | undefined {
+  const entry = state.document ? indexDocument(state.document).byKey.get(key) : undefined;
+  return editRefusal(state) ?? (entry === undefined ? 'That step no longer exists.' : setStartRefusal(state.document!, entry.path, state.catalog));
 }
 
 export class Studio {
@@ -494,6 +534,7 @@ export class Studio {
       outputTab: 'problems',
       panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
       collapsed: new Set(),
+      graphLists: new Set(),
       zoom: 1,
       connection: 'connecting',
       activities: [],
@@ -642,6 +683,8 @@ export class Studio {
         diagnostics: undefined,
         validated: undefined,
         errorNodeKeys: new Set(),
+        designerScope: undefined,
+        transitionFocus: undefined,
         dialog: draft ? { kind: 'recover', path, savedAt: draft.savedAt, stale: draft.etag !== etag } : undefined,
         message: opened.readOnlyReason ? `Opened ${path} read-only: ${opened.readOnlyReason}` : `Opened ${path}.`,
       });
@@ -732,10 +775,14 @@ export class Studio {
     }
   }
 
-  /** The selection is never hidden: containers above it are expanded (after a select, an insert, a paste, an undo…). */
+  /**
+   * The selection is never hidden (after a select, an insert, a paste, an undo…): containers above it are expanded, and
+   * a node inside a flowchart step shown on a canvas is shown by opening that step (G-2); a selection outside the opened
+   * step closes it.
+   */
   private revealSelection(): void {
-    const { document, selectedKey, collapsed } = this.state;
-    if (document === undefined || selectedKey === undefined || collapsed.size === 0) {
+    const { document, selectedKey, collapsed, designerScope, catalog, graphLists } = this.state;
+    if (document === undefined || selectedKey === undefined || selectedKey === workflowKey) {
       return;
     }
 
@@ -744,10 +791,126 @@ export class Studio {
       return;
     }
 
-    const ancestors = Array.from({ length: path.length }, (_, depth) => keyOf(nodeAt(document, path.slice(0, depth))));
-    if (ancestors.some((key) => collapsed.has(key))) {
-      this.store.set({ collapsed: new Set([...collapsed].filter((key) => !ancestors.includes(key))) });
+    const ancestors = Array.from({ length: path.length }, (_, depth) => nodeAt(document, path.slice(0, depth)));
+    const ancestorKeys = ancestors.map(keyOf);
+    if (ancestorKeys.some((key) => collapsed.has(key))) {
+      this.store.set({ collapsed: new Set([...collapsed].filter((key) => !ancestorKeys.includes(key))) });
     }
+
+    // The deepest ancestor that is a step on a canvas (its parent is a graph container not shown as a list).
+    let canvasStep: string | undefined;
+    for (let depth = 1; depth < ancestors.length; depth++) {
+      const parent = ancestors[depth - 1];
+      if (isGraphNode(parent, catalog) && !graphLists.has(keyOf(parent))) {
+        canvasStep = ancestorKeys[depth];
+      }
+    }
+
+    const scope = canvasStep ?? (designerScope !== undefined && (designerScope === selectedKey || ancestorKeys.includes(designerScope)) ? designerScope : undefined);
+    if (scope !== designerScope) {
+      this.store.set({ designerScope: scope });
+    }
+  }
+
+  // Flowcharts (G-2, ADR-0037). Every edit is one undo step; refusals are said, never half-applied.
+
+  /** Shows a graph container's steps as a list (keyboard-first) or on the canvas. */
+  toggleGraphView(key: string): void {
+    const graphLists = new Set(this.state.graphLists);
+    if (!graphLists.delete(key)) {
+      graphLists.add(key);
+    }
+
+    this.store.set({ graphLists });
+    this.revealSelection();
+  }
+
+  /** Shows a flowchart step (for example a Sequence) in the designer in place of the whole workflow, and selects it. */
+  openStep(key: string): void {
+    this.store.set({ designerScope: key });
+    this.select(key);
+  }
+
+  /** Shows the whole workflow again; the opened step stays selected. */
+  closeScope(): void {
+    this.store.set({ designerScope: undefined });
+  }
+
+  /** Selects a step and asks Properties to focus one of its transitions (an arrow was clicked). */
+  focusTransition(key: string, index: number): void {
+    this.select(key);
+    this.store.set({ transitionFocus: { key, index, seq: (this.state.transitionFocus?.seq ?? 0) + 1 } });
+  }
+
+  private graphEdit(key: string, label: string, apply: (document: JsonObject, path: readonly Step[]) => JsonObject, mergeKey?: string): boolean {
+    const { document } = this.state;
+    const entry = document ? indexDocument(document).byKey.get(key) : undefined;
+    const refusal = editRefusal(this.state) ?? (entry === undefined ? 'That step no longer exists.' : undefined);
+    if (refusal !== undefined) {
+      this.say(`Cannot edit: ${refusal}`);
+      return false;
+    }
+
+    this.commit(apply(document!, entry!.path), this.state.selectedKey, label, mergeKey);
+    return true;
+  }
+
+  /** Adds a transition from the step with `key` to its sibling with id `to` (checked after its existing ones). */
+  addTransition(key: string, to: string): void {
+    const refusal = addTransitionRefusalOf(this.state, key, to);
+    if (refusal !== undefined) {
+      this.say(`Cannot connect: ${refusal}`);
+      return;
+    }
+
+    const from = nodeIdOf(this.state.document!, key);
+    if (this.graphEdit(key, `Connect ${from} to ${to}`, (document, path) => addTransition(document, path, to))) {
+      this.say(`Connected ${from} to ${to}.`);
+    }
+  }
+
+  /** Edits a transition's target, condition or label; typing in one field merges into one undo step. */
+  editTransition(key: string, index: number, changes: { readonly to?: string; readonly when?: string; readonly label?: string }): void {
+    const field = Object.keys(changes).join(',');
+    this.graphEdit(key, `Edit transition ${index + 1}`, (document, path) => updateTransition(document, path, index, changes), `transition:${key}:${index}:${field}`);
+  }
+
+  removeTransitionAt(key: string, index: number): void {
+    if (this.graphEdit(key, `Remove transition ${index + 1}`, (document, path) => removeTransition(document, path, index))) {
+      this.say(`Removed transition ${index + 1} of ${nodeIdOf(this.state.document!, key)}.`);
+    }
+  }
+
+  /** Moves a transition earlier (-1) or later (+1): transitions are checked in order. */
+  moveTransitionAt(key: string, index: number, delta: -1 | 1): void {
+    const entry = this.state.document ? indexDocument(this.state.document).byKey.get(key) : undefined;
+    const refusal = entry === undefined ? 'That step no longer exists.' : moveTransitionRefusal(entry.node, index, delta);
+    if (refusal !== undefined) {
+      this.say(`Cannot move: ${refusal}`);
+      return;
+    }
+
+    this.graphEdit(key, `Move transition ${index + 1} ${delta < 0 ? 'up' : 'down'}`, (document, path) => moveTransition(document, path, index, delta));
+  }
+
+  /** Places a node on its flowchart's canvas (one undo step per drag). */
+  moveStep(key: string, at: Point): void {
+    this.graphEdit(key, `Move ${nodeIdOf(this.state.document!, key)} on the canvas`, (document, path) => setLayout(document, path, at.x, at.y));
+  }
+
+  /** Makes a step the start step of its flowchart. */
+  setStartStep(key: string): void {
+    const refusal = setStartRefusalOf(this.state, key);
+    if (refusal !== undefined) {
+      this.say(`Cannot set the start step: ${refusal}`);
+      return;
+    }
+
+    const document = this.state.document!;
+    const path = indexDocument(document).byKey.get(key)!.path;
+    const id = nodeIdOf(document, key);
+    this.commit(setStart(document, path).document, key, `Start at ${id}`);
+    this.say(`${id} is now the start step.`);
   }
 
   /** Shows a tab of the bottom panel. */
@@ -846,11 +1009,12 @@ export class Studio {
     const merge = mergeKey !== undefined && mergeKey === this.mergeKey && state.undo.length > 0;
     const undo = merge ? state.undo : [...state.undo, { document: state.document, selectedKey: state.selectedKey, label }].slice(-maxUndo);
     this.mergeKey = mergeKey;
-    this.store.set({ document: next, selectedKey, undo, redo: [] });
+    // A workflow that gains a flowchart (or transitions, or positions) declares format 1.1 in the same step (ADR-0037).
+    this.store.set({ document: withGraphSchema(next, state.catalog), selectedKey, undo, redo: [] });
   }
 
-  /** Inserts a new activity of `type` at the selection (see `insertionPoint`) and selects it. */
-  insertActivity(type: string, at?: Target): void {
+  /** Inserts a new activity of `type` at the selection (see `insertionPoint`), or at `at`, and selects it. */
+  insertActivity(type: string, at?: Target, layout?: Point): void {
     const state = this.state;
     const activity = state.catalog.get(type);
     const target = at ?? insertionTargetOf(state);
@@ -865,7 +1029,8 @@ export class Studio {
 
     const document = state.document!;
     const node = createNode(document, activity);
-    this.commit(place(document, target, node).document, keyOf(node), `Insert ${activity.displayName}`);
+    const placed = place(document, target, node);
+    this.commit(layout ? setLayout(placed.document, placed.path, layout.x, layout.y) : placed.document, keyOf(node), `Insert ${activity.displayName}`);
     this.rememberRecent(type);
     this.store.set({ insertTarget: undefined });
     this.say(`Inserted ${activity.displayName} as ${node.id as string}${'slot' in target.position ? ` into ${target.position.slot}` : ''}.`);
@@ -920,7 +1085,10 @@ export class Studio {
     }
 
     let document = state.document!;
-    const pasted = prepareForPaste(nodes, document);
+    // Into a flowchart, copied steps keep the transitions among themselves (shifted a little); elsewhere they lose them.
+    const intoGraph = isGraphNode(nodeAt(document, target.parentPath), state.catalog) && 'index' in target.position;
+    const renamed = prepareForPaste(nodes, document);
+    const pasted = intoGraph ? asPastedSteps(renamed) : asListNodes(renamed);
     let last: JsonObject | undefined;
     pasted.forEach((node, i) => {
       const at: Target = 'index' in target.position ? { parentPath: target.parentPath, position: { index: target.position.index + i } } : target;
@@ -950,8 +1118,11 @@ export class Studio {
     return editRefusal(state) ?? (entry === undefined ? 'That activity no longer exists.' : moveToRefusal(state.document!, entry.path, target, state.catalog));
   }
 
-  /** Moves the node with `key` (and its subtree) to `target` — across containers and into slots (W7). */
-  moveNodeTo(key: string, target: Target): void {
+  /**
+   * Moves the node with `key` (and its subtree) to `target` — across containers and into slots (W7). A flowchart step
+   * that leaves its flowchart loses its transitions and the ones that went to it; `layout` places it on a canvas.
+   */
+  moveNodeTo(key: string, target: Target, layout?: Point): void {
     const refusal = this.moveRefusalTo(key, target);
     const state = this.state;
     if (refusal !== undefined) {
@@ -960,7 +1131,12 @@ export class Studio {
     }
 
     const entry = indexDocument(state.document!).byKey.get(key)!;
-    const moved = moveTo(state.document!, entry.path, target, state.catalog);
+    const leavesGraph = graphParentPath(state.document!, entry.path, state.catalog) !== undefined && JSON.stringify(entry.path.slice(0, -1)) !== JSON.stringify(target.parentPath);
+    let moved = moveTo(leavesGraph ? detachStep(state.document!, entry.path) : state.document!, entry.path, target, state.catalog);
+    if (layout) {
+      moved = { document: setLayout(moved.document, moved.path, layout.x, layout.y), path: moved.path };
+    }
+
     const id = typeof entry.node.id === 'string' ? entry.node.id : 'the activity';
     if (moved.document !== state.document) {
       this.commit(moved.document, key, `Move ${id}`);
@@ -983,7 +1159,9 @@ export class Studio {
     const path = selectedPath(state)!;
     const id = nodeIdOf(document, state.selectedKey!);
     const next = selectionAfterDelete(document, path);
-    this.commit(removeNode(document, path), keyOf(next), `Delete ${id}`);
+    // A flowchart step takes the transitions that went to it along (ADR-0037: no transition may name a missing step).
+    const step = graphParentPath(document, path, state.catalog) !== undefined;
+    this.commit(removeNode(step ? detachStep(document, path) : document, path), keyOf(next), `Delete ${id}`);
     this.say(`Deleted ${id}.`);
   }
 

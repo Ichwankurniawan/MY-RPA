@@ -179,6 +179,57 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check(heavy.status.includes('Succeeded'), `the event-heavy run did not finish: ${heavy.status}`);
   const engineDuration = await page.getByTestId('run-elapsed').textContent();
 
+  // G-2: a 200-step flowchart on the canvas (a chain with a loop back every 10 steps, placed on a 10-column grid).
+  // Measured: open to interactive, typing in Properties with a step selected, each pointer move while moving a card,
+  // and each move while drawing an arrow (time to the next painted frame).
+  const steps = Array.from({ length: 200 }, (_, i) => ({
+    id: `s${i}`,
+    type: 'Core.Log',
+    properties: { message: `'step ${i}'` },
+    layout: { x: 40 + (i % 10) * 260, y: 40 + Math.floor(i / 10) * 150 },
+    transitions: i === 199 ? [] : i % 10 === 9 && i > 9 ? [{ to: `s${i - 9}`, when: 'false' }, { to: `s${i + 1}` }] : [{ to: `s${i + 1}` }],
+  }));
+  writeFileSync(join(project, 'flow-200.json'), JSON.stringify({ schemaVersion: '1.1', id: 'flow-200', name: 'Flow 200', version: '1.0.0', root: { id: 'flow', type: 'Core.Flowchart', properties: { maxSteps: 100000 }, children: steps } }, null, 2));
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await page.getByRole('combobox', { name: 'Workflow' }).selectOption('flow-200.json');
+  const flowOpenStart = Date.now();
+  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.locator('.flow-step[data-node-id="s199"]').waitFor();
+  const flowOpenMs = Date.now() - flowOpenStart;
+  check((await page.locator('.flow-arrows g.arrow').count()) === 217, `arrows: ${await page.locator('.flow-arrows g.arrow').count()}`);
+  await page.locator('.flow-step[data-node-id="s11"] > .node').click();
+  const flowKeystroke = await measure('keystroke');
+  const canvasGestures = await page.evaluate(async (count) => {
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    const pointer = (type, target, x, y) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 7, isPrimary: true, clientX: x, clientY: y }));
+    const surface = document.querySelector('.flow-surface');
+    const centre = (element) => {
+      const r = element.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const gesture = async (from) => {
+      const start = centre(from);
+      const times = [];
+      pointer('pointerdown', from, start.x, start.y);
+      for (let i = 1; i <= count; i++) {
+        const t = performance.now();
+        pointer('pointermove', surface, start.x + i * 3, start.y + i * 2);
+        await frame();
+        times.push(performance.now() - t);
+      }
+
+      pointer('pointerup', surface, start.x + count * 3, start.y + count * 2);
+      await frame();
+      return times;
+    };
+    const card = document.querySelector('.flow-step[data-node-id="s12"] > .node');
+    const move = await gesture(card);
+    const draw = await gesture(document.querySelector('.flow-step[data-node-id="s13"] .connect-handle'));
+    return { move, draw };
+  }, samples);
+  check(await page.locator('.flow-step[data-node-id="s12"]').evaluate((e) => e.style.left !== '560px'), 'the card move was committed');
+
   console.log(`3,001-node fixture, ${samples} samples per metric (production build, headless Chromium)`);
   console.log(`  Open to interactive (click Open → last node rendered, includes the file request): ${openMs} ms (target ≤ 1000)`);
   let within = openMs <= 1000 * tolerance;
@@ -208,6 +259,19 @@ await withStudio(async ({ project, page, startServer, problems }) => {
       `run shown as Succeeded after ${(heavy.totalMs / 1000).toFixed(1)} s (engine duration ${engineDuration}); long tasks: ${heavy.longTasks.length}` +
       (heavy.longTasks.length > 0 ? `, longest ${Math.max(...heavy.longTasks).toFixed(0)} ms` : ''),
   );
+
+  console.log('200-step flowchart on the canvas (G-2):');
+  console.log(`  Open to interactive (click Open → last step rendered): ${flowOpenMs} ms (target ≤ 1000)`);
+  within &&= flowOpenMs <= 1000 * tolerance;
+  for (const [name, times, target] of [
+    ['Property keystroke to paint (a step selected)', flowKeystroke.times, 50],
+    ['Moving a card (each pointer move to paint)', canvasGestures.move, 50],
+    ['Drawing an arrow (each pointer move to paint)', canvasGestures.draw, 50],
+  ]) {
+    const p95 = percentile(times, 95);
+    within &&= p95 <= target * tolerance;
+    console.log(`  ${name}: p50 ${percentile(times, 50).toFixed(1)} ms, p95 ${p95.toFixed(1)} ms (target p95 ≤ ${target})`);
+  }
 
   check(problems.length === 0, `browser errors: ${problems.join('; ')}`);
   check(within, 'a measurement is above its target');

@@ -4,8 +4,9 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useStudio, useStudioState } from './context';
-import { indexDocument, isObject } from './document';
-import { workflowKey } from './studio';
+import { indexDocument, isObject, nodeAt, type Step } from './document';
+import { graphParentPath, moveTransitionRefusal, stepsOf } from './graph';
+import { addTransitionRefusalOf, setStartRefusalOf, workflowKey } from './studio';
 import type { Diagnostic, Json, JsonObject, PropertyDescriptor } from './types';
 import { assignableNames, diagnosticTarget, jsonText, parseJsonText, setMetadata, type MetadataField } from './workflowData';
 
@@ -154,10 +155,12 @@ function NodeProperties() {
     return target.kind === 'node' && target.key === entry.key;
   });
   const idErrors = nodeDiagnostics.filter((d) => d.path.endsWith('.id'));
+  // Problems of a transition are shown on its row in the Transitions section (G-2), not in the node's list.
   const general = nodeDiagnostics.filter((d) => {
     const target = diagnosticTarget(d, validated);
-    return target.kind === 'node' && target.property === undefined && !d.path.endsWith('.id');
+    return target.kind === 'node' && target.property === undefined && !d.path.endsWith('.id') && !/\.transitions(\[|$)/.test(d.path);
   });
+  const graphPath = graphParentPath(document, entry.path, catalog);
   const disabled = readOnlyReason !== undefined;
   const names = assignableNames(document);
 
@@ -209,6 +212,9 @@ function NodeProperties() {
         />
       ))}
       {activity === undefined && !disabled && <AddRawProperty nodeKey={entry.key} existing={properties} />}
+      {graphPath !== undefined && (
+        <StepTransitions nodeKey={entry.key} node={node} graph={nodeAt(document, graphPath)} path={entry.path} disabled={disabled} diagnostics={nodeDiagnostics} />
+      )}
       {general.length > 0 && (
         <ul className="node-problems" aria-label="Problems of this node">
           {general.map((d, i) => (
@@ -219,6 +225,124 @@ function NodeProperties() {
         </ul>
       )}
     </>
+  );
+}
+
+/**
+ * A flowchart step's transitions (G-2, ADR-0037), in the order they are checked: the target step, the condition (an
+ * expression; empty means always) and the arrow's label, with buttons to reorder and remove; then Add a transition and
+ * Set as start step. This is the keyboard way to do everything the canvas does with arrows.
+ */
+function StepTransitions({ nodeKey, node, graph, path, disabled, diagnostics }: { nodeKey: string; node: JsonObject; graph: JsonObject; path: readonly Step[]; disabled: boolean; diagnostics: readonly Diagnostic[] }) {
+  const studio = useStudio();
+  const heading = useId();
+  const list = useRef<HTMLOListElement>(null);
+  const focus = useStudioState((s) => s.transitionFocus);
+  const [adding, setAdding] = useState('');
+  const addRefusal = useStudioState((s) => (adding === '' ? 'Choose the step to go to.' : addTransitionRefusalOf(s, nodeKey, adding)));
+  const startRefusal = useStudioState((s) => setStartRefusalOf(s, nodeKey));
+  const steps = stepsOf(graph).flatMap((s) => (typeof s.id === 'string' ? [s.id] : []));
+  const transitions = Array.isArray(node.transitions) ? node.transitions : [];
+  const at = (path.at(-1) as { children: number }).children;
+
+  useEffect(() => {
+    if (focus !== undefined && focus.key === nodeKey) {
+      list.current?.querySelector<HTMLElement>(`[data-transition="${focus.index}"] select`)?.focus();
+    }
+  }, [focus, nodeKey]);
+
+  return (
+    <section className="transitions" aria-labelledby={heading}>
+      <h3 id={heading}>Transitions</h3>
+      <p className="hint">After this step, the first transition whose condition is true (or that has none) is taken. When none is taken, the flowchart ends.</p>
+      <p className="start-step">
+        {at === 0 ? (
+          <span className="badge start">start</span>
+        ) : (
+          <button type="button" className="small" disabled={disabled || startRefusal !== undefined} title={startRefusal} onClick={() => studio.setStartStep(nodeKey)}>
+            Set as start step
+          </button>
+        )}
+      </p>
+      {transitions.length === 0 && <p className="hint">No transitions: the flowchart ends after this step.</p>}
+      {transitions.length > 0 && (
+        <ol ref={list} className="transition-list">
+          {transitions.map((t, i) => {
+            if (!isObject(t)) {
+              return null;
+            }
+
+            const to = typeof t.to === 'string' ? t.to : '';
+            const when = t.when === undefined ? '' : typeof t.when === 'string' ? t.when : JSON.stringify(t.when);
+            const label = typeof t.label === 'string' ? t.label : '';
+            const problems = diagnostics.filter((d) => d.path.includes(`.transitions[${i}]`));
+            const up = moveTransitionRefusal(node, i, -1);
+            const down = moveTransitionRefusal(node, i, 1);
+            return (
+              <li key={i} data-transition={i}>
+                <fieldset className={problems.length > 0 ? 'invalid' : undefined}>
+                  <legend>
+                    Transition {i + 1}
+                    {i === 0 && transitions.length > 1 ? ' (checked first)' : ''}
+                  </legend>
+                  <TargetSelect label="Go to" value={to} steps={steps} disabled={disabled} onChange={(value) => studio.editTransition(nodeKey, i, { to: value })} />
+                  <TextField label="Condition" value={when} hint="A Boolean expression; empty means always." disabled={disabled} errors={[]} code onChange={(text) => studio.editTransition(nodeKey, i, { when: text })} />
+                  <TextField label="Label" value={label} hint="Shown on the arrow." disabled={disabled} errors={[]} onChange={(text) => studio.editTransition(nodeKey, i, { label: text })} />
+                  {problems.length > 0 && <span className="field-error">{problemText(problems)}</span>}
+                  <span className="row-actions">
+                    <button type="button" className="small" aria-label={`Check transition ${i + 1} earlier`} disabled={disabled || up !== undefined} title={up} onClick={() => studio.moveTransitionAt(nodeKey, i, -1)}>
+                      Earlier
+                    </button>
+                    <button type="button" className="small" aria-label={`Check transition ${i + 1} later`} disabled={disabled || down !== undefined} title={down} onClick={() => studio.moveTransitionAt(nodeKey, i, 1)}>
+                      Later
+                    </button>
+                    <button type="button" className="small" aria-label={`Remove transition ${i + 1}`} disabled={disabled} onClick={() => studio.removeTransitionAt(nodeKey, i)}>
+                      Remove
+                    </button>
+                  </span>
+                </fieldset>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      <div className="add-transition">
+        <TargetSelect label="Add a transition to" value={adding} steps={steps} disabled={disabled} placeholder="Choose a step" onChange={setAdding} />
+        <button
+          type="button"
+          className="small"
+          disabled={disabled || addRefusal !== undefined}
+          title={addRefusal}
+          onClick={() => {
+            studio.addTransition(nodeKey, adding);
+            setAdding('');
+          }}
+        >
+          Add transition
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function TargetSelect({ label, value, steps, disabled, placeholder, onChange }: { label: string; value: string; steps: readonly string[]; disabled: boolean; placeholder?: string; onChange: (value: string) => void }) {
+  const id = useId();
+  // A target that is not a step (a validation error) stays visible so it can be corrected.
+  const options = value !== '' && !steps.includes(value) ? [value, ...steps] : steps;
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
+      <select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+        {placeholder !== undefined && <option value="">{placeholder}</option>}
+        {options.map((step) => (
+          <option key={step} value={step}>
+            {step}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

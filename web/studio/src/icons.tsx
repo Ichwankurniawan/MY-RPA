@@ -206,6 +206,21 @@ const paths = {
   ),
   'chevron-down': <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />,
   'chevron-right': <path d="M9.5 6.5l5.5 5.5-5.5 5.5" />,
+  'chevron-left': <path d="M14.5 6.5L9 12l5.5 5.5" />,
+  // G-2: a flowchart (two boxes joined by an arrow that loops back) and a decision (a diamond with two ways out).
+  flowchart: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="5" rx="1.5" />
+      <rect x="13.5" y="15.5" width="7" height="5" rx="1.5" />
+      <path d="M7 8.5v5.5a1.5 1.5 0 0 0 1.5 1.5h5M11.5 13l2 2.5-2 2.5M13.5 6h4a1.5 1.5 0 0 1 1.5 1.5v6" />
+    </>
+  ),
+  decision: (
+    <>
+      <path d="M12 3.5l6 6-6 6-6-6z" />
+      <path d="M6 9.5H3.5v9M18 9.5h2.5v9M12 15.5v5" />
+    </>
+  ),
   'expand-all': <path d="M7 4.5l5 5 5-5M7 14.5l5 5 5-5" />,
   'collapse-all': <path d="M7 9.5l5-5 5 5M7 19.5l5-5 5 5" />,
 } satisfies Record<string, ReactNode>;

@@ -5,6 +5,7 @@
 // (and one undo step) happens on drop. Keyboard equivalents: Cut/Paste, Move up/down, and the empty-slot zones.
 
 import { indexDocument } from './document';
+import { stepSize, type Point } from './graph';
 import type { Target } from './placement';
 import type { Studio } from './studio';
 
@@ -62,6 +63,13 @@ function check(studio: Studio, target: Target, element: HTMLElement, edge: DropC
   return { target, refusal, element, edge };
 }
 
+/** Where a step dropped at the pointer goes on a canvas: centred on the pointer, in canvas units (the designer may be zoomed). */
+function canvasPoint(canvas: HTMLElement, event: PointerEvent, zoom: number): Point {
+  const surface = canvas.querySelector<HTMLElement>('.flow-surface') ?? canvas;
+  const rect = surface.getBoundingClientRect();
+  return { x: Math.max(0, (event.clientX - rect.left) / zoom - stepSize.width / 2), y: Math.max(0, (event.clientY - rect.top) / zoom - stepSize.height / 2) };
+}
+
 /** Installs drag-and-drop on the Studio's root element; returns the uninstaller. */
 export function installDragAndDrop(root: HTMLElement, studio: Studio): () => void {
   const page = root.ownerDocument;
@@ -81,8 +89,8 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
   const under = (x: number, y: number) => page.elementsFromPoint(x, y).find((element) => element !== overlay && element !== indicator) ?? null;
 
   const sourceAt = (target: EventTarget | null): Source | undefined => {
-    // A card's own controls and its inline editors (UX-3) never start a drag.
-    if (!(target instanceof Element) || target.closest('input, textarea, select, .drop-zone, .inline-properties, .node button, [role="menu"]')) {
+    // A card's own controls and its inline editors (UX-3) never start a drag; a flowchart canvas moves its own steps (G-2).
+    if (!(target instanceof Element) || target.closest('input, textarea, select, .drop-zone, .inline-properties, .node button, [role="menu"], .flow-canvas')) {
       return undefined;
     }
 
@@ -125,6 +133,8 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
   };
 
   const onDown = (event: PointerEvent) => {
+    // A drag released where no click follows (for example over another element) must not swallow the next real click.
+    suppressClick = false;
     const source = event.button === 0 ? sourceAt(event.target) : undefined;
     press = source ? { source, x: event.clientX, y: event.clientY, pointerId: event.pointerId } : undefined;
   };
@@ -159,10 +169,12 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
       const { source } = press;
       const drop = candidate;
       if (drop?.target !== undefined && drop.refusal === undefined) {
+        // On a flowchart canvas the new step goes where it was dropped (G-2).
+        const at = drop.element.dataset.dropCanvas !== undefined ? canvasPoint(drop.element, event, studio.store.get().zoom) : undefined;
         if (source.kind === 'node') {
-          studio.moveNodeTo(source.key, drop.target);
+          studio.moveNodeTo(source.key, drop.target, at);
         } else {
-          studio.insertActivity(source.type, drop.target);
+          studio.insertActivity(source.type, drop.target, at);
         }
       } else {
         studio.notify(drop?.refusal ? `Not dropped: ${drop.refusal}` : 'Not dropped: drop on a gap between activities or on an empty slot.');

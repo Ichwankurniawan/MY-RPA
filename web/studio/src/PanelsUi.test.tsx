@@ -35,19 +35,6 @@ describe('Activity panel', () => {
     expect(within(panel).queryByRole('button', { name: 'Insert Log (Core.Log)' })).toBeNull();
   });
 
-  it('does not offer graph containers until the flowchart canvas exists (ADR-0037, G-2)', async () => {
-    class GraphCatalogApi extends FakeApi {
-      override async activities() {
-        return [...catalog, { type: 'Core.Flowchart', displayName: 'Flowchart', category: 'Control Flow', allowsChildren: true, childLayout: 'Graph' as const, properties: [], slots: [] }];
-      }
-    }
-
-    await renderStudio(memoryPreferences(), new GraphCatalogApi());
-
-    expect(screen.queryByRole('button', { name: 'Insert Flowchart (Core.Flowchart)' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Insert Log (Core.Log)' })).toBeTruthy();
-  });
-
   it('pins favorites at the top and remembers them per browser', async () => {
     const { preferences, state } = await renderStudio();
 

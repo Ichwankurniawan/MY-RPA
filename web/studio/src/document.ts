@@ -44,6 +44,12 @@ export function keyOf(node: JsonObject): string {
   return key;
 }
 
+/** Gives `replacement` the client key of `node` (an edit that rebuilds a node off the edited path keeps its identity). */
+export function carryKey(node: JsonObject, replacement: JsonObject): JsonObject {
+  keys.set(replacement, keyOf(node));
+  return replacement;
+}
+
 export function isObject(value: Json | undefined): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -1,6 +1,6 @@
 # Graph workflows — implementation plan (proposed)
 
-Status: **approved** (owner, 2026-10-08: "merge PR#7 to main,proceed G1"). G-1 done (2026-10-08); next: G-2. Implements [ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md)
+Status: **approved** (owner, 2026-10-08: "merge PR#7 to main,proceed G1"). G-1 and G-2 done (2026-10-08); next: G-3. Implements [ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md)
 (accepted): format 1.1, SDK 1.1, `Core.Flowchart` / `Core.Decision` first, then `Core.StateMachine` / `Core.State`.
 Follows the Studio UX slice (UX-1 to UX-3). Phase 6 is not part of this plan and still needs its own authorization.
 
@@ -74,6 +74,25 @@ draw an arrow, typing in Properties: p95 ≤ 50 ms) next to the existing 3,000-n
   is G-2; until then a 1.1 file opens and round-trips unchanged (transitions and layout are kept as data).
 - Validation: .NET 886/886 (Debug and Release), Studio Vitest 231/231, typecheck, smoke, manual (steps 1–11), accessibility (0 serious or critical), perf (all targets), `dotnet format` clean, Release build 0 warnings.
 - The Studio does not offer graph containers in the activity panel until G-2 (catalog `childLayout: Graph`).
+
+### G-2 result (2026-10-08)
+- Delivered as planned: the canvas (positions, auto-placement, arrows with labels, move, connect, click an arrow),
+  the Transitions editor in Properties (the keyboard way), a list view per flowchart, opening a container step with
+  breadcrumbs and a way back, the schema raise in the same undo step, step deletion and moves that remove dangling
+  transitions, paste that keeps transitions among the pasted steps, drops from the activity panel at the drop point,
+  and the arrow taken last during a run. G-1's "graph containers are not offered" filter is gone.
+- **Changed from the plan:** "Set as start step" lives in the Transitions section (Properties), not on the canvas card;
+  the keyboard view is the flowchart's List view (the existing cards, with each step's transitions), plus the
+  Transitions editor, rather than a separate table. Canvas steps are tree items, so the designer's keyboard navigation
+  and focus handling work unchanged.
+- **Bug found by the browser test (W7, latent):** a drag released where the browser sends no click (over another
+  element) left the "ignore the click after a drag" flag set, so the next real click was swallowed. Both the designer's
+  drag-and-drop and the canvas now clear it on every new press. The canvas also captures the pointer only once a press
+  becomes a drag (capture retargets the click away from the card).
+- Validation: Vitest 252/252, typecheck, smoke (new G-2 step in Chromium), manual (steps 1–11), accessibility (0
+  violations in all 12 states, including canvas, dark canvas and list view; keyboard passes), perf in two consecutive
+  runs: every 3,000-node target met; 200-step flowchart open 91–112 ms, typing p95 18 ms, card move p95 18–19 ms,
+  arrow drawing p95 19–22 ms (targets 1,000 / 50 / 50 / 50 ms). No .NET change.
 
 ## Order and delivery
 G-1 → G-2 → G-3, each on its own branch with its own PR, report and CI. G-2 starts from `main` after PR #7 (UX-3) is
