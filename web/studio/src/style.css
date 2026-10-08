@@ -1,23 +1,30 @@
-/* MyRPA Web Studio. Colors are tokens with a light and a dark theme (prefers-color-scheme); no inline styles (CSP). */
+/* MyRPA Web Studio (UX-1 theme). Colours are tokens with a light and a dark theme: the system's by default, or the one
+   chosen in View › Theme (data-theme on <html>). No inline styles (CSP). The accent is MyRPA teal. */
 :root {
-  --bg: #f4f5f8;
+  --bg: #f3f5f7;
   --panel: #ffffff;
-  --panel-2: #f9fafb;
-  --border: #d5d9e0;
-  --border-strong: #b8bec9;
-  --text: #1d2330;
-  --muted: #5b6475;
-  --accent: #2458d6;
+  --panel-2: #f7f9fa;
+  --chrome: #eaf0f2;
+  --border: #d4dbe0;
+  --border-strong: #b3bec6;
+  --text: #17222b;
+  --muted: #55616c;
+  --accent: #0b6e79;
+  --accent-strong: #08545d;
   --accent-text: #ffffff;
-  --selected: #dce6fb;
+  --accent-soft: #dcf0f1;
+  --selected: #d4eced;
   --error: #b42318;
-  --error-bg: #fde2df;
+  --error-bg: #fde3df;
   --ok: #116329;
   --ok-bg: #dcf3e2;
-  --info-bg: #e3ebff;
+  --info-bg: #e1f1f3;
   --warn: #8a5300;
   --warn-bg: #fff1d6;
-  --container: #f0f3fa;
+  --container: #eef4f5;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow: 0 1px 1px rgb(16 34 43 / 0.06);
   color-scheme: light;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
@@ -26,40 +33,72 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #15181e;
-    --panel: #1d2128;
-    --panel-2: #23282f;
-    --border: #353b45;
-    --border-strong: #4a5160;
-    --text: #e6e9ef;
-    --muted: #9aa3b2;
-    --accent: #6d9cff;
-    --accent-text: #0d1220;
-    --selected: #24365c;
+  :root:not([data-theme='light']) {
+    --bg: #12171b;
+    --panel: #1a2026;
+    --panel-2: #20272e;
+    --chrome: #161c21;
+    --border: #2f3942;
+    --border-strong: #46525d;
+    --text: #e4eaee;
+    --muted: #98a5b0;
+    --accent: #4fc4cf;
+    --accent-strong: #7fd7de;
+    --accent-text: #0a1a1d;
+    --accent-soft: #173539;
+    --selected: #1b3c41;
     --error: #ff8a7a;
     --error-bg: #4a1f1a;
     --ok: #6fd28c;
     --ok-bg: #1d3a26;
-    --info-bg: #1f2d4d;
+    --info-bg: #17343a;
     --warn: #f0c060;
     --warn-bg: #3d3018;
-    --container: #1a2030;
+    --container: #172128;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.35);
     color-scheme: dark;
   }
 }
 
+:root[data-theme='dark'] {
+  --bg: #12171b;
+  --panel: #1a2026;
+  --panel-2: #20272e;
+  --chrome: #161c21;
+  --border: #2f3942;
+  --border-strong: #46525d;
+  --text: #e4eaee;
+  --muted: #98a5b0;
+  --accent: #4fc4cf;
+  --accent-strong: #7fd7de;
+  --accent-text: #0a1a1d;
+  --accent-soft: #173539;
+  --selected: #1b3c41;
+  --error: #ff8a7a;
+  --error-bg: #4a1f1a;
+  --ok: #6fd28c;
+  --ok-bg: #1d3a26;
+  --info-bg: #17343a;
+  --warn: #f0c060;
+  --warn-bg: #3d3018;
+  --container: #172128;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; }
-h1 { font-size: 16px; margin: 0 12px 0 0; }
+h1 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: 0.01em; }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
 button, select, input, textarea { font: inherit; color: inherit; }
-button { padding: 4px 12px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--panel-2); cursor: pointer; }
+button { padding: 4px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel-2); cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: 0.55; cursor: default; }
 button.small { padding: 1px 8px; }
 button.link { padding: 0; border: none; background: none; color: var(--accent); text-decoration: underline; }
-select, input, textarea { background: var(--panel); border: 1px solid var(--border-strong); border-radius: 4px; }
+select, input, textarea { background: var(--panel); border: 1px solid var(--border-strong); border-radius: var(--radius); }
+.icon { flex: none; }
+.with-icon { display: inline-flex; align-items: center; gap: 6px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -67,18 +106,35 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
   display: grid;
   grid-template-columns: 240px 1fr 340px;
   grid-template-rows: auto minmax(0, 1fr) minmax(240px, 40vh) auto;
-  grid-template-areas: 'toolbar toolbar toolbar' 'toolbox designer properties' 'output output output' 'status status status';
+  grid-template-areas: 'commandbar commandbar commandbar' 'toolbox designer properties' 'output output output' 'status status status';
   height: 100vh;
 }
 
-.toolbar { grid-area: toolbar; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.toolbar label { display: flex; gap: 4px; align-items: center; color: var(--muted); }
+/* Command bar (UX-1): a title row, then groups of commands (icon above label) with a caption under each group. */
+.commandbar { grid-area: commandbar; background: var(--chrome); border-bottom: 1px solid var(--border); }
+.titlebar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--panel); }
+.titlebar label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.titlebar select { padding: 3px 6px; }
+.brand { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); margin-right: 6px; }
+.brand h1 { color: var(--text); }
 .document-title { flex: 1; font-weight: 600; min-width: 120px; }
+.commands { display: flex; flex-wrap: wrap; align-items: stretch; padding: 4px 6px 0; }
+.command-group { display: flex; flex-wrap: wrap; align-items: center; align-content: space-between; gap: 2px; padding: 0 8px; border-right: 1px solid var(--border); }
+.command-group:last-child { border-right: none; }
+.command-group .group-label { flex-basis: 100%; text-align: center; font-size: 11px; color: var(--muted); padding: 1px 0 3px; }
+button.command, label.command { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 52px; padding: 4px 6px; border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--text); font-size: 12px; line-height: 1.2; }
+button.command .icon { color: var(--accent); }
+button.command:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+button.command:active:not(:disabled) { background: var(--selected); }
+button.command:disabled .icon { color: var(--muted); }
+label.command { color: var(--accent); }
+label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
+.command-group .toolbar-status { align-self: center; font-size: 12px; padding: 0 6px; }
 .toolbox, .designer, .properties, .output, .connection { padding: 12px; overflow: auto; background: var(--panel); }
 /* The left column: project files above the activity catalog, each scrolling on its own. */
 .sidebar { grid-area: toolbox; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: var(--panel); }
 .sidebar > section, .sidebar > aside { padding: 12px; overflow: auto; min-height: 0; }
-.files { flex: 0 1 40%; border-bottom: 1px solid var(--border); }
+.files { flex: 0 1 40%; border-bottom: 1px solid var(--border); scroll-padding-top: 52px; }
 /* The heading and the New / Rename / Delete buttons stay in view while the file list scrolls. */
 .files-header { position: sticky; top: -12px; padding: 12px 0 8px; margin-top: -12px; background: var(--panel); z-index: 1; }
 /* Compact buttons keep New / Rename / Delete on one row; the bar's margin would fall outside the header's background. */
@@ -106,6 +162,9 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 
 /* Designer: activity cards; containers have a tinted boundary; nesting is indented with a guide line. */
 .designer { grid-area: designer; background: var(--bg); }
+.workflow-title { margin: 0 0 10px; }
+.workflow-name { margin: 0; font-size: 18px; font-weight: 650; }
+.workflow-description { margin: 2px 0 0; color: var(--muted); white-space: pre-wrap; }
 .breadcrumbs ol { display: flex; flex-wrap: wrap; gap: 0 4px; list-style: none; margin: 0 0 8px; padding: 0; color: var(--muted); }
 .breadcrumbs li { display: flex; gap: 4px; align-items: baseline; }
 .breadcrumbs .slot { color: var(--accent); }
@@ -114,7 +173,7 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 [role='group'] { padding-left: 20px; border-left: 1px dashed var(--border-strong); margin-left: 10px; }
 [role='treeitem'] { outline: none; }
 [role='treeitem']:focus-visible > .node { outline: 2px solid var(--accent); }
-.node { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 6px 10px; margin: 4px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); cursor: pointer; box-shadow: 0 1px 1px rgb(0 0 0 / 0.04); }
+.node { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 6px 10px; margin: 4px 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; box-shadow: var(--shadow); }
 .node.container { background: var(--container); border-left: 3px solid var(--border-strong); }
 .node.selected { background: var(--selected); border-color: var(--accent); }
 .node.has-error { border-color: var(--error); }
@@ -179,7 +238,14 @@ input.code, textarea.code { font-family: ui-monospace, Consolas, monospace; }
 .rows-editor .field-error { display: block; font-size: 12px; }
 .toolbar-status { color: var(--muted); }
 .connection { grid-area: designer / toolbox / output / properties; }
-.statusbar { grid-area: status; margin: 0; padding: 4px 12px; border-top: 1px solid var(--border); color: var(--muted); min-height: 1.8em; background: var(--panel); }
+/* Status bar (UX-1): segments for connection, file, validation and run, then the announced message. */
+/* One line of fixed height with strict containment: its text changes on every edit (file state, validation), and must
+   never make the page grid lay out the designer again (perf: keystroke p95 ≤ 50 ms on 3,000 nodes). */
+.statusbar { grid-area: status; display: flex; flex-wrap: nowrap; align-items: center; height: 26px; contain: strict; overflow: hidden; white-space: nowrap; margin: 0; padding: 0 6px; border-top: 1px solid var(--border); color: var(--muted); background: var(--chrome); font-size: 12px; }
+.statusbar .segment { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-right: 1px solid var(--border); margin: 0; }
+.statusbar .segment.message { border-right: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; }
+.statusbar .connection-ready .icon, .statusbar .validation-clean .icon { color: var(--ok); }
+.statusbar .connection-failed .icon, .statusbar .connection-signed-out .icon, .statusbar .validation-errors { color: var(--error); }
 .hint { color: var(--muted); }
 .notice { border: 1px solid var(--warn); background: var(--warn-bg); color: var(--text); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
 .notice ul { margin: 4px 0 0; padding-left: 18px; }

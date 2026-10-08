@@ -2,6 +2,7 @@ import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, 
 import { StudioContext, useStudio, useStudioState } from './context';
 import { DataPanel } from './DataPanel';
 import { installDragAndDrop } from './dragdrop';
+import { Icon, type IconName } from './icons';
 import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel } from './document';
 import type { Position } from './placement';
 import { PropertiesPanel } from './PropertyEditors';
@@ -185,13 +186,116 @@ function ConnectionPanel() {
   );
 }
 
+/** Connection, file, validation and run at a glance; the message part is the announced live region. */
 function StatusBar() {
   const message = useStudioState((s) => s.message);
+  const connection = useStudioState((s) => s.connection);
+  const path = useStudioState((s) => s.file?.path);
+  const readOnly = useStudioState((s) => s.file?.readOnlyReason !== undefined);
+  const dirty = useStudioState(isDirty);
+  const validation = useStudioState(validationSummary);
+  const run = useStudioState(currentRun);
+  const connectionText = connection === 'ready' ? 'Connected' : connection === 'connecting' ? 'Connecting…' : connection === 'signed-out' ? 'Signed out' : 'Offline';
   return (
-    <p className="statusbar" role="status" aria-live="polite">
-      {message}
-    </p>
+    <footer className="statusbar">
+      <span className={`segment connection-${connection}`}>
+        <Icon name="connected" size={14} /> {connectionText}
+      </span>
+      {path !== undefined && (
+        <span className="segment" data-testid="status-file">
+          <Icon name="file" size={14} /> {path} — {readOnly ? 'Read-only' : dirty ? 'Unsaved changes' : 'Saved'}
+        </span>
+      )}
+      {validation !== undefined && (
+        <span className={`segment validation-${validation.state}`} data-testid="status-validation">
+          <Icon name={validation.state === 'errors' ? 'problems' : 'check'} size={14} /> {validation.text}
+        </span>
+      )}
+      {run && (
+        <span className="segment">
+          <Icon name="run" size={14} /> {statusLabel(run)}
+        </span>
+      )}
+      <p className="segment message" role="status" aria-live="polite">
+        {message}
+      </p>
+    </footer>
   );
+}
+
+/** What the status bar says about validation. Results are shared objects, so the store's identity check stays exact. */
+const validationStates = {
+  none: { state: 'none', text: 'Not validated' },
+  checking: { state: 'checking', text: 'Checking…' },
+  clean: { state: 'clean', text: 'No problems' },
+} as const;
+const errorSummaries = new Map<number, { state: 'errors'; text: string }>();
+
+export function validationSummary(state: StudioState): { state: string; text: string } | undefined {
+  if (state.document === undefined) {
+    return undefined;
+  }
+
+  if (state.diagnostics === undefined) {
+    return validationStates.none;
+  }
+
+  if (state.validated !== state.document) {
+    return validationStates.checking;
+  }
+
+  const errors = state.diagnostics.filter((d) => d.severity === 'Error').length;
+  if (errors === 0) {
+    return validationStates.clean;
+  }
+
+  let summary = errorSummaries.get(errors);
+  if (summary === undefined) {
+    summary = { state: 'errors', text: `${errors} problem${errors === 1 ? '' : 's'}` };
+    errorSummaries.set(errors, summary);
+  }
+
+  return summary;
+}
+
+/** One command: our icon and its label; the label is the accessible name, the title says why it is disabled. */
+function Command({ icon, label, onClick, disabled, title }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean; title?: string }) {
+  return (
+    <button type="button" className="command" onClick={onClick} disabled={disabled} title={title}>
+      <Icon name={icon} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+type Theme = 'system' | 'light' | 'dark';
+const themeKey = 'myrpa.ui.theme';
+
+/** The colour theme: the system's by default, or chosen here (remembered per browser, best effort). */
+function useTheme(): [Theme, (theme: Theme) => void] {
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const stored = window.localStorage.getItem(themeKey);
+      return stored === 'light' || stored === 'dark' ? stored : 'system';
+    } catch {
+      return 'system';
+    }
+  });
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'system') {
+      delete root.dataset.theme;
+    } else {
+      root.dataset.theme = theme;
+    }
+
+    try {
+      window.localStorage.setItem(themeKey, theme);
+    } catch {
+      // Storage may be unavailable (private mode); the choice then lasts for this page only.
+    }
+  }, [theme]);
+  return [theme, setTheme];
 }
 
 function Toolbar() {
@@ -224,60 +328,88 @@ function Toolbar() {
     }
   };
 
+  const [theme, setTheme] = useTheme();
   const ready = connection === 'ready';
+  const readOnly = file?.readOnlyReason !== undefined;
   return (
-    <header className="toolbar">
-      <h1>MyRPA Studio</h1>
-      <span className="document-title" data-testid="document-title">
-        {file ? `${file.path}${dirty ? ' •' : ''}${file.readOnlyReason ? ' (read-only)' : ''}` : 'No workflow open'}
-      </span>
-      <label>
-        Project
-        <select value={project ?? ''} disabled={!ready} onChange={(e) => void studio.selectProject(e.target.value)}>
-          {projects.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Workflow
-        <select value={choice} disabled={!ready} onChange={(e) => setChoice(e.target.value)}>
-          <option value="">Choose…</option>
-          {files.map((f) => (
-            <option key={f.path} value={f.path}>
-              {f.path}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="button" onClick={open} disabled={choice === '' || busy !== undefined}>
-        Open
-      </button>
-      <button type="button" onClick={() => void studio.save()} disabled={!dirty || file?.readOnlyReason !== undefined || busy !== undefined} title="Ctrl+S">
-        Save
-      </button>
-      <button
-        type="button"
-        onClick={() => studio.startName('save-as')}
-        disabled={!hasDocument || file?.readOnlyReason !== undefined || busy !== undefined}
-        title={file?.readOnlyReason ? `The workflow is read-only: ${file.readOnlyReason}` : 'Save the workflow as a new file'}
-      >
-        Save as…
-      </button>
-      <button type="button" onClick={() => void studio.validate()} disabled={!hasDocument || busy !== undefined}>
-        Validate
-      </button>
-      <button type="button" onClick={() => void studio.requestRun()} disabled={runRefusal !== undefined} title={runRefusal ?? 'Validate, then run (F5)'}>
-        Run
-      </button>
-      <button type="button" onClick={() => void studio.stop()} disabled={stopRefusal !== undefined} title={stopRefusal ?? 'Stop the run (Shift+F5)'}>
-        Stop
-      </button>
-      <span className="toolbar-status" data-testid="toolbar-run-status">
-        {run ? `Status: ${statusLabel(run)}` : ''}
-      </span>
+    <header className="commandbar">
+      <div className="titlebar">
+        <span className="brand">
+          <Icon name="logo" size={22} />
+          <h1>MyRPA Studio</h1>
+        </span>
+        <span className="document-title" data-testid="document-title">
+          {file ? `${file.path}${dirty ? ' •' : ''}${file.readOnlyReason ? ' (read-only)' : ''}` : 'No workflow open'}
+        </span>
+        <label>
+          Project
+          <select value={project ?? ''} disabled={!ready} onChange={(e) => void studio.selectProject(e.target.value)}>
+            {projects.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Workflow
+          <select value={choice} disabled={!ready} onChange={(e) => setChoice(e.target.value)}>
+            <option value="">Choose…</option>
+            {files.map((f) => (
+              <option key={f.path} value={f.path}>
+                {f.path}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="with-icon" onClick={open} disabled={choice === '' || busy !== undefined}>
+          <Icon name="folder-open" size={16} />
+          <span>Open</span>
+        </button>
+      </div>
+      {ready && (
+        <div className="commands">
+          <div className="command-group" role="toolbar" aria-label="File">
+            <Command icon="file-new" label="New workflow…" onClick={() => studio.startName('new')} disabled={project === undefined} title="Create a new workflow in the project" />
+            <Command icon="save" label="Save" onClick={() => void studio.save()} disabled={!dirty || readOnly || busy !== undefined} title="Ctrl+S" />
+            <Command
+              icon="save-as"
+              label="Save as…"
+              onClick={() => studio.startName('save-as')}
+              disabled={!hasDocument || readOnly || busy !== undefined}
+              title={file?.readOnlyReason ? `The workflow is read-only: ${file.readOnlyReason}` : 'Save the workflow as a new file'}
+            />
+            <span className="group-label" aria-hidden="true">
+              File
+            </span>
+          </div>
+          <EditBar />
+          <div className="command-group" role="toolbar" aria-label="Run">
+            <Command icon="validate" label="Validate" onClick={() => void studio.validate()} disabled={!hasDocument || busy !== undefined} title="Check the workflow on the server" />
+            <Command icon="run" label="Run" onClick={() => void studio.requestRun()} disabled={runRefusal !== undefined} title={runRefusal ?? 'Validate, then run (F5)'} />
+            <Command icon="stop" label="Stop" onClick={() => void studio.stop()} disabled={stopRefusal !== undefined} title={stopRefusal ?? 'Stop the run (Shift+F5)'} />
+            <span className="toolbar-status" data-testid="toolbar-run-status">
+              {run ? `Status: ${statusLabel(run)}` : ''}
+            </span>
+            <span className="group-label" aria-hidden="true">
+              Run
+            </span>
+          </div>
+          <div className="command-group" role="toolbar" aria-label="View">
+            <label className="command theme-choice">
+              <Icon name="theme" />
+              <select value={theme} onChange={(e) => setTheme(e.target.value as Theme)} aria-label="Theme">
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
+            <span className="group-label" aria-hidden="true">
+              View
+            </span>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
@@ -701,14 +833,26 @@ function WorkflowTree() {
   return (
     <main className="designer" aria-labelledby="designer-heading">
       <h2 id="designer-heading">Workflow</h2>
+      <WorkflowTitle document={document} />
       <PluginNotice />
-      <EditBar />
       <Breadcrumbs />
       {/* While a run of this file is shown, nodes without a run state were not executed (styled as such). */}
       <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown} className={showsRun ? 'shows-run' : undefined}>
         {isObject(root) && <TreeNode node={root} depth={1} />}
       </ul>
     </main>
+  );
+}
+
+/** The workflow's name and description above the designer (edited through the Workflow breadcrumb). */
+function WorkflowTitle({ document }: { document: JsonObject }) {
+  const name = typeof document.name === 'string' && document.name.trim() !== '' ? document.name : undefined;
+  const description = typeof document.description === 'string' && document.description.trim() !== '' ? document.description : undefined;
+  return (
+    <div className="workflow-title">
+      <p className="workflow-name">{name ?? 'Untitled workflow'}</p>
+      {description && <p className="workflow-description">{description}</p>}
+    </div>
   );
 }
 
@@ -767,31 +911,18 @@ function EditBar() {
   const pasteRefusal = useStudioState(insertRefusal);
 
   return (
-    <div className="editbar" role="toolbar" aria-label="Edit">
-      <button type="button" onClick={() => studio.undo()} disabled={undo === undefined} title={undo ? `Undo: ${undo} (Ctrl+Z)` : 'Nothing to undo'}>
-        Undo
-      </button>
-      <button type="button" onClick={() => studio.redo()} disabled={redo === undefined} title={redo ? `Redo: ${redo} (Ctrl+Y)` : 'Nothing to redo'}>
-        Redo
-      </button>
-      <button type="button" onClick={() => studio.moveSelected(-1)} disabled={moveUp !== undefined} title={moveUp ?? 'Move the selected activity up (Alt+Up)'}>
-        Move up
-      </button>
-      <button type="button" onClick={() => studio.moveSelected(1)} disabled={moveDown !== undefined} title={moveDown ?? 'Move the selected activity down (Alt+Down)'}>
-        Move down
-      </button>
-      <button type="button" onClick={() => studio.deleteSelected()} disabled={remove !== undefined} title={remove ?? 'Delete the selected activity (Delete)'}>
-        Delete
-      </button>
-      <button type="button" onClick={() => toSystemClipboard(studio.cutSelected())} disabled={remove !== undefined} title={remove ?? 'Cut the selected activity (Ctrl+X)'}>
-        Cut
-      </button>
-      <button type="button" onClick={() => toSystemClipboard(studio.copySelected())} disabled={!hasSelection} title={hasSelection ? 'Copy the selected activity (Ctrl+C)' : 'Select an activity to copy'}>
-        Copy
-      </button>
-      <button type="button" onClick={() => studio.paste()} disabled={pasteRefusal !== undefined} title={pasteRefusal ?? 'Paste what was copied in this tab (Ctrl+V pastes the clipboard)'}>
-        Paste
-      </button>
+    <div className="command-group" role="toolbar" aria-label="Edit">
+      <Command icon="undo" label="Undo" onClick={() => studio.undo()} disabled={undo === undefined} title={undo ? `Undo: ${undo} (Ctrl+Z)` : 'Nothing to undo'} />
+      <Command icon="redo" label="Redo" onClick={() => studio.redo()} disabled={redo === undefined} title={redo ? `Redo: ${redo} (Ctrl+Y)` : 'Nothing to redo'} />
+      <Command icon="cut" label="Cut" onClick={() => toSystemClipboard(studio.cutSelected())} disabled={remove !== undefined} title={remove ?? 'Cut the selected activity (Ctrl+X)'} />
+      <Command icon="copy" label="Copy" onClick={() => toSystemClipboard(studio.copySelected())} disabled={!hasSelection} title={hasSelection ? 'Copy the selected activity (Ctrl+C)' : 'Select an activity to copy'} />
+      <Command icon="paste" label="Paste" onClick={() => studio.paste()} disabled={pasteRefusal !== undefined} title={pasteRefusal ?? 'Paste what was copied in this tab (Ctrl+V pastes the clipboard)'} />
+      <Command icon="delete" label="Delete" onClick={() => studio.deleteSelected()} disabled={remove !== undefined} title={remove ?? 'Delete the selected activity (Delete)'} />
+      <Command icon="move-up" label="Move up" onClick={() => studio.moveSelected(-1)} disabled={moveUp !== undefined} title={moveUp ?? 'Move the selected activity up (Alt+Up)'} />
+      <Command icon="move-down" label="Move down" onClick={() => studio.moveSelected(1)} disabled={moveDown !== undefined} title={moveDown ?? 'Move the selected activity down (Alt+Down)'} />
+      <span className="group-label" aria-hidden="true">
+        Edit
+      </span>
     </div>
   );
 }

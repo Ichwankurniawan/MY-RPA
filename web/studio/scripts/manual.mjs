@@ -67,6 +67,8 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check((await slotOf('log-1')) === 'then:', 'Log is in then');
   await problemsTab().click();
   await page.locator('.problems').filter({ hasText: 'MYRPA1040' }).waitFor();
+  // Live validation runs after typing pauses: wait until it has seen the last activity too (the Log).
+  await row('log-1').locator('.badge', { hasText: 'error' }).waitFor();
   const marked = [(await badges('assign-1')).includes('error'), (await badges('if-1')).includes('error'), (await badges('log-1')).includes('error')];
   check(marked.every(Boolean), `error badges ${marked}`);
   await shot(page, 3);

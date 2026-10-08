@@ -1,6 +1,6 @@
 # Studio UX slice — plan (proposed)
 
-Status: **approved** by the owner (2026-10-08), with the proposed answers below. In progress: UX-1. Follows Phase 5 (the Web Studio, ADR-0021 to ADR-0036).
+Status: **approved** by the owner (2026-10-08), with the proposed answers below. UX-1 done (2026-10-08); next: UX-2. Follows Phase 5 (the Web Studio, ADR-0021 to ADR-0036).
 Companion: [ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md) (flowchart and state machine, proposed).
 
 ## Goal
@@ -60,6 +60,23 @@ keyboard-only operation) and the performance budgets.
 UX-1 → UX-2 → UX-3, each its own commits and report, like W4B–W8. UX-1 and UX-2 are mostly layout and styling; UX-3
 touches drag-and-drop geometry and needs the most testing. ADR-0037's canvas builds on UX-3's zoom and pane work, so
 UX goes first if both are approved.
+
+## UX-1 result (2026-10-08)
+- Delivered: the command bar (File, Edit, Run, View), 34 MyRPA icons and the favicon, the teal theme with a View ›
+  Theme choice (System, Light, Dark), the workflow title, the segmented status bar. Edit commands moved from the
+  designer into the command bar (same accessible names, so every test and the keyboard flow are unchanged).
+- **Performance lesson 1:** the status bar's text changes on every edit; as an auto-height grid row it made the page grid
+  lay out the 3,000-node designer again (keystroke p95 58–60 ms, insert 65–68 ms). It is now one fixed-height line with
+  `contain: strict`; editing p95 returned to the earlier level (keystroke 49.6, undo 42.4, insert 53.7, drag
+  activation 97.2 ms). Rule: anything whose text changes per edit must not resize a grid track.
+- **Performance lesson 2:** the drag-movement measurement depended on layout: it dragged the root and containers (whose
+  moves are refused) and hovered cards at their centre, so the share of refused moves (each a full-page style
+  recalculation) changed with the page geometry. `perf.mjs` now drags leaf activities onto the gap above other leaves,
+  never next to themselves: with that, the median drop-preview move is the same before and after UX-1 (15.6 ms; traced
+  with Chrome invalidation tracking). Drag-movement p95 under the load on this workstation is 59–63 ms for both the
+  earlier build and UX-1; CI measures it with its documented tolerance.
+- Validation: Vitest 209/209, typecheck, smoke, manual (steps 1–11), accessibility (0 serious or critical), perf as
+  above.
 
 ## Owner decisions (2026-10-08)
 1. The three sub-slices are approved (the minimap stays optional).

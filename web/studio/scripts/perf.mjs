@@ -46,7 +46,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
       async ({ kind, count }) => {
         const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
         const key = (k, options) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...options }));
-        const button = (name) => [...document.querySelectorAll('.editbar button')].find((b) => b.textContent === name);
+        const button = (name) => [...document.querySelectorAll('[role="toolbar"][aria-label="Edit"] button')].find((b) => b.textContent === name);
         const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
         const times = [];
         const scripts = [];
@@ -94,7 +94,9 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     const frame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
     const visible = [...document.querySelectorAll('.designer [role="treeitem"] > .node')].filter((card) => {
       const r = card.getBoundingClientRect();
-      return r.top > 0 && r.bottom < window.innerHeight * 0.6 && r.height > 0;
+      // Leaf activities only: the root and containers cannot move into themselves, so their moves would be refused
+      // (no indicator) and the samples would depend on which cards happen to be visible in the layout.
+      return r.top > 0 && r.bottom < window.innerHeight * 0.6 && r.height > 0 && card.parentElement.dataset.nodeId.startsWith('log-');
     });
     const at = (card, dy = 0) => {
       const r = card.getBoundingClientRect();
@@ -110,9 +112,17 @@ await withStudio(async ({ project, page, startServer, problems }) => {
       await frame();
       activation.push(performance.now() - start);
       for (let m = 1; m <= 3; m++) {
-        const over = visible[(i + m * 3) % visible.length];
+        // Aim at the gap above another card (3 px below its top edge): a real drop preview (indicator drawn), never a
+        // refused hover over the dragged card itself, so every sample measures the same work whatever the layout.
+        // Never the dragged card or its neighbours: dropping a card next to itself is a no-op and refused (nothing drawn).
+        const from = visible.indexOf(source);
+        let to = (from + 2 + m * 3) % visible.length;
+        while (Math.abs(to - from) <= 1) {
+          to = (to + 2) % visible.length;
+        }
+        const over = visible[to];
         const t = performance.now();
-        document.dispatchEvent(new PointerEvent('pointermove', at(over, 1)));
+        document.dispatchEvent(new PointerEvent('pointermove', at(over, 3 - over.getBoundingClientRect().height / 2)));
         await frame();
         movement.push(performance.now() - t);
       }

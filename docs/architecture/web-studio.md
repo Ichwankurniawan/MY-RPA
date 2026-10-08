@@ -50,6 +50,12 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 
 ## What it does
 
+- **Shell (UX-1):** a command bar with File (New workflow…, Save, Save as…), Edit (Undo, Redo, Cut, Copy, Paste, Delete,
+  Move up/down), Run (Validate, Run, Stop, run status) and View (Theme: System, Light, Dark; remembered per browser)
+  groups. Each command shows an icon from the MyRPA icon set (`src/icons.tsx`, drawn for the project) and its label,
+  which is its accessible name; a disabled command's tooltip says why. The workflow's name and description head the
+  designer. The status bar shows the connection, the open file (saved, unsaved, read-only), validation and the current
+  run, then the announced message. The favicon is the MyRPA mark.
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
@@ -155,6 +161,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | File | Responsibility |
 |---|---|
 | `src/types.ts` | Wire types (hand-written for W3, ADR-0028 decision 6) |
+| `src/icons.tsx` | The MyRPA icon set (UX-1): 34 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
 | `src/api.ts` | Fetch client: anti-forgery header on state changes, ETags, error bodies |
 | `src/document.ts` | Document model: immutable v1.0 JSON, client keys (`WeakMap`), index, path-copying edits, structural edits and their refusals, lossy-file detection, editability |
 | `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation, stream status |
@@ -200,6 +207,8 @@ nothing about the client.
   reasons, the lifecycle from server events, failures, timeouts and `MYRPA2004`, Stop (Cancelling…, 409, errors,
   refusals), node mapping (own workflow only, open file only), the event cap, concurrent runs on one stream, the
   recent-runs cap, per-frame batching, and stream re-creation with replay and gaps.
+- `ShellUi.test.tsx` (UX-1): every icon is a decorative SVG without style attributes; the command groups and their
+  accessible names; disabled reasons; New workflow…; the status bar segments; the workflow title; the theme choice.
 - `ExecutionUi.test.tsx` (W5): the run dialog (required, defaults, timeout, Cancel), the lifecycle and node states on
   the tree, Stop and Shift+F5, failure explanation and Select failed node, not-started labels, recent runs, the
   reconnecting and missing-events notices.
