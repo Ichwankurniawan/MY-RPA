@@ -21,6 +21,10 @@ public sealed class TestCatalog : IActivityCatalog
                 allowsChildren: true,
                 childLayout: ActivityChildLayout.Graph),
             new(new("Core.Decision"), "Decision", "Test"),
+            new(new("Core.StateMachine"), "StateMachine", "Test", allowsChildren: true, childLayout: ActivityChildLayout.Graph),
+            new(new("Core.State"), "State", "Test",
+                properties: [new("final", ActivityPropertyKind.Expression)],
+                slots: [new("entry"), new("exit")]),
             new(new("Core.Assign"), "Assign", "Test", properties:
             [
                 new("to", ActivityPropertyKind.AssignmentTarget, isRequired: true),

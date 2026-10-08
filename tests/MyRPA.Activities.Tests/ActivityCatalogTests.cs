@@ -29,7 +29,8 @@ public sealed class ActivityCatalogTests
         Assert.Equal(
             [
                 "Core.Assign", "Core.Decision", "Core.Delay", "Core.DoWhile", "Core.Flowchart", "Core.ForEach", "Core.If",
-                "Core.InvokeWorkflow", "Core.Log", "Core.Sequence", "Core.Switch", "Core.Throw", "Core.TryCatch", "Core.While",
+                "Core.InvokeWorkflow", "Core.Log", "Core.Sequence", "Core.State", "Core.StateMachine", "Core.Switch", "Core.Throw",
+                "Core.TryCatch", "Core.While",
             ],
             provider.GetRequiredService<IActivityCatalog>().Descriptors.Select(d => d.TypeName.Value));
     }
@@ -39,7 +40,7 @@ public sealed class ActivityCatalogTests
     {
         using var provider = Build(s => s.AddMyRpaActivities().AddMyRpaActivities());
 
-        Assert.Equal(14, provider.GetRequiredService<IActivityCatalog>().Descriptors.Count);
+        Assert.Equal(16, provider.GetRequiredService<IActivityCatalog>().Descriptors.Count);
         Assert.Same(provider.GetRequiredService<IActivityCatalog>(), provider.GetRequiredService<IActivityFactory>());
     }
 

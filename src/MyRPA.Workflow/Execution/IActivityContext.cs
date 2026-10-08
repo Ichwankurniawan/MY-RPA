@@ -95,4 +95,14 @@ public interface IActivityContext
     /// <param name="node">A node from <see cref="NodeDefinition.Children"/> of <see cref="Node"/>.</param>
     /// <exception cref="InvalidOperationException"><paramref name="node"/> is not a child of <see cref="Node"/>.</exception>
     ValueTask<NodeDefinition?> ExecuteStepAsync(NodeDefinition node);
+
+    /// <summary>
+    /// For a step that is being run by its graph container's <see cref="ExecuteStepAsync"/>: evaluates this node's
+    /// transitions now, in order, and returns the target sibling of the first one whose <c>when</c> is true or absent, or
+    /// <see langword="null"/> (SDK 1.1, ADR-0037). The choice is recorded: the container continues with it instead of
+    /// evaluating the transitions after the step, so a step can still act after the decision (a <c>Core.State</c> runs
+    /// its <c>exit</c> actions). At most once per invocation.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">This node is not a step being run by a graph container, or it already chose.</exception>
+    NodeDefinition? ChooseTransition();
 }

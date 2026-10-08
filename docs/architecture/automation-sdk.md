@@ -151,7 +151,9 @@ catchable failure; the run's timeout is not.
 - `InvokeWorkflowAsync`;
 - `ExecuteStepAsync` (SDK 1.1) for a step of a graph container: it runs the step, then returns the sibling chosen by the
   step's `transitions`, or null. A plugin builds its own graph container by declaring
-  `childLayout: ActivityChildLayout.Graph` and looping over `ExecuteStepAsync`, as `Core.Flowchart` does.
+  `childLayout: ActivityChildLayout.Graph` and looping over `ExecuteStepAsync`, as `Core.Flowchart` does;
+- `ChooseTransition` (SDK 1.1) for such a step while it runs: it evaluates the step's own transitions now and the
+  container continues with that choice (as `Core.State`, which acts after choosing).
 
 It has no service locator. Logging and tracing work like this:
 - **Logging:** inject `ILogger<T>`. Every entry written during `ExecuteAsync` carries the `myrpa.execution.id`,
@@ -228,7 +230,8 @@ The full sample, including the plugin entry point, manifest and provider, is in
     default behaviour);
   - a **major** version may remove or change members.
 - A host accepts plugins built for the same major version and an equal or lower minor version.
-- SDK 1.1 (ADR-0037) added `IActivityContext.ExecuteStepAsync` and `ActivityDescriptor.ChildLayout`. Plugins that
+- SDK 1.1 (ADR-0037) added `IActivityContext.ExecuteStepAsync`, `IActivityContext.ChooseTransition` and
+  `ActivityDescriptor.ChildLayout`. Plugins that
   declare `sdkVersion: "1.0"` still load; a plugin that uses graph containers declares `1.1`.
 - The workflow schema version (1.1) and the manifest version (1.0) are versioned independently of the SDK.
 - Technical debt: the SDK assemblies still carry the product assembly version (0.1.0). Before a public SDK, their

@@ -121,6 +121,20 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.getByRole('button', { name: 'List view', exact: true }).click();
   await scan('Flowchart list view');
+  // G-3: a state machine on the canvas, a state selected.
+  writeFileSync(join(project, 'state-machine.json'), readFileSync(join(repo, 'samples', 'state-machine.json'), 'utf8'));
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await filesTree.locator('[data-path="state-machine.json"]').dblclick();
+  await page.getByTestId('document-title').filter({ hasText: /^state-machine\.json$/ }).waitFor();
+  await page.locator('.flow-step[data-node-id="process"] > .node').click();
+  await scan('State machine canvas, a state selected');
+  await filesTree.locator('[data-path="flowchart.json"]').dblclick();
+  await page.getByTestId('document-title').filter({ hasText: /^flowchart\.json$/ }).waitFor();
+  await page.locator('.flow-step[data-node-id="check"] > .node').click();
+  if ((await page.getByRole('button', { name: 'List view', exact: true }).getAttribute('aria-pressed')) !== 'true') {
+    await page.getByRole('button', { name: 'List view', exact: true }).click();
+  }
   const panel = page.getByRole('complementary', { name: 'Properties' });
   await tree.locator('[role=treeitem][aria-selected=true]').focus();
   await page.keyboard.press('ArrowDown');

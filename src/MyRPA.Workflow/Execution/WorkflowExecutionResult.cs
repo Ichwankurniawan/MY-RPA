@@ -118,4 +118,7 @@ public static class ExecutionErrorCodes
 
     /// <summary>A graph container ran more steps than its <c>maxSteps</c> limit (ADR-0037).</summary>
     public const string MaxStepsExceeded = "MYRPA2010";
+
+    /// <summary>A state machine cannot go on: no transition was taken from a state that is not final, or a final state has transitions (ADR-0037).</summary>
+    public const string StateMachineStuck = "MYRPA2011";
 }

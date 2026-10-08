@@ -70,7 +70,8 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   values. Containers collapse and expand (the card's toggle, ArrowLeft/ArrowRight, Expand all / Collapse all); a
   selection inside a collapsed container expands it. Zoom 50–200 % with Ctrl+= / Ctrl+- / Ctrl+0, the zoom buttons
   and fit to width (CSS `zoom` set through the CSSOM). While dragging, one transparent overlay carries the cursor.
-- **Flowcharts (G-2, ADR-0037):** a `Core.Flowchart` (any catalog activity with `childLayout: Graph`) shows its steps on
+- **Flowcharts and state machines (G-2, G-3, ADR-0037):** a `Core.Flowchart` or `Core.StateMachine` (any catalog
+  activity with `childLayout: Graph`) shows its steps on
   a canvas: step cards at their `layout` positions (placed in rows from the start step when they have none), the start
   step marked, SVG arrows for transitions with their labels (or conditions). Drag a card to move it (one undo step);
   drag from a card's handle to another step to add a transition; click an arrow to edit it; drop an activity from the
@@ -81,6 +82,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   or moving a step out removes the transitions to it; pasted steps keep the transitions among themselves. Adding the
   first flowchart (or transitions, or positions) to a 1.0 file raises it to 1.1 in the same undo step. While a run of
   the file is shown, the arrow taken last is highlighted (from consecutive step events; there is no transition event).
+  In a state machine the steps are states: a final state is marked, and Open shows a state's `entry` and `exit`.
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
@@ -187,7 +189,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 |---|---|
 | `src/types.ts` | Wire types (hand-written for W3, ADR-0028 decision 6) |
 | `src/preferences.ts` | Per-browser UI preferences (UX-2): favorites, recent activities, panel sizes; guarded storage, in-memory store for tests |
-| `src/icons.tsx` | The MyRPA icon set (UX-1, UX-3, G-2): 50 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
+| `src/icons.tsx` | The MyRPA icon set (UX-1, UX-3, G-2, G-3): 52 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
 | `src/api.ts` | Fetch client: anti-forgery header on state changes, ETags, error bodies |
 | `src/document.ts` | Document model: immutable v1.0 JSON, client keys (`WeakMap`), index, path-copying edits, structural edits and their refusals, lossy-file detection, editability |
 | `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation, stream status |

@@ -66,7 +66,7 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
         }
     }
 
-    internal async ValueTask ExecuteNodeAsync(ExecutionFrame frame, NodeDefinition node, VariableScope variables, CancellationToken cancellationToken)
+    internal async ValueTask ExecuteNodeAsync(ExecutionFrame frame, NodeDefinition node, VariableScope variables, CancellationToken cancellationToken, StepChoice? choice = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var identity = frame.Identity.ForNode(node.Id);
@@ -82,7 +82,7 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
             var activity = _activities.Create(node.Type, frame.Services);
             try
             {
-                var context = new ActivityContext(this, frame, node, identity, variables, _time, cancellationToken);
+                var context = new ActivityContext(this, frame, node, identity, variables, _time, cancellationToken, choice);
                 await activity.ExecuteAsync(context).ConfigureAwait(false);
             }
             catch (Exception original)

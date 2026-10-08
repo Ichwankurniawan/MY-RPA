@@ -42,8 +42,8 @@ public sealed class CorpusDiagnosticsTests
     {
         var text = File.ReadAllText(Path.Combine(Corpus, "expected", "locations.json"));
 
-        // MYRPA1057 (a position that is not a finite number) cannot be written as JSON the Studio keeps unchanged; it is
-        // covered by GraphWorkflowTests.
-        Assert.All(["MYRPA1053", "MYRPA1054", "MYRPA1055", "MYRPA1056", "MYRPA1058"], code => Assert.Contains($"\"{code}\"", text, StringComparison.Ordinal));
+        // MYRPA1057 is here as a final state with transitions (diag-state.json); its other case, a position that is not a
+        // finite number, cannot be written as JSON the Studio keeps unchanged (GraphWorkflowTests covers it).
+        Assert.All(["MYRPA1053", "MYRPA1054", "MYRPA1055", "MYRPA1056", "MYRPA1057", "MYRPA1058"], code => Assert.Contains($"\"{code}\"", text, StringComparison.Ordinal));
     }
 }

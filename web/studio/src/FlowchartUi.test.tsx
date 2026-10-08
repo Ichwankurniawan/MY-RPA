@@ -23,6 +23,26 @@ class GraphApi extends FakeApi {
         slots: [],
       },
       { type: 'Core.Decision', displayName: 'Decision', category: 'Control Flow', allowsChildren: false, properties: [], slots: [] },
+      {
+        type: 'Core.StateMachine',
+        displayName: 'State Machine',
+        category: 'Control Flow',
+        allowsChildren: true,
+        childLayout: 'Graph' as const,
+        properties: [{ name: 'maxSteps', kind: 'Expression' as const, required: false, allowedValues: [], scopeSlots: [] }],
+        slots: [],
+      },
+      {
+        type: 'Core.State',
+        displayName: 'State',
+        category: 'Control Flow',
+        allowsChildren: false,
+        properties: [{ name: 'final', kind: 'Expression' as const, required: false, allowedValues: [], scopeSlots: [] }],
+        slots: [
+          { name: 'entry', required: false, prefix: false },
+          { name: 'exit', required: false, prefix: false },
+        ],
+      },
     ];
   }
 }
@@ -46,12 +66,28 @@ const flowJson = JSON.stringify({
   },
 });
 
+const machineJson = JSON.stringify({
+  schemaVersion: '1.1',
+  id: 'machine',
+  name: 'Machine',
+  version: '1.0.0',
+  root: {
+    id: 'robot',
+    type: 'Core.StateMachine',
+    children: [
+      { id: 'init', type: 'Core.State', slots: { entry: log('hello') }, layout: { x: 40, y: 40 }, transitions: [{ to: 'end' }] },
+      { id: 'end', type: 'Core.State', properties: { final: true }, layout: { x: 40, y: 200 } },
+    ],
+  },
+});
+
 const treeJson = JSON.stringify({ schemaVersion: '1.0', id: 'tree', name: 'Tree', version: '1.0.0', root: { id: 'main', type: 'Core.Sequence', children: [log('a')] } });
 
 async function renderStudio(path = 'flow.json') {
   const api = new GraphApi();
   api.files.set('flow.json', { text: flowJson, etag: 1 });
   api.files.set('tree.json', { text: treeJson, etag: 1 });
+  api.files.set('machine.json', { text: machineJson, etag: 1 });
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { validateDelayMs: undefined });
   render(<App studio={studio} />);
   await act(settle);
@@ -225,6 +261,20 @@ describe('Flowchart canvas', () => {
     });
 
     expect([...document.querySelectorAll<SVGGElement>('g.arrow.taken')].map((g) => g.dataset.arrow)).toEqual([`${item('check').dataset.key}:1`]);
+  });
+
+  it('shows a state machine on the same canvas: states, the final state marked, entry and exit opened like any step (G-3)', async () => {
+    const { state } = await renderStudio('machine.json');
+
+    expect([...document.querySelectorAll('.flow-step')].map((e) => (e as HTMLElement).dataset.nodeId)).toEqual(['init', 'end']);
+    expect(within(item('end')).getByText('final')).toBeTruthy();
+    expect(within(item('init')).queryByText('final')).toBeNull();
+    expect(arrows()).toHaveLength(1);
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open State' })));
+    expect(item('hello')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'exit: empty' })).toBeTruthy();
+    expect(state().designerScope).toBe(item('init').dataset.key);
   });
 
   it('inserting a Flowchart into a 1.0 workflow raises it to 1.1 in the same undo step', async () => {

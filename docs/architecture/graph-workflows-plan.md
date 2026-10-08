@@ -1,6 +1,6 @@
 # Graph workflows — implementation plan (proposed)
 
-Status: **approved** (owner, 2026-10-08: "merge PR#7 to main,proceed G1"). G-1 and G-2 done (2026-10-08); next: G-3. Implements [ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md)
+Status: **approved** (owner, 2026-10-08: "merge PR#7 to main,proceed G1"). G-1, G-2 and G-3 done (2026-10-08). Phase 6 still needs the owner's authorization. Implements [ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md)
 (accepted): format 1.1, SDK 1.1, `Core.Flowchart` / `Core.Decision` first, then `Core.StateMachine` / `Core.State`.
 Follows the Studio UX slice (UX-1 to UX-3). Phase 6 is not part of this plan and still needs its own authorization.
 
@@ -93,6 +93,17 @@ draw an arrow, typing in Properties: p95 ≤ 50 ms) next to the existing 3,000-n
   violations in all 12 states, including canvas, dark canvas and list view; keyboard passes), perf in two consecutive
   runs: every 3,000-node target met; 200-step flowchart open 91–112 ms, typing p95 18 ms, card move p95 18–19 ms,
   arrow drawing p95 19–22 ms (targets 1,000 / 50 / 50 / 50 ms). No .NET change.
+
+### G-3 result (2026-10-08)
+- Delivered: `Core.StateMachine` and `Core.State` (entry → transitions → exit; conditions only), MYRPA1055 for a step
+  that is not a state, MYRPA1057 for a final state with transitions, MYRPA2011 at run time,
+  `samples/state-machine.json` (CLI: "Processed 3 of 3 items"), `tests/corpus/diag-state.json`, two icons and a final
+  badge in the Studio.
+- **One SDK addition** beyond G-1: `IActivityContext.ChooseTransition()`, so a state decides between `entry` and
+  `exit` as ADR-0037 §2 says (details in the ADR's G-3 notes).
+- Validation: .NET 898/898 (Release; `dotnet format` clean, 0 warnings), Vitest 255/255, smoke (new G-3 step: the
+  sample on the canvas, run, final state and the arrow taken), manual (steps 1–11), accessibility (0 violations in all
+  13 states), perf (every target met).
 
 ## Order and delivery
 G-1 → G-2 → G-3, each on its own branch with its own PR, report and CI. G-2 starts from `main` after PR #7 (UX-3) is

@@ -364,6 +364,7 @@ button.command[aria-pressed='false'] .icon { color: var(--muted); }
 .arrow-label { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; }
 .arrow.selected .arrow-label { fill: var(--accent-strong); }
 .badge.start { background: var(--accent-soft); color: var(--accent-strong); }
+.badge.final { background: var(--ok-bg); color: var(--ok); }
 .transitions-summary { margin: 2px 0 0; font-size: 0.85em; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .scope-bar { display: flex; align-items: center; gap: 10px; margin: 6px 0; padding: 6px 10px; border-radius: var(--radius); background: var(--info-bg); }
 .transitions { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }

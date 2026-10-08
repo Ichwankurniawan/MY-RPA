@@ -73,6 +73,7 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
         [
             new(new("Test.Sequence"), "Sequence", "Test", allowsChildren: true),
             new(new("Test.Graph"), "Graph", "Test", allowsChildren: true, slots: [new("misuse")], childLayout: ActivityChildLayout.Graph),
+            new(new("Test.Choose"), "Choose", "Test", properties: [new("again", ActivityPropertyKind.Text), new("after", ActivityPropertyKind.AssignmentTarget)]),
             new(new("Test.Set"), "Set", "Test", properties:
             [
                 new("to", ActivityPropertyKind.AssignmentTarget, isRequired: true),
@@ -103,6 +104,7 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
     {
         "Test.Sequence" => new Sequence(),
         "Test.Graph" => new Graph(),
+        "Test.Choose" => new Choose(),
         "Test.Set" => new Set(),
         "Test.Fail" => new Fail(),
         "Test.Wait" => new Wait(),
@@ -142,6 +144,26 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
             }
 
             return ActivityResult.Completed;
+        }
+    }
+
+    /// <summary>Chooses its transition while it runs, then (with <c>after</c>) assigns 99 to show it acted after choosing.</summary>
+    private sealed class Choose : IActivity
+    {
+        public ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+        {
+            context.ChooseTransition();
+            if (context.HasProperty("again"))
+            {
+                context.ChooseTransition();
+            }
+
+            if (context.HasProperty("after"))
+            {
+                context.SetValue(context.GetName("after"), 99L);
+            }
+
+            return ActivityResult.CompletedTask;
         }
     }
 

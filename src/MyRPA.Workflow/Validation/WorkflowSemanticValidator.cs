@@ -14,6 +14,10 @@ namespace MyRPA.Workflow.Validation;
 /// </summary>
 internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<ValidationDiagnostic> diagnostics)
 {
+    // Format 1.1 rules for the built-in state machine (format §3.1, ADR-0037).
+    private const string StateMachineType = "Core.StateMachine";
+    private const string StateType = "Core.State";
+
     private readonly HashSet<string> _nodeIds = new(StringComparer.Ordinal);
     private WorkflowSchemaVersion _schemaVersion = WorkflowSchemaVersion.Current;
 
@@ -236,6 +240,19 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
             }
         }
 
+        if (raw.Type == StateMachineType)
+        {
+            foreach (var child in raw.Children.Where(c => c.Type is not null && c.Type != StateType))
+            {
+                Error(DiagnosticCodes.InvalidGraphSteps, child.Path + ".type", $"A state machine holds states only ({StateType}), not '{child.Type}'.", child.Id);
+            }
+        }
+
+        if (raw.Type == StateType && raw.Transitions is { Count: > 0 } && raw.Properties.FirstOrDefault(p => p.Name == "final") is { } final && IsLiteralTrue(final.Value))
+        {
+            Error(DiagnosticCodes.InvalidGraphNode, raw.Path + ".transitions", "A final state ends the state machine, so it cannot have transitions.", nodeId);
+        }
+
         var stepIds = isGraph ? raw.Children.Where(c => c.Id is not null).Select(c => c.Id!).ToHashSet(StringComparer.Ordinal) : null;
         var children = raw.Children.Select(child => ValidateNode(child, scope, stepIds)).ToList();
         if (isGraph)
@@ -379,6 +396,10 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
                 step.Id));
         }
     }
+
+    /// <summary>A literal <c>true</c>, written as JSON <c>true</c> or as the expression text <c>"true"</c>.</summary>
+    private static bool IsLiteralTrue(JsonElement value) =>
+        value.ValueKind == JsonValueKind.True || (value.ValueKind == JsonValueKind.String && value.GetString()!.Trim() == "true");
 
     private void RequireGraphSchema(string path, string subject, string? nodeId)
     {

@@ -1243,6 +1243,8 @@ const typeIcons: Record<string, IconName> = {
   'Core.InvokeWorkflow': 'invoke',
   'Core.Flowchart': 'flowchart',
   'Core.Decision': 'decision',
+  'Core.StateMachine': 'state-machine',
+  'Core.State': 'state',
 };
 
 const activityIcon = (type: string | undefined): IconName => (type === undefined ? 'activity' : (typeIcons[type] ?? (type.startsWith('Browser.') ? 'browser' : 'activity')));
@@ -1629,6 +1631,9 @@ const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { no
   const label = nodeLabel(node, activity);
   const summary = propertySummary(node, activity);
   const inside = childSteps(node).length;
+  // A step whose `final` property is the literal true (a final state, G-3) is marked; an expression is shown in the summary.
+  const properties = isObject(node.properties) ? node.properties : {};
+  const final = properties.final === true || properties.final === 'true';
 
   useLayoutEffect(() => {
     item.current?.style.setProperty('left', `${at.x}px`);
@@ -1658,13 +1663,15 @@ const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { no
             <span className="label">{label}</span> {id !== undefined && <span className="id">#{id}</span>}
             {start && ' '}
             {start && <span className="badge start">start</span>}
+            {final && ' '}
+            {final && <span className="badge final">final</span>}
             {hasError && ' '}
             {hasError && <span className="badge error">error</span>}
             {status !== undefined && ' '}
             {status !== undefined && <span className={`badge status-${status.toLowerCase()}`}>{status}</span>}
           </span>
         </div>
-        {summary !== '' && <p className="summary">{summary}</p>}
+        {summary !== '' && !final && <p className="summary">{summary}</p>}
         {inside > 0 && (
           <p className="step-inside">
             {inside} activit{inside === 1 ? 'y' : 'ies'} inside{' '}

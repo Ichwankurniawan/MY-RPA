@@ -215,6 +215,21 @@ const paths = {
       <path d="M7 8.5v5.5a1.5 1.5 0 0 0 1.5 1.5h5M11.5 13l2 2.5-2 2.5M13.5 6h4a1.5 1.5 0 0 1 1.5 1.5v6" />
     </>
   ),
+  // G-3: a state machine (two states with arrows both ways) and one state (a rounded box with an entry dot).
+  'state-machine': (
+    <>
+      <rect x="3" y="4" width="8" height="6" rx="3" />
+      <rect x="13" y="14" width="8" height="6" rx="3" />
+      <path d="M11 7h4.5a1.5 1.5 0 0 1 1.5 1.5V14M13 17H8.5A1.5 1.5 0 0 1 7 15.5V10" />
+    </>
+  ),
+  state: (
+    <>
+      <rect x="3.5" y="6" width="17" height="12" rx="6" />
+      <circle cx="8.5" cy="12" r="1.6" fill="currentColor" />
+      <path d="M12 12h4.5" />
+    </>
+  ),
   decision: (
     <>
       <path d="M12 3.5l6 6-6 6-6-6z" />

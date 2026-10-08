@@ -191,6 +191,24 @@ public sealed class GraphWorkflowTests
     }
 
     [Fact]
+    public void StateMachine_HoldsStatesOnly_AndAFinalStateHasNoTransitions()
+    {
+        var result = Load("""
+            { "schemaVersion": "1.1", "id": "w", "name": "W", "version": "1",
+              "root": { "id": "machine", "type": "Core.StateMachine", "children": [
+                { "id": "start", "type": "Core.State", "transitions": [ { "to": "done" }, { "to": "stray" } ] },
+                { "id": "stray", "type": "Core.Log", "properties": { "message": "1" } },
+                { "id": "done", "type": "Core.State", "properties": { "final": true }, "transitions": [ { "to": "start" } ] },
+                { "id": "also-final", "type": "Core.State", "properties": { "final": "true" }, "transitions": [ { "to": "start" } ] },
+                { "id": "maybe", "type": "Core.State", "properties": { "final": "1 > 2" }, "transitions": [ { "to": "start" } ] } ] } }
+            """);
+
+        Assert.Equal(
+            [(DiagnosticCodes.InvalidGraphSteps, "$.root.children[1].type"), (DiagnosticCodes.InvalidGraphNode, "$.root.children[2].transitions"), (DiagnosticCodes.InvalidGraphNode, "$.root.children[3].transitions")],
+            result.Errors.Select(e => (e.Code, e.Path)));
+    }
+
+    [Fact]
     public void Descriptor_GraphLayout_RequiresChildren() =>
         Assert.Throws<ArgumentException>(() => new ActivityDescriptor(new("Acme.Graph"), "Graph", "Test", childLayout: ActivityChildLayout.Graph));
 

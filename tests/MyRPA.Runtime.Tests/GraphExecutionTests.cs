@@ -91,6 +91,31 @@ public sealed class GraphExecutionTests
     }
 
     [Fact]
+    public async Task ChooseTransition_DecidesBeforeTheStepFinishes_AndTheContainerUsesThatChoice()
+    {
+        // The condition sees n = 0 when the step chooses; the step then sets n = 99. Evaluated after the step, it would fail.
+        var (result, events) = await RunAsync(Graph(string.Join(", ",
+            """{ "id": "a", "type": "Test.Choose", "properties": { "after": "n" }, "transitions": [ { "to": "b", "when": "n == 0" }, { "to": "c" } ] }""",
+            Step("b"),
+            Step("c"))));
+
+        Assert.True(result.Succeeded, result.Error?.Message);
+        Assert.Equal(["g", "a", "b"], events.Where(e => e.StartsWith("NodeStarted", StringComparison.Ordinal)).Select(e => e[12..]));
+    }
+
+    [Fact]
+    public async Task ChooseTransition_OutsideAGraphStep_OrTwice_IsRefused()
+    {
+        var outside = await RunAsync(RuntimeHarness.Workflow("""{ "id": "s", "type": "Test.Sequence", "children": [ { "id": "c", "type": "Test.Choose" } ] }""", variables: Trace));
+        Assert.Equal(ExecutionStatus.Failed, outside.Result.Status);
+        Assert.Contains("'c' is not a step being run by a graph container", outside.Result.Error!.Message, StringComparison.Ordinal);
+
+        var twice = await RunAsync(Graph("""{ "id": "c", "type": "Test.Choose", "properties": { "again": "yes" } }"""));
+        Assert.Equal(ExecutionStatus.Failed, twice.Result.Status);
+        Assert.Contains("'c' already chose its transition", twice.Result.Error!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExecuteStep_Cancellation_PropagatesFromAStep()
     {
         using var h = new RuntimeHarness();

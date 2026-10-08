@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.1",
+  "id": "diag-state",
+  "name": "diag-state",
+  "version": "1.0.0",
+  "root": {
+    "id": "machine",
+    "type": "Core.StateMachine",
+    "children": [
+      {
+        "id": "start",
+        "type": "Core.State",
+        "transitions": [
+          {
+            "to": "stop"
+          }
+        ]
+      },
+      {
+        "id": "note",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'not a state'"
+        }
+      },
+      {
+        "id": "stop",
+        "type": "Core.State",
+        "properties": {
+          "final": true
+        },
+        "transitions": [
+          {
+            "to": "start"
+          }
+        ]
+      }
+    ]
+  }
+}

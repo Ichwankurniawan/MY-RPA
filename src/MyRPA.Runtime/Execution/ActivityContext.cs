@@ -13,7 +13,8 @@ internal sealed class ActivityContext(
     ExecutionIdentity identity,
     VariableScope variables,
     TimeProvider timeProvider,
-    CancellationToken cancellationToken) : IActivityContext
+    CancellationToken cancellationToken,
+    StepChoice? choice = null) : IActivityContext
 {
     public NodeDefinition Node { get; } = node;
 
@@ -71,19 +72,44 @@ internal sealed class ActivityContext(
             throw new InvalidOperationException($"Node '{node.Id}' is not a step (child) of node '{Node.Id}'.");
         }
 
-        await runner.ExecuteNodeAsync(frame, node, variables, CancellationToken).ConfigureAwait(false);
-        for (var i = 0; i < node.Transitions.Count; i++)
+        // The step may choose its transition itself while it runs (ChooseTransition); otherwise it is chosen now.
+        var stepChoice = new StepChoice(Node);
+        await runner.ExecuteNodeAsync(frame, node, variables, CancellationToken, stepChoice).ConfigureAwait(false);
+        return stepChoice.Made ? stepChoice.Target : SelectTransition(Node, node, variables);
+    }
+
+    public NodeDefinition? ChooseTransition()
+    {
+        if (choice is null)
         {
-            var transition = node.Transitions[i];
+            throw new InvalidOperationException($"Node '{Node.Id}' is not a step being run by a graph container, so it has no transition to choose.");
+        }
+
+        if (choice.Made)
+        {
+            throw new InvalidOperationException($"Node '{Node.Id}' already chose its transition.");
+        }
+
+        choice.Target = SelectTransition(choice.Container, Node, variables);
+        choice.Made = true;
+        return choice.Target;
+    }
+
+    /// <summary>The first transition of <paramref name="step"/> that is taken, as a step of <paramref name="container"/>.</summary>
+    private static NodeDefinition? SelectTransition(NodeDefinition container, NodeDefinition step, VariableScope variables)
+    {
+        for (var i = 0; i < step.Transitions.Count; i++)
+        {
+            var transition = step.Transitions[i];
             var taken = transition.When is null || (transition.When.Evaluate(variables) is bool b
                 ? b
                 : throw new WorkflowExpressionException(
-                    $"Transition {i} of step '{node.Id}' (to '{transition.To}') must evaluate to Boolean: \"{transition.When.Source}\"."));
+                    $"Transition {i} of step '{step.Id}' (to '{transition.To}') must evaluate to Boolean: \"{transition.When.Source}\"."));
             if (taken)
             {
                 // Validation guarantees the target is a sibling (MYRPA1053).
-                return Node.Children.FirstOrDefault(c => c.Id == transition.To)
-                    ?? throw new InvalidOperationException($"Transition target '{transition.To}' is not a step of node '{Node.Id}'.");
+                return container.Children.FirstOrDefault(c => c.Id == transition.To)
+                    ?? throw new InvalidOperationException($"Transition target '{transition.To}' is not a step of node '{container.Id}'.");
             }
         }
 

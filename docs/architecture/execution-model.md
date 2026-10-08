@@ -102,7 +102,10 @@ arbitrary nodes, touch engine state, or reach a service locator.
 `IActivityContext.ExecuteStepAsync(step)`: the engine runs the step like any child (same scope, same events), then
 evaluates the step's `transitions` in order and returns the sibling to run next, or null. Transition conditions are
 evaluated only there, so graph semantics live in the engine, not in each activity. A condition that is not Boolean
-fails the container (MYRPA2003); a failing step is attributed to the step, as in a sequence. The loader guarantees that
+fails the container (MYRPA2003); a failing step is attributed to the step, as in a sequence. A step can choose its
+transition while it runs with `IActivityContext.ChooseTransition()` (the same evaluation, recorded for its container):
+`Core.State` does so between its `entry` and `exit` actions, so conditions see what `entry` did and `exit` runs after
+the decision. The loader guarantees that
 only steps of graph containers have transitions and that every target is a sibling.
 
 **Activity lifetime.** Each node invocation gets a new activity instance, and the engine disposes it right after the

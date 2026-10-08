@@ -559,6 +559,52 @@
     ]
   },
   {
+    "file": "diag-state.json",
+    "readable": true,
+    "source": "hand-written (format 1.1, ADR-0037)",
+    "diagnostics": [
+      {
+        "code": "MYRPA1055",
+        "severity": "Error",
+        "message": "A state machine holds states only (Core.State), not \u0027Core.Log\u0027.",
+        "path": "$.root.children[1].type",
+        "nodeId": "note",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[1]",
+          "nodeId": "note",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1057",
+        "severity": "Error",
+        "message": "A final state ends the state machine, so it cannot have transitions.",
+        "path": "$.root.children[2].transitions",
+        "nodeId": "stop",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[2]",
+          "nodeId": "stop",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1056",
+        "severity": "Warning",
+        "message": "Step \u0027note\u0027 cannot be reached from the start step \u0027start\u0027; it never runs.",
+        "path": "$.root.children[1]",
+        "nodeId": "note",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[1]",
+          "nodeId": "note",
+          "property": null
+        }
+      }
+    ]
+  },
+  {
     "file": "known-comments.json",
     "readable": true,
     "diagnostics": [

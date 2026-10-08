@@ -215,6 +215,7 @@ public sealed class CliWorkflowTests : IDisposable
     [InlineData("hello-world.json", "greeting", "Hello, World!")]
     [InlineData("control-flow.json", "handledError", "Out of stock (node fail-on-purpose)")]
     [InlineData("flowchart.json", "outcome", "Succeeded after 3 attempts")]
+    [InlineData("state-machine.json", "summary", "Processed 3 of 3 items")]
     public async Task ShippedSamples_Run(string sample, string output, string expected)
     {
         var result = await Cli.RunAsync("run", Path.Combine(RepositoryPaths.Samples, sample));

@@ -617,6 +617,23 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check((await item('decision-1').locator('.transitions-summary').textContent()) === '→ assign-1 when n < 3→ log-1', 'the list view shows the transitions');
   step('G-2. Flowchart built in Chromium: Flowchart inserted (file raised to 1.1), steps dropped on the canvas, an arrow drawn, transitions added by keyboard, a step moved; saved, valid, ran 3 loops; the arrow taken is highlighted; list view');
 
+  // G-3: the shipped state machine sample on the same canvas, run: the final state marked, states visited, the arrow taken.
+  copyFileSync(join(repo, 'samples', 'state-machine.json'), join(project, 'state-machine.json'));
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await openWorkflow('state-machine.json');
+  check((await page.locator('.flow-step').evaluateAll((s) => s.map((e) => e.dataset.nodeId).join(','))) === 'init,get-work,process,end', 'the states are on the canvas');
+  check((await page.locator('.flow-step[data-node-id="end"] .badge.final').count()) === 1, 'the final state is marked');
+  await runWithDefaults();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  const machineLogs = (await page.locator('.events .log').allTextContents()).join('|');
+  check(machineLogs.includes('Processing invoice-3'), `state machine logs: ${machineLogs}`);
+  const getWorkKey = await page.locator('.flow-step[data-node-id="get-work"]').getAttribute('data-key');
+  const machineTaken = await page.locator('.flow-arrows g.arrow.taken').evaluateAll((gs) => gs.map((g) => g.dataset.arrow));
+  check(JSON.stringify(machineTaken) === JSON.stringify([`${getWorkKey}:1`]), `the arrow taken last: ${JSON.stringify(machineTaken)}`);
+  await page.screenshot({ path: join(results, 'g3-state-machine.png') });
+  step('G-3. State machine sample on the canvas: final state marked; ran (init → get work ⇄ process → end) and processed 3 items; the arrow taken last (get-work → end) highlighted');
+
   // W6-8: Single-command start: only --open <file> (no --project, no --web). The server serves the Studio bundled
   // next to it, makes the file's folder the project, and the Studio opens the file.
   const singleLink = await startServer(['--open', join(project, 'hello-world.json')]);

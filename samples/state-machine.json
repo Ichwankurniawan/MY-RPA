@@ -1,0 +1,155 @@
+{
+  "schemaVersion": "1.1",
+  "id": "state-machine-queue",
+  "name": "State machine: process a queue",
+  "version": "1.0.0",
+  "description": "The usual shape of a long-running robot (ADR-0037): init, get work, process, end. Each state runs entry, its transitions choose the next state, then exit runs.",
+  "arguments": [
+    {
+      "name": "items",
+      "direction": "In",
+      "type": "List",
+      "default": [
+        "invoice-1",
+        "invoice-2",
+        "invoice-3"
+      ]
+    },
+    {
+      "name": "summary",
+      "direction": "Out",
+      "type": "String"
+    }
+  ],
+  "variables": [
+    {
+      "name": "next",
+      "type": "Int",
+      "default": 0
+    },
+    {
+      "name": "done",
+      "type": "Int",
+      "default": 0
+    }
+  ],
+  "root": {
+    "id": "robot",
+    "type": "Core.StateMachine",
+    "properties": {
+      "maxSteps": 1000
+    },
+    "children": [
+      {
+        "id": "init",
+        "type": "Core.State",
+        "displayName": "Init",
+        "slots": {
+          "entry": {
+            "id": "init-log",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'Starting: ' + len(items) + ' items'"
+            }
+          }
+        },
+        "layout": {
+          "x": 240,
+          "y": 40
+        },
+        "transitions": [
+          {
+            "to": "get-work"
+          }
+        ]
+      },
+      {
+        "id": "get-work",
+        "type": "Core.State",
+        "displayName": "Get work",
+        "layout": {
+          "x": 240,
+          "y": 190
+        },
+        "transitions": [
+          {
+            "to": "process",
+            "when": "next < len(items)",
+            "label": "item"
+          },
+          {
+            "to": "end",
+            "label": "empty"
+          }
+        ]
+      },
+      {
+        "id": "process",
+        "type": "Core.State",
+        "displayName": "Process",
+        "slots": {
+          "entry": {
+            "id": "process-log",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'Processing ' + items[next]"
+            }
+          },
+          "exit": {
+            "id": "advance",
+            "type": "Core.Sequence",
+            "children": [
+              {
+                "id": "count",
+                "type": "Core.Assign",
+                "properties": {
+                  "to": "done",
+                  "value": "done + 1"
+                }
+              },
+              {
+                "id": "step",
+                "type": "Core.Assign",
+                "properties": {
+                  "to": "next",
+                  "value": "next + 1"
+                }
+              }
+            ]
+          }
+        },
+        "layout": {
+          "x": 520,
+          "y": 190
+        },
+        "transitions": [
+          {
+            "to": "get-work"
+          }
+        ]
+      },
+      {
+        "id": "end",
+        "type": "Core.State",
+        "displayName": "End",
+        "properties": {
+          "final": true
+        },
+        "slots": {
+          "entry": {
+            "id": "report",
+            "type": "Core.Assign",
+            "properties": {
+              "to": "summary",
+              "value": "'Processed ' + done + ' of ' + len(items) + ' items'"
+            }
+          }
+        },
+        "layout": {
+          "x": 240,
+          "y": 340
+        }
+      }
+    ]
+  }
+}

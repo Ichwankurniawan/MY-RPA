@@ -109,6 +109,12 @@ container completes.
 | `when` | no | Expression (like an Expression property) that must be Boolean; absent means always. Evaluated in the container's scope after the step. |
 | `label` | no | Text shown on the arrow; designer only. |
 
+A `Core.StateMachine` is a graph container whose steps are `Core.State` nodes (MYRPA1055 otherwise). A state runs its
+`entry` slot, then (unless it is final) its transitions choose the next state, then its `exit` slot runs; a state that
+is not final and takes no transition fails with MYRPA2011. A final state (`final` true) ends the machine and has no
+transitions (MYRPA1057 when `final` is the literal `true`; at run time, MYRPA2011). Example:
+[`samples/state-machine.json`](../../samples/state-machine.json) (init → get work ⇄ process → end).
+
 Steps share the container's scope (no locals). Every run of a step emits its own `node.started` / `node.completed`
 events, so a step in a loop appears once per run. Example: [`samples/flowchart.json`](../../samples/flowchart.json).
 
@@ -130,6 +136,8 @@ events, so a step in a loop appears once per run. Example: [`samples/flowchart.j
 | `Core.InvokeWorkflow` | `workflow` (text, req), `arguments` (map), `outputs` (target map), `timeoutMilliseconds` (expr) | — | Runs another workflow file (relative path, confined to the entry workflow's directory). |
 | `Core.Flowchart` (1.1) | `maxSteps` (expr → Int ≥ 0; default 10,000) | `children` as graph steps (§3.1) | Runs the start step, then follows transitions; checks cancellation between steps. Running more than `maxSteps` steps fails the node with `MYRPA2010`. |
 | `Core.Decision` (1.1) | — | — | Does nothing; a flowchart branch point whose transitions carry the conditions. |
+| `Core.StateMachine` (1.1) | `maxSteps` (expr → Int ≥ 0; default 10,000) | `children`: `Core.State` steps (§3.1) | Runs the first state, then the state each one chooses, until a final state completes; more than `maxSteps` states fails with `MYRPA2010`. |
+| `Core.State` (1.1) | `final` (expr → Boolean; default false) | `entry`, `exit` | `entry`, then the transitions choose the next state (conditions only), then `exit`. Not final and no transition taken: `MYRPA2011`. |
 
 `myrpa info` prints the registered activity types.
 
@@ -169,9 +177,9 @@ injected clock. There is no access to .NET members or types. Limits: 4096 charac
 | MYRPA1043 / 1044 | Expression syntax, function or arity error / unknown name |
 | MYRPA1045 / 1046 / 1047 | Invalid assignment target (unknown or read-only) / value not allowed / local hides a name |
 | MYRPA1050 / 1051 / 1052 | Children not allowed / unknown slot / missing required slot |
-| MYRPA1053 / 1054 / 1055 | Transition target is not a sibling step / transitions on a node whose parent is not a graph container / graph container without steps |
+| MYRPA1053 / 1054 / 1055 | Transition target is not a sibling step / transitions on a node whose parent is not a graph container / graph container without steps, or a state machine step that is not a `Core.State` |
 | MYRPA1056 | Step cannot be reached from the start step (warning) |
-| MYRPA1057 | Layout position is not a finite number (later also: final state with transitions, G-3) |
+| MYRPA1057 | Layout position is not a finite number, or a final state (`final` literally true) with transitions |
 | MYRPA1058 | `transitions`, `layout` or a graph container in a file that declares a schema version before 1.1 |
 | MYRPA1060 / 1061 / 1062 / 1063 / 1064 / 1065 | Invalid name / duplicate name / invalid direction / invalid type / invalid default / Out argument with default or required |
 
@@ -189,6 +197,7 @@ injected clock. There is no access to .NET members or types. Limits: 4096 charac
 | MYRPA2008 | Maximum invocation depth exceeded |
 | MYRPA2009 | Invoked workflow could not be resolved or is invalid |
 | MYRPA2010 | A graph container ran more than `maxSteps` steps (`errorType` `Graph`) |
+| MYRPA2011 | A state machine cannot go on: no transition taken from a state that is not final, or a final state has transitions (`errorType` `Graph`) |
 
 ## 8. Compatibility policy
 
@@ -197,5 +206,6 @@ injected clock. There is no access to .NET members or types. Limits: 4096 charac
   the schema-version check in `WorkflowLoader`).
 - `WorkflowJsonWriter` writes the same format (load → write round-trips) and keeps the file's schema version: a
   workflow without graph data stays `1.0`.
-- Version 1.1 (ADR-0037) added `transitions`, `layout`, graph containers, `Core.Flowchart` and `Core.Decision`. A 1.0
+- Version 1.1 (ADR-0037) added `transitions`, `layout`, graph containers, `Core.Flowchart`, `Core.Decision`,
+  `Core.StateMachine` and `Core.State`. A 1.0
   reader rejects 1.1 files with MYRPA1011.

@@ -133,6 +133,21 @@ Refinements made while implementing the engine slice ([plan](../architecture/gra
 - Deleting a step, or moving it out of its flowchart, also removes the transitions that went to it (and its own);
   pasted steps keep the transitions among themselves (renamed with their ids), others are dropped.
 
+## Implementation notes (G-3, 2026-10-08)
+- **SDK 1.1 gains `IActivityContext.ChooseTransition()`** (additive; SDK 1.1 has not been released). With
+  `ExecuteStepAsync` alone the transitions are evaluated after the whole step, so a state could not keep the order of
+  §2 (entry → transitions → exit). A step being run by its container may now ask the engine to evaluate its own
+  transitions while it runs; the container continues with that recorded choice. Transition semantics stay in the
+  engine; outside a graph step, or a second time, the call is refused.
+- `final` stays an expression (default false). The loader reports MYRPA1057 when it is the literal `true` and the state
+  has transitions; an expression that is true at run time with transitions fails with MYRPA2011. A final state's `exit`
+  runs too (it is how a state is left).
+- "A state machine holds states only" (MYRPA1055) is a format rule on the type names `Core.StateMachine` and
+  `Core.State` in the loader, as §4 lists it; no catalog field describes allowed child types (the Studio shows the
+  diagnostic; it does not refuse the insert).
+- The Studio needed no state-machine-specific code beyond two icons and a "final" badge: the canvas, the Transitions
+  editor, the list view and Open work for any graph container.
+
 ## Owner decisions (2026-10-08)
 1. Schedule: after the Studio UX slice (UX-1 to UX-3), before Phase 6.
 2. Format 1.1 (`transitions`, `layout`) and SDK 1.1 (`ChildLayout`, `ExecuteStepAsync`): approved.

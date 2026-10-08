@@ -81,7 +81,7 @@ public static class DiagnosticCodes
     /// <summary>A node has transitions but its parent is not a graph container (ADR-0037).</summary>
     public const string TransitionsNotAllowed = "MYRPA1054";
 
-    /// <summary>A graph container has no steps, or a step its container does not accept (ADR-0037).</summary>
+    /// <summary>A graph container has no steps, or a step its container does not accept (a state machine holds states only, ADR-0037).</summary>
     public const string InvalidGraphSteps = "MYRPA1055";
 
     /// <summary>A step cannot be reached from the start step (warning, ADR-0037).</summary>
