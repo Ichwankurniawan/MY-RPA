@@ -40,4 +40,6 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0034](0034-web-studio-quality-review.md) | Web Studio quality: performance, accessibility, security, dependencies (W8) | Accepted for W8 | W8 |
 | [0035](0035-web-studio-wpf-exit-review.md) | Web Studio WPF exit review: corpus parity and exit evidence (W9) | Accepted for W9; exit record in 0036 | W9 |
 | [0036](0036-wpf-studio-archived.md) | The WPF Studio is archived, not deleted (W10, Phase 5 completion) | Accepted | W10 |
-| [0037](0037-flowchart-and-state-machine-workflows.md) | Flowchart and state-machine workflows (graph containers) | Accepted (owner, 2026-10-08); after the UX slice | post-5 |
+| [0037](0037-flowchart-and-state-machine-workflows.md) | Flowchart and state-machine workflows (graph containers) | Accepted (owner, 2026-10-08); implemented (G-1 to G-3) | post-5 |
+| [0038](0038-browser-selectors.md) | Browser selectors: final format, strategies and generation | Accepted (owner, 2026-10-08) | 6 |
+| [0039](0039-browser-recorder.md) | Browser recorder: recording sessions, the recorder script, browser contracts | Accepted (owner, 2026-10-08) | 6 |

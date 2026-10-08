@@ -62,14 +62,41 @@ public static class BrowserSelectors
             {
                 SelectorStrategies.Css => locator is null ? page.Locator("css=" + step.Value) : locator.Locator("css=" + step.Value),
                 SelectorStrategies.XPath => locator is null ? page.Locator("xpath=" + step.Value) : locator.Locator("xpath=" + step.Value),
-                SelectorStrategies.Text => locator is null ? page.GetByText(step.Value) : locator.GetByText(step.Value),
+                SelectorStrategies.Text => Text(page, locator, step.Value),
                 SelectorStrategies.Role => Role(page, locator, step.Value),
+                SelectorStrategies.Accessibility => locator is null
+                    ? page.GetByLabel(step.Value, new PageGetByLabelOptions { Exact = true })
+                    : locator.GetByLabel(step.Value, new LocatorGetByLabelOptions { Exact = true }),
+                SelectorStrategies.Attributes => locator is null ? page.Locator(AttributeCss(step.Value)) : locator.Locator(AttributeCss(step.Value)),
                 _ => throw Invalid(Format(selector), $"strategy '{step.Strategy}' is not supported by the browser provider"),
             };
         }
 
         return locator!;
     }
+
+    /// <summary><c>text=Sign in</c> contains the text; <c>text="Sign in"</c> is exactly the whole text (ADR-0038).</summary>
+    private static ILocator Text(IPage page, ILocator? scope, string value)
+    {
+        var exact = IsQuoted(value);
+        var text = exact ? value[1..^1] : value;
+        return scope is null
+            ? page.GetByText(text, new PageGetByTextOptions { Exact = exact })
+            : scope.GetByText(text, new LocatorGetByTextOptions { Exact = exact });
+    }
+
+    private static bool IsQuoted(string value) => value.Length >= 3 && value[0] == '"' && value[^1] == '"';
+
+    /// <summary>An <c>attr=name=value</c> step as a CSS attribute selector with an exactly equal, escaped value.</summary>
+    private static string AttributeCss(string value)
+    {
+        var equals = value.IndexOf('=', StringComparison.Ordinal);
+        var escaped = value[(equals + 1)..].Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+        return $"css=[{value[..equals]}=\"{escaped}\"]";
+    }
+
+    private static bool IsAttributeName(string name) =>
+        name.Length is > 0 and <= 128 && (char.IsAsciiLetter(name[0]) || name[0] is '_' or ':') && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or ':' or '.');
 
     private static ILocator Role(IPage page, ILocator? scope, string value)
     {
@@ -100,6 +127,10 @@ public static class BrowserSelectors
             "XPATH" => (SelectorStrategies.XPath, part[(equals + 1)..]),
             "TEXT" => (SelectorStrategies.Text, part[(equals + 1)..]),
             "ROLE" => (SelectorStrategies.Role, part[(equals + 1)..]),
+            "LABEL" => (SelectorStrategies.Accessibility, part[(equals + 1)..]),
+            "ATTR" => (SelectorStrategies.Attributes, part[(equals + 1)..]),
+            "TESTID" => (SelectorStrategies.Attributes, "data-testid=" + part[(equals + 1)..]),
+            "AUTOMATIONID" => throw Invalid(whole, "Automation ID selectors are for desktop applications (Windows automation), not for web pages"),
             _ when part.StartsWith('/') || part.StartsWith('(') => (SelectorStrategies.XPath, part),
             _ => (SelectorStrategies.Css, part),
         };
@@ -114,6 +145,15 @@ public static class BrowserSelectors
             throw Invalid(whole, $"'{value.Split('|')[0]}' is not an ARIA role");
         }
 
+        if (strategy == SelectorStrategies.Attributes)
+        {
+            var at = value.IndexOf('=', StringComparison.Ordinal);
+            if (at < 0 || !IsAttributeName(value[..at]) || at == value.Length - 1)
+            {
+                throw Invalid(whole, $"'{value}' is not 'name=value' with an HTML attribute name and a value");
+            }
+        }
+
         return new SelectorStep(strategy, value);
     }
 
@@ -122,6 +162,8 @@ public static class BrowserSelectors
         SelectorStrategies.XPath => "xpath",
         SelectorStrategies.Text => "text",
         SelectorStrategies.Role => "role",
+        SelectorStrategies.Accessibility => "label",
+        SelectorStrategies.Attributes => "attr",
         _ => "css",
     };
 

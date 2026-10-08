@@ -95,18 +95,23 @@ Plugin settings, from `PluginSource.Settings` in code hosts; the CLI cannot pass
 Example: `samples/plugins/browser-demo.json` is a complete open, navigate, type, click, read and close workflow.
 
 ## Selectors
-This is a provisional Phase 4 syntax. Phase 6 defines the final selector format, generation and recording. The text
-is parsed into the SDK `Selector` (provider `Browser.Playwright`).
+The final format ([ADR-0038](../adr/0038-browser-selectors.md), Phase 6; everything valid in Phase 4 keeps its
+meaning). The text is parsed into the SDK `Selector` (provider `Browser.Playwright`).
 
 | Syntax | Strategy | Meaning |
 |---|---|---|
 | `css=#login` or `#login` | Css | CSS selector (the default without a prefix). |
 | `xpath=//form/button` or `//form/button` | XPath | XPath (the default when the text starts with `/` or `(`). |
 | `text=Sign in` | Text | Elements containing the text (case-insensitive, whitespace-normalized). |
+| `text="Sign in"` | Text | Elements whose whole text is exactly `Sign in`. |
 | `role=button` / `role=button\|Sign in` | Role | ARIA role, optionally with the exact accessible name. |
+| `label=Email` | Accessibility | Form controls labelled exactly `Email` (`<label>`, `aria-label`, `aria-labelledby`). |
+| `attr=name=email` | Attributes | Elements whose attribute `name` equals `email` exactly. |
+| `testid=submit` | Attributes | Shorthand for `attr=data-testid=submit`. |
 | `css=form#login >> role=button\|Submit` | chained | Each step searches within the previous match. |
 
 Invalid selectors fail with `InvalidSelector`, from our parser or from the browser engine (e.g. malformed CSS or XPath).
+Automation ID selectors are for desktop applications (Phase 7): `automationid=` is refused with `InvalidSelector`.
 
 ## Errors
 Failures are classified in `errorType`, which `Core.TryCatch` exposes as `err.errorType`. Error code MYRPA2001:

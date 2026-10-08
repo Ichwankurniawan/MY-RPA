@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MyRPA.Core.Execution;
 using static MyRPA.Browser.Playwright.Tests.Nodes;
 
@@ -140,6 +141,45 @@ public sealed class SelectorTests(BrowserHost host) : IClassFixture<BrowserHost>
 
         AssertSucceeded(result);
         Assert.Equal(expected, result.Outputs["t"]);
+    }
+
+    [Theory]
+    [InlineData("label=Name", "name")]
+    [InlineData("attr=data-kind=nav", "link")]
+    [InlineData("attr=name=name", "name")]
+    [InlineData("testid=greet-button", "greet")]
+    [InlineData("text=\"Two\"", null)]
+    [InlineData("text=Tw", null)]
+    [InlineData("css=ul >> text=\"One\"", null)]
+    public async Task Phase6Selectors_FindTheElement(string selector, string? id)
+    {
+        // ADR-0038: exact text, label (Accessibility), attributes and test ids. List items have no id: their class is read.
+        var attribute = id is null ? "class" : "id";
+        var result = await host.RunAsync(host.Open() + ", " + Node("Browser.GetAttribute", $"\"selector\": {JsonSerializer.Serialize(selector)}, \"name\": \"{attribute}\", \"to\": \"t\""), ["t"]);
+
+        AssertSucceeded(result);
+        Assert.Equal(id ?? "item", result.Outputs["t"]);
+    }
+
+    [Fact]
+    public async Task ExactText_DoesNotMatchPartOfAText()
+    {
+        var result = await host.RunAsync(host.Open() + ", " + Node("Browser.GetText", $"\"selector\": {JsonSerializer.Serialize("text=\"Tw\"")}, \"to\": \"t\", \"timeoutMilliseconds\": 500"), ["t"]);
+
+        AssertFailed(result, ErrorTypes.ElementNotFound);
+    }
+
+    [Theory]
+    [InlineData("attr=data-kind")]
+    [InlineData("attr=bad name=x")]
+    [InlineData("attr=data-kind=")]
+    [InlineData("label= ")]
+    [InlineData("automationid=Submit")]
+    public async Task InvalidPhase6Selectors_FailWithInvalidSelector(string selector)
+    {
+        var result = await host.RunAsync(host.Open() + ", " + Node("Browser.GetText", $"\"selector\": {JsonSerializer.Serialize(selector)}, \"to\": \"t\", \"timeoutMilliseconds\": 1000"), ["t"]);
+
+        AssertFailed(result, ErrorTypes.InvalidSelector);
     }
 
     [Theory]

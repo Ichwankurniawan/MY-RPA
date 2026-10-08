@@ -13,7 +13,7 @@ public sealed class TestSite : IDisposable
           <h1 id="title">Welcome</h1>
           <a id="link" href="/other" data-kind="nav">Other page</a>
           <label for="name">Name</label><input id="name" name="name" value="" />
-          <button id="greet" onclick="document.getElementById('out').textContent = 'Hello, ' + document.getElementById('name').value">Greet</button>
+          <button id="greet" data-testid="greet-button" onclick="document.getElementById('out').textContent = 'Hello, ' + document.getElementById('name').value">Greet</button>
           <p id="out"></p>
           <button id="hidden" style="display:none">Hidden</button>
           <button id="disabled" disabled>Disabled</button>

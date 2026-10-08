@@ -4,6 +4,8 @@
 - Date: 2026-09-24
 - Phase: 4
 - Builds on: ADR-0013 (SDK), ADR-0014/0016 (plugin loading), ADR-0015 (trust)
+- Amended by: [ADR-0038](0038-browser-selectors.md) (the final selector format, Phase 6),
+  [ADR-0039](0039-browser-recorder.md) (recording sessions may add the recorder script; workflow runs still may not)
 
 ## Context
 PRD Phase 4 asks for the first real automation provider: browser automation with Playwright, following PRD 7.2

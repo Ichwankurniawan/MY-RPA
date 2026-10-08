@@ -4,11 +4,10 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 5 complete (W0–W10, 2026-10-08;
-  the WPF Studio is archived, ADR-0036). Authorized follow-up (owner, 2026-10-08): the Studio UX slice UX-1 → UX-3
-  (`docs/architecture/studio-ux-plan.md`), then graph workflows (ADR-0037: flowchart, then state machine; `docs/architecture/graph-workflows-plan.md`,
-  G-1 engine, G-2 Studio canvas and G-3 state machine done).** Phase 6
-  (Selectors & Recorder) comes after those and must not start without the owner's explicit authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 6 — Selectors & Recorder, authorized by
+  the owner on 2026-10-08 ("okay, proceed to phase 6"); plan `docs/architecture/selectors-recorder-plan.md`, decisions
+  ADR-0038 and ADR-0039; slices S-1 → S-4 (S-1 done).** Phase 5, the Studio UX slice and graph workflows (ADR-0037) are
+  complete. Phase 7 must not start without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
