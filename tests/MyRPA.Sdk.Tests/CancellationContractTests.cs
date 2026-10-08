@@ -23,7 +23,8 @@ public sealed class CancellationContractTests
     {
         using var h = Harness();
 
-        var result = await h.RunAsync(SdkHarness.Workflow(Sequence("Test.Cooperative")), timeout: TimeSpan.FromMilliseconds(50));
+        // The timeout runs from the start of the run: long enough to reach the node even on a slow machine.
+        var result = await h.RunAsync(SdkHarness.Workflow(Sequence("Test.Cooperative")), timeout: TimeSpan.FromSeconds(1));
 
         Assert.Equal(ExecutionStatus.TimedOut, result.Status);
         Assert.Equal(["waiting", "cleanup-done"], h.Probe.Events);
@@ -33,9 +34,13 @@ public sealed class CancellationContractTests
     public async Task ExternalCancellation_ReportsCancelled_AndCleanupCompletesFirst()
     {
         using var h = Harness();
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var run = h.RunAsync(SdkHarness.Workflow(Sequence("Test.Cooperative")), cancellationToken: cts.Token);
+        // Cancel once the activity runs (a timer could fire before the engine reaches the node on a slow machine).
+        await h.Probe.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
 
-        var result = await h.RunAsync(SdkHarness.Workflow(Sequence("Test.Cooperative")), cancellationToken: cts.Token);
+        await cts.CancelAsync();
+        var result = await run;
 
         Assert.Equal(ExecutionStatus.Cancelled, result.Status);
         // Cleanup ran (with CancellationToken.None) before the engine returned the result.
@@ -78,6 +83,7 @@ public sealed class CancellationContractTests
         public async ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
         {
             probe.Events.Enqueue("waiting");
+            probe.Started.TrySetResult();
             try
             {
                 await Task.Delay(Timeout.Infinite, context.CancellationToken);
