@@ -73,9 +73,12 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workfl
 | `DELETE /api/projects/{project}/workflows/{path}` | Delete; `If-Match` required |
 | `POST /api/projects/{project}/move` | `{ from, to }` with `If-Match` (the source's ETag): renames or moves a file within the project, atomically, content unchanged → 200 `{ path }` and the `ETag`. 409 if `to` exists (never overwrites), 412 on a stale ETag, 428 without `If-Match`, 404 if `from` is gone, 400 for paths the store refuses or `from` = `to` (W6) |
 | `POST /api/validate` | `{ document }` → `{ valid, diagnostics: [{ code, severity, message, path, nodeId }] }` from the engine's `WorkflowLoader`. `…properties.<name>` in a path names the property (ADR-0026). |
-| `POST /api/runs` | `{ project, path, document?, arguments?, argumentText?, timeoutMs? }` → 202 `{ runId }`. See below. |
+| `POST /api/runs` | `{ project, path, document?, arguments?, argumentText?, timeoutMs?, debug? }` → 202 `{ runId }`. See below. |
 | `GET /api/runs/{runId}` | `{ runId, state, lastSequence, result? }`. The result has status, ids, duration, outputs and error. |
 | `POST /api/runs/{runId}/cancel` | 202, 404 if the run is unknown, 409 if it already finished |
+| `GET /api/runs/{runId}/debug` | A debug run's state (ADR-0040): `{ paused: null or { executionId, parentExecutionId, workflowId, nodeId, activityType, reason, values: [{ name, kind, type, value }] }, breakpoints: [nodeId] }`. The only place paused values appear. 404 for a run that is not a debug run of this session |
+| `POST /api/runs/{runId}/debug` | `{ command }`: `continue`, `stepInto`, `stepOver`, `stepOut` (202, 409 if not paused) or `pause` (202, 409 if already paused or finished). 400 for another command, 404 as above |
+| `PUT /api/runs/{runId}/breakpoints` | `{ breakpoints: [nodeId] }` replaces a debug run's breakpoints, from its next node on → 204 |
 | `POST /api/streams` | 201 `{ streamId }`: one per browser tab |
 | `GET /api/streams/{streamId}` | The tab's SSE stream (see below) |
 | `POST /api/streams/{streamId}/subscriptions` | `{ runId, afterSequence? }` or `{ recordingId, afterSequence? }`: follow a run or a recording on this stream |
@@ -101,6 +104,9 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workfl
   run with `MYRPA2004` before any node runs.
 - An invalid workflow gets 422 with the diagnostics. Unknown or Out arguments, bad values or text, and a name given
   twice get 400.
+- `debug: { breakpoints?: [nodeId], pauseAtStart? }` starts a debug run (ADR-0040). Breakpoints are node ids of the run's
+  workflow (at most 10,000; an empty id is a 400). The run belongs to the session that started it: only that session can
+  read its paused values and send commands; anyone else gets 404. Stop is the usual cancel, which also ends a pause.
 
 ## Event stream (ADR-0024)
 
@@ -125,7 +131,9 @@ data: {"sequence":3,"kind":"node.started","runId":"…","time":"…","executionI
 ```
 
 - **Data:** each event's `data` is an `ExecutionEventMessage` (`MyRPA.Contracts`). The kinds are `execution.started`,
-  `node.started`, `node.completed`, `execution.completed`, `log` and `stream.gap`.
+  `node.started`, `node.completed`, `execution.completed`, `log` and `stream.gap`; debug runs add `debug.paused`
+  (`nodeId`, `reason`: `breakpoint`, `step` or `pause`) and `debug.resumed` (`reason`: the command). These two carry ids
+  only; the values come from `GET /api/runs/{runId}/debug`.
 - **Order:** within a run, sequences are 1, 2, 3… in execution order. Runs are interleaved.
 - **Run end:** a run ends with the `execution.completed` that has no `parentExecutionId`.
 - **Resuming:** the `id` is the stream's position vector: subscription index = last sequence delivered. After a
