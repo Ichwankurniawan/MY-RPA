@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "smoke": "node scripts/smoke.mjs",
+    "manual": "node scripts/manual.mjs",
     "perf": "node scripts/perf.mjs",
     "a11y": "node scripts/a11y.mjs"
   },

@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
+import { memoryDrafts } from './drafts';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, immediately, helloWorldEvents, settle } from './test-support';
 
@@ -179,5 +180,22 @@ describe('Shortcuts and leaving with focus still in an edited field', () => {
     fireEvent.change(field, { target: { value: "'typed'" } });
 
     expect(leave()).toBe(true);
+  });
+
+  it('writes the crash-recovery draft at once when the page is left, not only after typing pauses', async () => {
+    const drafts = memoryDrafts();
+    const studio = new Studio(new FakeApi(), (url) => new FakeEventSource(url), immediately, { drafts, draftDelayMs: 60_000 });
+    render(<App studio={studio} />);
+    await act(async () => {
+      await settle();
+      await studio.open('hello-world.json');
+    });
+    fireEvent.click(treeItem('log-greeting'));
+    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'typed'" } });
+    expect(drafts.entries.size).toBe(0);
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect([...drafts.entries.values()].map((d) => d.text).join()).toContain("'typed'");
   });
 });

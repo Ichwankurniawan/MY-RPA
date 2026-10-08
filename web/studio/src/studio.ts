@@ -353,7 +353,8 @@ function selectedPath(state: StudioState): readonly Step[] | undefined {
   return state.document && state.selectedKey ? indexDocument(state.document).byKey.get(state.selectedKey)?.path : undefined;
 }
 
-function editRefusal(state: StudioState): string | undefined {
+/** Why the document cannot be edited at all now (no file open, or a read-only file); undefined when it can. */
+export function editRefusal(state: StudioState): string | undefined {
   if (state.document === undefined) {
     return 'Open a workflow first.';
   }
@@ -382,7 +383,8 @@ export function insertionTargetOf(state: StudioState): Target | string {
     return placeRefusal(state.document!, picked, state.catalog) ?? picked;
   }
 
-  const path = selectedPath(state);
+  // With the workflow itself selected (its details in Properties), inserts go into the root, as for a selected root.
+  const path = state.selectedKey === workflowKey ? [] : selectedPath(state);
   return path === undefined ? 'Select where to insert.' : selectionTarget(state.document!, path, state.catalog);
 }
 

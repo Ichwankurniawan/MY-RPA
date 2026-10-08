@@ -8,6 +8,7 @@ import { PropertiesPanel } from './PropertyEditors';
 import {
   currentRun,
   deleteRefusalOf,
+  editRefusal,
   insertRefusal,
   isActive,
   isDirty,
@@ -68,9 +69,14 @@ function Shell() {
         }
       }
     };
+    // Leaving writes the crash-recovery draft at once: it is otherwise written a second after typing stops (W9 manual run).
+    const onHide = () => studio.writeDraft();
     const onLeave = (event: BeforeUnloadEvent) => {
+      studio.writeDraft();
       if (isDirty(studio.store.get())) {
         event.preventDefault();
+        // Some browsers ask only when returnValue is set as well (the text itself is never shown).
+        event.returnValue = '';
       }
     };
     // Ctrl+X / C / V on activities (W7) use the browser's clipboard events, so pasting needs no permission prompt. In a
@@ -100,12 +106,14 @@ function Shell() {
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('beforeunload', onLeave);
+    window.addEventListener('pagehide', onHide);
     window.addEventListener('copy', onCopyOrCut);
     window.addEventListener('cut', onCopyOrCut);
     window.addEventListener('paste', onPaste);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('beforeunload', onLeave);
+      window.removeEventListener('pagehide', onHide);
       window.removeEventListener('copy', onCopyOrCut);
       window.removeEventListener('cut', onCopyOrCut);
       window.removeEventListener('paste', onPaste);
@@ -280,6 +288,9 @@ function Toolbox() {
   const studio = useStudio();
   const activities = useStudioState((s) => s.activities);
   const refusal = useStudioState(insertRefusal);
+  // Disabled only when nothing can be edited. When only the selection gives no place to insert, an entry is
+  // aria-disabled: a click says why, and it can still be dragged onto a drop zone, which is a place of its own.
+  const blocked = useStudioState((s) => editRefusal(s) !== undefined);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   // The catalog (built-in and plugin activities, ADR-0020) grouped by category; the search also matches descriptions.
@@ -324,7 +335,8 @@ function Toolbox() {
                         title={a.description}
                         aria-label={`Insert ${a.displayName} (${a.type})`}
                         aria-describedby={a.description ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
-                        disabled={refusal !== undefined}
+                        disabled={blocked}
+                        aria-disabled={!blocked && refusal !== undefined ? true : undefined}
                         onClick={() => studio.insertActivity(a.type)}
                       >
                         <span>{a.displayName}</span> <small>({a.type})</small>

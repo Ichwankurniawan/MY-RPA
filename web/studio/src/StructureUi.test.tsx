@@ -62,7 +62,7 @@ describe('structural editing UI', () => {
     expect(editButton('Undo').title).toBe('Undo: Edit message (Ctrl+Z)');
   });
 
-  it('disables insertion where there is no list, with the reason', async () => {
+  it('marks insertion unavailable where there is no list, with the reason; a click says why and changes nothing', async () => {
     const api = new FakeApi();
     api.files.set('if.json', { text: JSON.stringify({ schemaVersion: '1.0', root: { id: 'if', type: 'Core.If', slots: { then: { id: 't', type: 'Core.Log' } } } }), etag: 1 });
     const studio = new Studio(api, (url) => new FakeEventSource(url));
@@ -74,8 +74,34 @@ describe('structural editing UI', () => {
 
     fireEvent.click(treeItem('t'));
 
-    expect((screen.getByRole('button', { name: 'Insert Log (Core.Log)' }) as HTMLButtonElement).disabled).toBe(true);
+    const insert = screen.getByRole('button', { name: 'Insert Log (Core.Log)' }) as HTMLButtonElement;
+    // aria-disabled, not disabled: the entry can still be dragged onto a drop zone (W9 manual run).
+    expect(insert.getAttribute('aria-disabled')).toBe('true');
+    expect(insert.disabled).toBe(false);
     expect(screen.getByText(/fills the slot 'then'/)).toBeTruthy();
+    const before = studio.store.get().document;
+    fireEvent.click(insert);
+    expect(studio.store.get().document).toBe(before);
+    expect(studio.store.get().message).toMatch(/^Cannot insert: .*fills the slot 'then'/);
+  });
+
+  it('inserts into the root while the workflow itself is selected (W9 manual run)', async () => {
+    const { studio } = await renderStudio();
+    act(() => studio.selectWorkflow());
+
+    const insert = screen.getByRole('button', { name: 'Insert Log (Core.Log)' }) as HTMLButtonElement;
+    expect(insert.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(insert);
+
+    expect(treeIds()).toEqual(['main', 'build-greeting', 'log-greeting', 'log-1']);
+  });
+
+  it('disables the toolbox only when nothing can be edited', async () => {
+    const studio = new Studio(new FakeApi(), (url) => new FakeEventSource(url));
+    render(<App studio={studio} />);
+    await act(settle);
+
+    expect((screen.getByRole('button', { name: 'Insert Log (Core.Log)' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('deletes with the button or the Delete key and keeps focus in the tree', async () => {

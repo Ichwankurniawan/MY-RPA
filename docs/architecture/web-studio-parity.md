@@ -117,6 +117,7 @@ Web Studio every keystroke is already an edit of the document: there is no uncom
 | A refused value (invalid JSON, duplicate map name) stays in its field with the reason; Save and Run use the last valid document, they are not cancelled | The refused text is not saved; leaving the page warns only if the document itself has unsaved changes | Accept, or add a "fix the refused value first" guard before W10: owner's choice |
 | A non-string `version` (MYRPA1004) | The Web Studio opens the file and shows the diagnostic; WPF refused to open it | Web is more capable |
 | Case values are typed into the case zone instead of a prompt after the drop | Same outcome; no modal | Accept |
+| The status line and the Execution panel show the latest run of the tab, whichever file it ran | Recent runs selects any run; each run names its file | Accept, or show only the open file's runs: owner's choice |
 
 ## 4. Manual test script (Web Studio, PRD 5.5)
 
@@ -152,6 +153,18 @@ Automated coverage of the same steps (`npm run smoke`): 1 (start link, W6-8), 2 
 4 (W4B-1, W4B-2), 5 (5-6, W4B-2), 6 (W7-3), 7 (10, W4B-3; the server's validation is the CLI's `WorkflowLoader`),
 8 (11-12, W6-3), 9 (W5-1, W4B-3), 10 (W5-3), 11 (W6-3, W6-6); step 12's keyboard part by `npm run a11y`. The script
 is still run by a person: it checks what tests cannot (layout, wording, screen-reader output).
+
+`npm run manual` (W9) drives steps 1-11 exactly as written (drags from the toolbox, shortcuts, the CLI) and saves one
+screenshot per step. It cannot observe the browser's own leave prompt (step 11) or a screen reader (step 12).
+
+### Findings of the first run (2026-10-08)
+
+| Step | Finding | Fixed |
+|---|---|---|
+| 3 | At 125 % zoom the Files buttons wrapped and file names showed through below the header | Compact one-row buttons (`690abb4`) |
+| 3 | With the workflow selected (step 2), every toolbox entry was disabled, so not even a drag onto the empty list worked | Workflow selected = insert into the root; entries are only `aria-disabled` when the selection gives no place, so drags onto zones always work |
+| 11 | Crash recovery missed edits made less than a second before the page was left (drafts were written after a pause only) | The draft is written at once on `beforeunload` / `pagehide` |
+| — | The status line and Execution panel show the latest run of any file (a failed `demo-plugin.json` run while `greeter.json` was open) | Open: owner's choice (§3) |
 
 ## 5. Exit review sign-off
 

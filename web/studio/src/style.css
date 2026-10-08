@@ -98,7 +98,8 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 .toolbox li { padding: 1px 0; }
 .toolbox .category-toggle { width: 100%; text-align: left; border: none; background: none; padding: 4px 2px; font-weight: 600; color: var(--muted); }
 .toolbox button.insert { width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px 6px; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
-.toolbox button.insert:hover:not(:disabled) { border-color: var(--border); background: var(--panel-2); }
+.toolbox button.insert:hover:not(:disabled):not([aria-disabled='true']) { border-color: var(--border); background: var(--panel-2); }
+.toolbox button.insert[aria-disabled='true'] { opacity: 0.55; }
 .toolbox small { color: var(--muted); }
 .toolbox .description { display: block; padding: 0 6px 2px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
