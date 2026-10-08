@@ -92,6 +92,20 @@ public static class EventReading
         throw new InvalidOperationException("The stream ended before a matching event.");
     }
 
+    /// <summary>
+    /// Advances the fake clock until <paramref name="done"/> completes. A run executes on its own thread: node.started is
+    /// reported before the activity creates its timer, so a single advance right after that event can come first, and
+    /// the timer then waits for an advance that never comes (a hang seen in CI on a busy runner).
+    /// </summary>
+    public static async Task AdvanceUntilAsync(this FakeTimeProvider time, TimeSpan step, Task done)
+    {
+        while (!done.IsCompleted)
+        {
+            time.Advance(step);
+            await Task.WhenAny(done, Task.Delay(TimeSpan.FromMilliseconds(10), TestContext.Current.CancellationToken));
+        }
+    }
+
     public static string Describe(ExecutionEventMessage e) => e.Kind switch
     {
         ExecutionEventKinds.NodeStarted => $"node.started {e.NodeId}",
