@@ -6,7 +6,7 @@ Guidance for AI agents and contributors working in this repository.
 
 - The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 6 — Selectors & Recorder, authorized by
   the owner on 2026-10-08 ("okay, proceed to phase 6"); plan `docs/architecture/selectors-recorder-plan.md`, decisions
-  ADR-0038 and ADR-0039; slices S-1 → S-4 (S-1 done).** Phase 5, the Studio UX slice and graph workflows (ADR-0037) are
+  ADR-0038 and ADR-0039; slices S-1 → S-4 (S-1 and S-2 done).** Phase 5, the Studio UX slice and graph workflows (ADR-0037) are
   complete. Phase 7 must not start without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
@@ -46,17 +46,20 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 
 - Dependency direction (ADR-0003, amended by ADR-0010 and ADR-0013): Core ← Workflow; Core, Workflow ← Activities;
   Core, Workflow ← Runtime; Core, Workflow ← Storage; Core, Workflow ← Sdk; Core, Workflow, Sdk, Activities ← Plugins;
-  everything ← Cli; Contracts has no references;
+  everything ← Cli; Contracts and Browser.Contracts have no references (Browser.Contracts ← Server, the browser plugin;
+  ADR-0039);
   Core, Workflow, Contracts ← Execution.Hosting (ADR-0022); engine, Plugins, Contracts, Execution.Hosting ← Server. The engine and plugin host never reference Contracts or
   Execution.Hosting. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
   Plugins. Nothing references a composition root.
 - `MyRPA.Core`, `MyRPA.Workflow` and `MyRPA.Sdk`: BCL only, no packages, plain `net10.0` (ADR-0004, ADR-0013).
-- Plugin projects (`plugins/*`, `samples/plugins/*`, `tests/fixtures/*`) reference only `MyRPA.Sdk` (host contract
-  assemblies with `Private="false"`), set `EnableDynamicLoading`, and are never compiled against: tests reference them
+- Plugin projects (`plugins/*`, `samples/plugins/*`, `tests/fixtures/*`) reference only `MyRPA.Sdk` and
+  `MyRPA.Browser.Contracts` (host contract assemblies with `Private="false"`; a plugin may register an implementation of
+  an extension contract interface, ADR-0039), set `EnableDynamicLoading`, and are never compiled against: tests reference them
   with `ReferenceOutputAssembly="false"` and load them through the plugin host.
 - Technology packages live only in their provider plugin (`ArchitectureRules.TechnologyPackageOwners`):
   `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`. Never in src, tests or other plugins.
-- Browser plugin rules (ADR-0017): no JavaScript evaluation (`EvaluateAsync`), http/https/about:blank URLs only, file
+- Browser plugin rules (ADR-0017, ADR-0039): no JavaScript evaluation (`EvaluateAsync`; only the recorder adds its
+  fixed script and binding, `BrowserPluginRulesTests`), http/https/about:blank URLs only, file
   access only through `BrowserFilePolicy`, one browser per session, sessions closed when the run ends.
 - Libraries may use only `Microsoft.Extensions.*.Abstractions`; only composition roots use `Microsoft.Extensions.Hosting`.
 - Forbidden everywhere: WPF/WinForms/XAML and Windows-only target frameworks (ADR-0036). Forbidden in `src`: Playwright/browser libs, FlaUI/UIA, WF4/CoreWF, DB drivers/ORMs, AI SDKs,

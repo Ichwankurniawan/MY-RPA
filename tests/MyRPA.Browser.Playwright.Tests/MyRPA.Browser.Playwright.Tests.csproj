@@ -8,6 +8,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyRPA.Plugins\MyRPA.Plugins.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <!-- ADR-0039: the recorder is reached through its extension contract, from the host's services. -->
+    <ProjectReference Include="..\..\src\MyRPA.Browser.Contracts\MyRPA.Browser.Contracts.csproj" />
     <ProjectReference Include="..\..\plugins\MyRPA.Browser.Playwright\MyRPA.Browser.Playwright.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
   <ItemGroup>

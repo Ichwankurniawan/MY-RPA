@@ -1,5 +1,7 @@
 using System.Globalization;
+using MyRPA.Browser.Contracts;
 using MyRPA.Browser.Playwright.Activities;
+using MyRPA.Browser.Playwright.Recording;
 using MyRPA.Sdk.Plugins;
 
 namespace MyRPA.Browser.Playwright;
@@ -48,6 +50,7 @@ public sealed class BrowserPlugin : IPlugin
             .AddInstance(_options ?? throw new InvalidOperationException("Initialize must run before Register."))
             .AddProvider<IBrowserProvider, PlaywrightBrowserProvider>(PlaywrightBrowserProvider.Id)
             .AddService<BrowserSessions, BrowserSessions>(PluginServiceLifetime.Run)
+            .AddService<IBrowserRecorder, PlaywrightRecorder>(PluginServiceLifetime.Plugin)
             .AddActivity<OpenActivity>(OpenActivity.Descriptor)
             .AddActivity<NavigateActivity>(NavigateActivity.Descriptor)
             .AddActivity<ClickActivity>(ClickActivity.Descriptor)

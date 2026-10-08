@@ -135,9 +135,28 @@ Failures are classified in `errorType`, which `Core.TryCatch` exposes as `err.er
 
 Cancellation and the **run's** timeout are not errors of a node: the run ends `Cancelled` or `TimedOut`.
 
+## Recorder (Phase 6, ADR-0039)
+The plugin implements `IBrowserRecorder` (`MyRPA.Browser.Contracts`), registered as an extension contract. A recording
+session is not a workflow run:
+- a **visible** Chromium (a `Headless` option exists for automated tests only) opens the start URL (http/https);
+- the fixed `Recording/recorder.js`, embedded in the plugin, is added to its pages (main frame only) with one binding
+  whose name is random per session; it reports clicks, typing, option choices and file choices with selector
+  candidates (ADR-0038 §3);
+- the host validates every message (kinds, sizes, file names without paths, selectors that parse), keeps the first
+  candidate that matches exactly one element (checked with Playwright locators; the script's own count only when the
+  page has already changed), and up to two alternatives;
+- typing in one field replaces the earlier step; a password's text is never sent; Enter submits through the form's
+  button (recorded as its click); a navigation within 2 s of a recorded click is that click's result, others are
+  Navigate steps; a download replaces the click that started it (the file is not kept);
+- `IRecordingTestDriver` (on the session) acts as the user with real input, for tests; the server never exposes it.
+
+Pop-up windows and frames are not recorded (Phase 6 scope).
+
 ## Security
-- **No JavaScript evaluation.** No activity runs workflow-supplied script in the page. Pages run their own scripts as
-  in any browser.
+- **No JavaScript evaluation.** No activity runs workflow-supplied script in the page, and nothing in the plugin
+  evaluates code in a page. Only recording sessions add the recorder's fixed script and binding (ADR-0039); an
+  architecture test (`BrowserPluginRulesTests`) allows those two calls in `Recording/PlaywrightRecorder.cs` and no
+  page-scripting call anywhere else. Pages run their own scripts as in any browser.
 - **URLs:** `file:` and non-http(s) schemes are refused, so workflows cannot read local files through the browser.
 - **Files:** uploads and downloads are confined to `fileRoot`.
   - Relative paths are resolved against it, and absolute paths must be inside it.

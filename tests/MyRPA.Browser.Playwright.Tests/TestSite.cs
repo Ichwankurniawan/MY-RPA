@@ -30,6 +30,18 @@ public sealed class TestSite : IDisposable
         </body></html>
         """;
 
+    /// <summary>A sign-in form (recorder tests: a password, Enter to submit).</summary>
+    public const string Login = """
+        <!doctype html>
+        <html><head><title>Sign in</title></head><body>
+          <form action="/other" method="get">
+            <label for="email">Email</label><input id="email" name="email" type="email" />
+            <label for="password">Password</label><input id="password" name="password" type="password" />
+            <button type="submit">Sign in</button>
+          </form>
+        </body></html>
+        """;
+
     private readonly HttpListener _listener = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _loop;
@@ -100,6 +112,9 @@ public sealed class TestSite : IDisposable
                     break;
                 case "/other":
                     await WriteAsync(response, "<!doctype html><html><head><title>Other</title></head><body><h1 id=\"title\">Other</h1></body></html>");
+                    break;
+                case "/login":
+                    await WriteAsync(response, Login);
                     break;
                 case "/slow":
                     await Task.Delay(TimeSpan.FromSeconds(20), _stop.Token);

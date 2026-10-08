@@ -99,7 +99,8 @@ flowchart LR
 
 | Concern | Behaviour |
 |---|---|
-| Host/SDK sharing | `MyRPA.Core`, `MyRPA.Workflow`, `MyRPA.Sdk`, `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Logging.Abstractions` always come from the host, so plugin types implement the host's interfaces. |
+| Host/SDK sharing | `MyRPA.Core`, `MyRPA.Workflow`, `MyRPA.Sdk`, `MyRPA.Browser.Contracts`, `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Logging.Abstractions` always come from the host, so plugin types implement the host's interfaces. |
+| Extension contracts | A plugin registers only its own types (`RequireOwned`), with one exception (ADR-0039): an interface of an extension contract assembly (`PluginLoadContext.ExtensionContractAssemblies`: `MyRPA.Browser.Contracts`) may be registered with the plugin's implementation. The host reads such services as a list (`GetServices<IBrowserRecorder>()`); they never replace a host service. |
 | Private dependencies | Resolved from the plugin's `.deps.json`, must be inside the plugin directory, and are loaded into the plugin's context. |
 | Dependency conflicts | Two plugins, or a plugin and the host, can use different versions of the same library, as long as its types do not cross the plugin boundary. Types that must cross the boundary belong in the shared list, which needs an ADR to change. |
 | Integrity | Each assembly is opened with read-only sharing, re-hashed, compared with the digest taken at discovery, and loaded from its path while still open (ADR-0016). A file changed after verification is refused. On Windows the open handle blocks writers, so the loaded file is the verified file; on Linux/macOS sharing is advisory and a small window remains. |

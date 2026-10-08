@@ -44,9 +44,16 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
         "MyRPA.Core",
         "MyRPA.Workflow",
         "MyRPA.Sdk",
+        "MyRPA.Browser.Contracts",
         "Microsoft.Extensions.DependencyInjection.Abstractions",
         "Microsoft.Extensions.Logging.Abstractions",
     }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Shared assemblies whose interfaces a plugin may implement and register (extension contracts, ADR-0039): the host
+    /// reads such services as a list; they never replace a host service.
+    /// </summary>
+    public static FrozenSet<string> ExtensionContractAssemblies { get; } = new[] { "MyRPA.Browser.Contracts" }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>Loads the verified entry assembly.</summary>
     public Assembly LoadEntryAssembly() =>

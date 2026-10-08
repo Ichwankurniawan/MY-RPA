@@ -24,6 +24,17 @@ A user can record a simple website interaction and insert the generated activiti
 - Validation: browser plugin tests 73/73 against real Chromium (new: each new form finds its element, exact text does
   not match part of a text, malformed `attr=`/`label=` and `automationid=` fail with `InvalidSelector`).
 
+## S-2 result (2026-10-08)
+- Delivered: `MyRPA.Browser.Contracts` (BCL only) shared with plugins; the extension-contract rule in the plugin
+  registrar; the plugin's recorder (visible Chromium, `recorder.js` with selector candidates, a random binding name,
+  validated messages, uniqueness checked by locators, typing coalesced, passwords never sent, navigation and
+  downloads); `IRecordingTestDriver` for tests; a source-level architecture rule for page scripting (it did not exist
+  before: `EvaluateAsync` had been banned by convention only), with a known-bad self-test.
+- Found by the tests: a click on a link navigates before the browser can count matches, so the script now counts
+  role/name, label and exact-text matches itself (used only then); Chrome already clicks a form's submit button on
+  Enter, so the script's own Enter handler (a duplicate click) was removed.
+- Validation: .NET 931/931 (Release; recorder tests 8/8 against real Chromium, headless), `dotnet format` clean.
+
 ## Rules (unchanged)
 - No new runtime dependencies beyond the plugin's Playwright; the Studio keeps its CSP and libraries.
 - Workflow runs never run JavaScript in pages (ADR-0017); only recording sessions use the recorder script (ADR-0039).

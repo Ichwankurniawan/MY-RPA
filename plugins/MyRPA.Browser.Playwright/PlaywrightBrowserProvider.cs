@@ -93,7 +93,8 @@ public sealed class PlaywrightBrowserProvider : IBrowserProvider, IAsyncDisposab
         _driverGate.Dispose();
     }
 
-    private async Task<IPlaywright> GetDriverAsync(CancellationToken cancellationToken)
+    /// <summary>The plugin's one Playwright driver, started on first use (shared by sessions and the recorder).</summary>
+    internal async Task<IPlaywright> GetDriverAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _driverGate.WaitAsync(cancellationToken).ConfigureAwait(false);

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Browser extension contracts (ADR-0039): the recorder interface and the recorded-step model, shared by MyRPA.Server
+    and the browser plugin. The plugin host shares this assembly with plugins (like the SDK) and lets a plugin implement
+    its interfaces. BCL only: no project references, no packages.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Browser.Contracts</RootNamespace>
+    <Description>MyRPA browser extension contracts (recorder).</Description>
+  </PropertyGroup>
+</Project>

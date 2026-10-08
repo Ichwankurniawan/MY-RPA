@@ -40,6 +40,10 @@ public static class ArchitectureRules
         new("MyRPA.Contracts", typeof(MyRPA.Contracts.Execution.ExecutionEventMessage).Assembly,
             AllowedProjects: [],
             AllowedPackages: []),
+        // ADR-0039: browser extension contracts (the recorder), shared by the server and the browser plugin. BCL only.
+        new("MyRPA.Browser.Contracts", typeof(MyRPA.Browser.Contracts.IBrowserRecorder).Assembly,
+            AllowedProjects: [],
+            AllowedPackages: []),
         // ADR-0022/0023: execution hosting shared by the server, agents and robots. Engine contracts only (not Runtime).
         new("MyRPA.Execution.Hosting", typeof(MyRPA.Execution.Hosting.ExecutionHost).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Contracts"],
@@ -63,6 +67,7 @@ public static class ArchitectureRules
         "MyRPA.Workflow",
         "MyRPA.Sdk",
         "MyRPA.Contracts",
+        "MyRPA.Browser.Contracts",
     };
 
     /// <summary>
@@ -81,8 +86,26 @@ public static class ArchitectureRules
     /// <summary>The control-plane layer, which the engine and built-in libraries never depend on (ADR-0022).</summary>
     public static IReadOnlyList<string> ControlPlaneProjects { get; } = ["MyRPA.Contracts", "MyRPA.Execution.Hosting"];
 
-    /// <summary>The src project a plugin project (plugins, samples/plugins, tests/fixtures) may reference (ADR-0014).</summary>
-    public static IReadOnlyList<string> PluginProjectAllowedReferences { get; } = ["MyRPA.Sdk"];
+    /// <summary>
+    /// The src projects a plugin project (plugins, samples/plugins, tests/fixtures) may reference (ADR-0014): the SDK and
+    /// the extension contracts (ADR-0039), both provided by the host.
+    /// </summary>
+    public static IReadOnlyList<string> PluginProjectAllowedReferences { get; } = ["MyRPA.Sdk", "MyRPA.Browser.Contracts"];
+
+    /// <summary>
+    /// Page-scripting APIs of Playwright (ADR-0017: workflow runs never run JavaScript in pages). Only the recorder may
+    /// add its script and binding (ADR-0039), and nothing may evaluate code in a page.
+    /// </summary>
+    public static IReadOnlyList<string> PageScriptingApis { get; } =
+        ["EvaluateAsync", "EvaluateHandleAsync", "EvalOnSelectorAsync", "EvalOnSelectorAllAsync", "EvaluateAllAsync", "AddScriptTagAsync", "ExposeFunctionAsync", "AddInitScriptAsync", "ExposeBindingAsync"];
+
+    /// <summary>The one browser plugin file allowed to use page-scripting APIs, and which ones (ADR-0039).</summary>
+    public static (string File, IReadOnlyList<string> Apis) RecorderScriptException { get; } =
+        ("Recording/PlaywrightRecorder.cs", ["AddInitScriptAsync", "ExposeBindingAsync"]);
+
+    /// <summary>The page-scripting APIs <paramref name="source"/> calls (as <c>.Name(</c>).</summary>
+    public static IReadOnlyList<string> FindPageScripting(string source) =>
+        [.. PageScriptingApis.Where(api => source.Contains("." + api + "(", StringComparison.Ordinal) || source.Contains("." + api + "<", StringComparison.Ordinal))];
 
     /// <summary>
     /// Technology packages that are forbidden in src but allowed in exactly one provider plugin (ADR-0017). A technology
@@ -184,9 +207,9 @@ public static class ArchitectureRules
         ["MyRPA.Sdk.Tests"] = ["MyRPA.Sdk", "MyRPA.Activities", "MyRPA.Runtime"],
         ["MyRPA.Plugins.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         // The browser plugin is tested through the real plugin host (it is only built, never compiled against).
-        ["MyRPA.Browser.Playwright.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Browser.Playwright.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime", "MyRPA.Browser.Contracts"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
-        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Server", "MyRPA.Cli"],
+        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Server", "MyRPA.Cli"],
         // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.
         ["MyRPA.Server.Tests"] = ["MyRPA.Server"],
         // Execution hosting runs the real engine with the built-in activities.

@@ -14,6 +14,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" Private="false" ExcludeAssets="runtime" />
+    <!-- ADR-0039: the browser extension contracts (the recorder), shared by the host like the SDK. -->
+    <ProjectReference Include="..\..\src\MyRPA.Browser.Contracts\MyRPA.Browser.Contracts.csproj" Private="false" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Playwright" />
@@ -21,11 +23,13 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="myrpa-plugin.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The recorder script (ADR-0039): added only to recording sessions' pages, never to workflow runs. -->
+    <EmbeddedResource Include="Recording\recorder.js" LogicalName="MyRPA.Browser.Playwright.Recording.recorder.js" />
   </ItemGroup>
   <!-- MyRPA.Core and MyRPA.Workflow arrive transitively through MyRPA.Sdk; they are host-provided contract assemblies. -->
   <Target Name="ExcludeHostContractAssemblies" AfterTargets="ResolveAssemblyReferences">
     <ItemGroup>
-      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow' or '%(Filename)' == 'MyRPA.Browser.Contracts'" />
     </ItemGroup>
   </Target>
 </Project>

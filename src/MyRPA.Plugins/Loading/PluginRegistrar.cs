@@ -60,7 +60,7 @@ internal sealed class PluginRegistrar(PluginInfo plugin, PluginManifest manifest
         where TService : class
         where TImplementation : class, TService
     {
-        RequireOwned(typeof(TService), "Service type");
+        RequireOwnedOrExtensionContract(typeof(TService), "Service type");
         RequireOwned(typeof(TImplementation), "Service implementation");
         RequireConcrete(typeof(TImplementation), "Service implementation");
         var serviceLifetime = lifetime switch
@@ -161,6 +161,19 @@ internal sealed class PluginRegistrar(PluginInfo plugin, PluginManifest manifest
         if (AssemblyLoadContext.GetLoadContext(type.Assembly) != context)
         {
             _problems.Add($"{what} '{type.FullName}' is not defined by the plugin; plugins can only register their own types.");
+        }
+    }
+
+    /// <summary>A plugin's own type, or an interface of an extension contract assembly (ADR-0039) that the host reads as a list.</summary>
+    private void RequireOwnedOrExtensionContract(Type type, string what)
+    {
+        var extension = type.IsInterface
+            && AssemblyLoadContext.GetLoadContext(type.Assembly) == AssemblyLoadContext.Default
+            && type.Assembly.GetName().Name is { } name
+            && PluginLoadContext.ExtensionContractAssemblies.Contains(name);
+        if (!extension)
+        {
+            RequireOwned(type, what);
         }
     }
 
