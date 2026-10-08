@@ -7,6 +7,8 @@
     <ProjectReference Include="..\..\src\MyRPA.Server\MyRPA.Server.csproj" />
     <!-- Built first, never compiled against: the server loads it through the plugin host. -->
     <ProjectReference Include="..\..\samples\plugins\MyRPA.Samples.DemoPlugin\MyRPA.Samples.DemoPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Recording tests (ADR-0039) load the browser plugin through the server's plugin host. -->
+    <ProjectReference Include="..\..\plugins\MyRPA.Browser.Playwright\MyRPA.Browser.Playwright.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
@@ -15,6 +17,10 @@
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>SamplePluginDirectory</_Parameter1>
       <_Parameter2>$(MSBuildThisFileDirectory)..\..\samples\plugins\MyRPA.Samples.DemoPlugin\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BrowserPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Browser.Playwright\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 </Project>

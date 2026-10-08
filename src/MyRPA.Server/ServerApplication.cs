@@ -137,6 +137,7 @@ internal static class ServerApplication
         services.AddSingleton<ProjectStore>();
         services.AddSingleton<LocalSessions>();
         services.AddSingleton<EventStreams>();
+        services.AddSingleton<Recordings>();
         if (options.WebRoot is { } webRoot)
         {
             // Factory-created, so the container disposes it. Hidden, dot-prefixed and system files are never served.
@@ -220,6 +221,7 @@ internal static class ServerApplication
         MapProjects(api);
         MapRuns(api);
         MapStreams(api);
+        MapRecordings(api);
     }
 
     private static void MapProjects(RouteGroupBuilder api)
@@ -465,11 +467,18 @@ internal static class ServerApplication
             return Results.NoContent();
         });
 
-        api.MapPost("/streams/{streamId}/subscriptions", (string streamId, SubscribeRequest request, HttpContext context, EventStreams streams, ExecutionHost host) =>
+        api.MapPost("/streams/{streamId}/subscriptions", (string streamId, SubscribeRequest request, HttpContext context, EventStreams streams, ExecutionHost host, Recordings recordings) =>
         {
             if (streams.Find(streamId, Session(context)) is not { } stream)
             {
                 return NotFound($"Unknown stream '{streamId}'.");
+            }
+
+            if (request.RecordingId is { } recordingId)
+            {
+                return recordings.Find(recordingId, Session(context)) is { } recording
+                    ? Subscribed(stream.Subscribe(recording, Math.Max(0, request.AfterSequence ?? 0)), "recording")
+                    : NotFound($"Unknown recording '{recordingId}'.");
             }
 
             if (request.RunId is null || !host.TryGet(request.RunId, out var run))
@@ -477,7 +486,7 @@ internal static class ServerApplication
                 return NotFound($"Unknown run '{request.RunId}'.");
             }
 
-            return stream.Subscribe(run, Math.Max(0, request.AfterSequence ?? 0)) switch
+            return stream.Subscribe(new RunSource(run), Math.Max(0, request.AfterSequence ?? 0)) switch
             {
                 SubscribeOutcome.Subscribed => Results.StatusCode(StatusCodes.Status201Created),
                 SubscribeOutcome.AlreadySubscribed => Problem(StatusCodes.Status409Conflict, "The stream already follows this run."),
@@ -487,6 +496,71 @@ internal static class ServerApplication
 
         api.MapDelete("/streams/{streamId}/subscriptions/{runId}", (string streamId, string runId, HttpContext context, EventStreams streams) =>
             streams.Find(streamId, Session(context)) is { } stream && stream.Unsubscribe(runId) ? Results.NoContent() : NotFound("Unknown stream or subscription."));
+    }
+
+    private static IResult Subscribed(SubscribeOutcome outcome, string what) => outcome switch
+    {
+        SubscribeOutcome.Subscribed => Results.StatusCode(StatusCodes.Status201Created),
+        SubscribeOutcome.AlreadySubscribed => Problem(StatusCodes.Status409Conflict, $"The stream already follows this {what}."),
+        _ => Problem(StatusCodes.Status429TooManyRequests, "Too many subscriptions on this stream."),
+    };
+
+    // ADR-0039: recordings. A recording is started from the Studio, records in a visible browser on this machine, and
+    // sends its steps to the tab's event stream; nothing it records is executed.
+    private static void MapRecordings(RouteGroupBuilder api)
+    {
+        api.MapGet("/recordings", (Recordings recordings) => Results.Json(new { available = recordings.Unavailable is null, reason = recordings.Unavailable }));
+
+        api.MapPost("/recordings", async (StartRecordingRequest request, HttpContext context, Recordings recordings) =>
+        {
+            if (!Uri.TryCreate(request.StartUrl, UriKind.Absolute, out var url))
+            {
+                return BadRequest("startUrl must be an absolute http or https URL.");
+            }
+
+            var (handle, status, error) = await recordings.StartAsync(Session(context), url, context.RequestAborted).ConfigureAwait(false);
+            return handle is null
+                ? Problem(status, error!)
+                : Results.Json(new { recordingId = handle.Id, startUrl = handle.StartUrl.AbsoluteUri }, statusCode: StatusCodes.Status201Created);
+        });
+
+        api.MapGet("/recordings/{recordingId}", (string recordingId, HttpContext context, Recordings recordings) =>
+            recordings.Find(recordingId, Session(context)) is { } handle
+                ? Results.Text(RecordingJson(handle), "application/json")
+                : NotFound($"Unknown recording '{recordingId}'."));
+
+        api.MapDelete("/recordings/{recordingId}", async (string recordingId, HttpContext context, Recordings recordings) =>
+        {
+            if (recordings.Find(recordingId, Session(context)) is not { } handle)
+            {
+                return NotFound($"Unknown recording '{recordingId}'.");
+            }
+
+            await handle.StopAsync().ConfigureAwait(false);
+            return Results.NoContent();
+        });
+    }
+
+    private static string RecordingJson(RecordingHandle handle)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("recordingId", handle.Id);
+            writer.WriteString("startUrl", handle.StartUrl.AbsoluteUri);
+            writer.WriteBoolean("active", handle.End is null);
+            if (handle.End is { } end)
+            {
+                writer.WriteString("endReason", end.Reason.ToString());
+            }
+
+            writer.WritePropertyName("steps");
+            JsonSerializer.Serialize(writer, handle.Steps, MyRPA.Contracts.Execution.ContractsJsonContext.Default.IReadOnlyListRecordedStepMessage);
+            writer.WriteEndObject();
+        }
+
+        return System.Text.Encoding.UTF8.GetString(buffer.ToArray());
     }
 
     private static object Validation(WorkflowLoadResult result) => new
@@ -554,4 +628,7 @@ internal sealed record ValidateRequest(JsonElement? Document);
 internal sealed record StartRunRequest(string? Project, string? Path, JsonElement? Document, Dictionary<string, JsonElement>? Arguments, int? TimeoutMs, Dictionary<string, string?>? ArgumentText = null);
 
 /// <summary>Body of <c>POST /api/streams/{streamId}/subscriptions</c>.</summary>
-internal sealed record SubscribeRequest(string? RunId, long? AfterSequence);
+internal sealed record SubscribeRequest(string? RunId, long? AfterSequence, string? RecordingId = null);
+
+/// <summary><c>POST /api/recordings</c> (ADR-0039).</summary>
+internal sealed record StartRecordingRequest(string? StartUrl);

@@ -26,6 +26,12 @@ internal sealed record ServerOptions
     /// <summary>Loopback port; 0 picks a free one.</summary>
     public int Port { get; init; } = 5310;
 
+    /// <summary>
+    /// Recording browsers without a window (<c>--recorder-headless</c>). For automated tests only (CI has no display); a
+    /// person records in a visible browser (ADR-0039).
+    /// </summary>
+    public bool RecorderHeadless { get; init; }
+
     /// <summary>Largest accepted request body (documents are at most a few hundred KB; ADR-0012 caps files at 5 MB).</summary>
     public long MaxRequestBodyBytes { get; init; } = 5 * 1024 * 1024;
 
@@ -79,9 +85,17 @@ internal static class ServerCommandLine
         string? web = null;
         string? open = null;
         var port = 5310;
+        var recorderHeadless = false;
         for (var i = 0; i < args.Count; i++)
         {
             var name = args[i];
+            if (name == "--recorder-headless")
+            {
+                // Test-only (ADR-0039): recording browsers without a window, for CI which has no display.
+                recorderHeadless = true;
+                continue;
+            }
+
             if (name is not ("--project" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port"))
             {
                 error = $"Unexpected argument '{name}'.";
@@ -187,6 +201,6 @@ internal static class ServerCommandLine
 
         web ??= bundledWebRoot is not null && File.Exists(Path.Combine(bundledWebRoot, "index.html")) ? bundledWebRoot : null;
         error = null;
-        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow };
+        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow, RecorderHeadless = recorderHeadless };
     }
 }
