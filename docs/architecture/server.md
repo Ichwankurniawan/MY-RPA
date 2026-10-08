@@ -81,6 +81,7 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workfl
 | `POST /api/streams/{streamId}/subscriptions` | `{ runId, afterSequence? }` or `{ recordingId, afterSequence? }`: follow a run or a recording on this stream |
 | `DELETE /api/streams/{streamId}/subscriptions/{id}` | Stop following a run or recording |
 | `GET /api/recordings` | `{ available, reason }`: whether this server can record (it needs the browser plugin) |
+| `POST /api/recordings/generate` | `{ startUrl, steps: [{ kind, selector, element, text, secret, values, url, fileName }] }` → `{ nodes, arguments }`: the browser plugin's activities for the steps the user kept (v1.0 nodes: Open, the steps, Close; a password becomes the In argument `password`). 400 for a step it cannot turn into an activity |
 | `POST /api/recordings` | `{ startUrl }` (http/https) → 201 `{ recordingId, startUrl }`: opens a visible recording browser on this machine (ADR-0039). 409 while another recording runs (one at a time), 400 for a bad URL, 503 without the browser plugin |
 | `GET /api/recordings/{id}` | `{ recordingId, startUrl, active, endReason?, steps }` (the current steps) |
 | `DELETE /api/recordings/{id}` | Stop recording and close its browser → 204 |
@@ -107,7 +108,8 @@ A stream follows runs and, since Phase 6, recordings (ADR-0039): `recording.step
 time, step: { sequence, kind, selector, alternatives, element, text?, secret, values, url?, fileName?, replaces? } }`;
 a step with `replaces` takes the place of that earlier step) and `recording.ended` (`endReason`: `Stopped`,
 `BrowserClosed` or `Failed`). Recordings resume by the same position vector as runs. A recording belongs to the session
-that started it. `--recorder-headless` opens recording browsers without a window, for automated tests only.
+that started it. `--recorder-headless` opens recording browsers without a window, and `--recorder-debugging-port <n>` gives them a
+local DevTools port so an end-to-end test can act as the user; both are for automated tests only.
 
 
 One `EventSource` per tab, for any number of runs:

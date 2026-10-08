@@ -69,7 +69,7 @@ describe('Command bar', () => {
     const names = (group: string) => within(screen.getByRole('toolbar', { name: group })).getAllByRole('button').map((b) => b.textContent);
     expect(names('File')).toEqual(['New workflow…', 'Save', 'Save as…']);
     expect(names('Edit')).toEqual(['Undo', 'Redo', 'Cut', 'Copy', 'Paste', 'Delete', 'Move up', 'Move down']);
-    expect(names('Run')).toEqual(['Validate', 'Run', 'Stop']);
+    expect(names('Run')).toEqual(['Validate', 'Run', 'Stop', 'Record']);
   });
 
   it('says why a command is disabled, and enables it when it applies', async () => {

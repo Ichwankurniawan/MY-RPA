@@ -32,6 +32,12 @@ internal sealed record ServerOptions
     /// </summary>
     public bool RecorderHeadless { get; init; }
 
+    /// <summary>
+    /// A DevTools port for recording browsers (<c>--recorder-debugging-port</c>), so an end-to-end test can act as the
+    /// user (ADR-0039). For automated tests only.
+    /// </summary>
+    public int? RecorderDebuggingPort { get; init; }
+
     /// <summary>Largest accepted request body (documents are at most a few hundred KB; ADR-0012 caps files at 5 MB).</summary>
     public long MaxRequestBodyBytes { get; init; } = 5 * 1024 * 1024;
 
@@ -86,6 +92,7 @@ internal static class ServerCommandLine
         string? open = null;
         var port = 5310;
         var recorderHeadless = false;
+        int? recorderDebuggingPort = null;
         for (var i = 0; i < args.Count; i++)
         {
             var name = args[i];
@@ -96,7 +103,7 @@ internal static class ServerCommandLine
                 continue;
             }
 
-            if (name is not ("--project" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port"))
+            if (name is not ("--project" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port" or "--recorder-debugging-port"))
             {
                 error = $"Unexpected argument '{name}'.";
                 return null;
@@ -164,6 +171,13 @@ internal static class ServerCommandLine
                 case "--port" when int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var p) && p is >= 0 and <= 65535:
                     port = p;
                     break;
+                case "--recorder-debugging-port" when int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var d) && d is > 0 and <= 65535:
+                    // Test-only (ADR-0039): an end-to-end test acts as the user in the recording browser over DevTools.
+                    recorderDebuggingPort = d;
+                    break;
+                case "--recorder-debugging-port":
+                    error = "--recorder-debugging-port must be a number from 1 to 65535.";
+                    return null;
                 default:
                     error = $"--port must be a number from 0 to 65535.";
                     return null;
@@ -201,6 +215,6 @@ internal static class ServerCommandLine
 
         web ??= bundledWebRoot is not null && File.Exists(Path.Combine(bundledWebRoot, "index.html")) ? bundledWebRoot : null;
         error = null;
-        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow, RecorderHeadless = recorderHeadless };
+        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow, RecorderHeadless = recorderHeadless, RecorderDebuggingPort = recorderDebuggingPort };
     }
 }

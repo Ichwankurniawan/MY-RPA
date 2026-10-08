@@ -12,6 +12,16 @@ public interface IBrowserRecorder
     /// <param name="cancellationToken">Cancels the start.</param>
     /// <exception cref="ArgumentException">The start URL is not an absolute http or https URL.</exception>
     ValueTask<IRecordingSession> StartAsync(RecordingOptions options, IRecordingListener listener, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Turns reviewed steps into workflow nodes of the plugin's own activities (the plugin knows them; the Studio does
+    /// not): JSON <c>{ "nodes": [v1.0 nodes], "arguments": [argument definitions the nodes need] }</c>. The nodes open
+    /// the browser at <paramref name="startUrl"/>, perform the steps and close it; a password becomes an In argument.
+    /// </summary>
+    /// <param name="startUrl">The recording's start URL.</param>
+    /// <param name="steps">The steps, in order, as the user kept and edited them.</param>
+    /// <exception cref="ArgumentException">A step is not valid (for example a selector that does not parse).</exception>
+    string GenerateActivities(Uri startUrl, IReadOnlyList<RecordedStep> steps);
 }
 
 /// <summary>How a recording starts.</summary>
@@ -22,6 +32,12 @@ public sealed class RecordingOptions
 
     /// <summary>For automated tests only: no visible window. A person records in a visible browser.</summary>
     public bool Headless { get; init; }
+
+    /// <summary>
+    /// For automated end-to-end tests only: a local DevTools port, so a test can act as the user in the recording
+    /// browser. Never set for a person's recording.
+    /// </summary>
+    public int? DebuggingPort { get; init; }
 }
 
 /// <summary>Receives a recording's steps (each may replace an earlier one) and its end.</summary>

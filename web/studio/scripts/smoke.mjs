@@ -4,7 +4,10 @@
 // and can run repeatedly. Checks use roles, labels and data attributes, never pixels. See harness.mjs for prerequisites.
 
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 import { join } from 'node:path';
+import { chromium } from 'playwright-core';
 import { check, repo, results, withStudio } from './harness.mjs';
 
 const step = (text) => console.log(`  ✓ ${text}`);
@@ -641,6 +644,67 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await titleIs('hello-world.json');
   check((await page.getByRole('combobox', { name: 'Project' }).inputValue()) === 'demo', 'the file’s folder is the project');
   step('W6-8. Single command (MyRPA.Server --open <file>): bundled Studio served, the file’s folder became the project, the file opened');
+
+  // Phase 6 (ADR-0039), the definition of done: record a simple website interaction and insert it into the Studio. The
+  // server loads the browser plugin; the recording browser is headless with a DevTools port (test-only flags) so this
+  // script can act as the user in it with real input. Then the inserted activities are saved and run headless.
+  const site = createServer((request, response) => {
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    response.end(request.url.startsWith('/done')
+      ? '<!doctype html><title>Done</title><h1 id="welcome">Welcome</h1>'
+      : '<!doctype html><title>Sign in</title><form action="/done"><label for="email">Email</label><input id="email" name="email" type="email">'
+        + '<label for="password">Password</label><input id="password" name="password" type="password"><button type="submit">Sign in</button></form>');
+  });
+  await new Promise((resolve) => site.listen(0, '127.0.0.1', resolve));
+  const siteUrl = `http://127.0.0.1:${site.address().port}/login`;
+  const freePort = await new Promise((resolve) => {
+    const probe = createNetServer();
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+  const configuration = process.env.MYRPA_CONFIGURATION ?? 'Release';
+  const browserPlugin = join(repo, 'plugins', 'MyRPA.Browser.Playwright', 'bin', configuration, 'net10.0');
+  writeFileSync(join(project, 'rec.json'), `${JSON.stringify({ schemaVersion: '1.0', id: 'rec', name: 'Recorded', version: '1.0.0', root: { id: 'main', type: 'Core.Sequence' } }, null, 2)}\n`);
+  const recordingLink = await startServer(['--project', project, '--web', join(repo, 'web', 'studio', 'dist'), '--plugin', browserPlugin, '--recorder-headless', '--recorder-debugging-port', String(freePort)]);
+  await page.goto(recordingLink);
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await openWorkflow('rec.json');
+  await row('main').click();
+  const recorderPanel = page.getByRole('tabpanel');
+  await click('Record');
+  await recorderPanel.getByLabel('Start at').fill(siteUrl);
+  await recorderPanel.getByRole('button', { name: 'Start recording', exact: true }).click();
+  await page.getByTestId('recorder-status').filter({ hasText: /^Recording/ }).waitFor();
+  // Act as the user in the recording browser (real input over DevTools).
+  const recordingBrowser = await chromium.connectOverCDP(`http://127.0.0.1:${freePort}`);
+  const userPage = recordingBrowser.contexts()[0].pages().find((p) => p.url().startsWith(siteUrl)) ?? recordingBrowser.contexts()[0].pages()[0];
+  await userPage.getByLabel('Email').fill('ada@example.com');
+  await userPage.getByLabel('Password').fill('s3cret-value');
+  await userPage.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('tab', { name: 'Recorder (3)' }).waitFor();
+  const recordedWhat = await recorderPanel.locator('.recorded-what').allTextContents();
+  check(JSON.stringify(recordedWhat) === JSON.stringify(['Step 1: Type textbox "Email"', 'Step 2: Type input "Password"', 'Step 3: Click button "Sign in"']), `recorded steps: ${JSON.stringify(recordedWhat)}`);
+  check(!(await recorderPanel.textContent()).includes('s3cret'), 'the password is not shown');
+  await recorderPanel.getByRole('button', { name: 'Insert 3 steps', exact: true }).click();
+  await page.locator('[role=treeitem][data-node-id="close-1"]').waitFor({ timeout: 15_000 }).catch(() => undefined);
+  await expectTree('main,open-1,type-1,type-2,click-1,close-1', `the recording was inserted (${await page.locator('.segment.message').textContent()})`);
+  await recordingBrowser.close();
+  await page.keyboard.press('Control+s');
+  await title.filter({ hasText: /^rec\.json$/ }).waitFor();
+  const recordedFile = readFileSync(join(project, 'rec.json'), 'utf8');
+  const recorded = JSON.parse(recordedFile);
+  check(recorded.root.children.map((c) => c.type).join(',') === 'Browser.Open,Browser.TypeText,Browser.TypeText,Browser.Click,Browser.Close', `saved activities ${recorded.root.children.map((c) => c.type)}`);
+  check(recorded.root.children[1].properties.selector === 'role=textbox|Email' || recorded.root.children[1].properties.selector === 'label=Email', `semantic selector ${recorded.root.children[1].properties.selector}`);
+  check(recorded.arguments?.[0]?.name === 'password' && !recordedFile.includes('s3cret'), 'the password is an argument, never in the file');
+  await click('Run');
+  await dialog.waitFor();
+  await dialog.getByLabel(/^password/).fill('s3cret-value');
+  await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor({ timeout: 60_000 });
+  site.close();
+  step('Phase 6 DoD. Recorded a sign-in on a local website (real input in the recording browser), inserted it at the selection (Open, Type, Type password, Click, Close; semantic selectors; the password became an argument, never stored), saved, and ran it headless: Succeeded');
 
   // The deleted stream answers the browser's automatic retry with a 404 (JSON), which Chromium reports on the console.
   const expected = (text) => /EventSource's response has a MIME type/.test(text);

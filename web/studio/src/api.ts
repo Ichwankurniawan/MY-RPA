@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, Diagnostic, JsonObject, PluginReport, RunStatus, ServerInfo, ValidationResult, WorkflowFile } from './types';
+import type { ActivityDescriptor, Diagnostic, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ServerInfo, ValidationResult, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -53,6 +53,14 @@ export interface StudioApi {
   subscribe(streamId: string, runId: string, afterSequence: number): Promise<void>;
   /** The SSE address of a stream. */
   streamUrl(streamId: string): string;
+  /** Whether this server can record (it needs the browser plugin, ADR-0039). */
+  recordingInfo(): Promise<{ available: boolean; reason?: string | null }>;
+  /** Opens a recording browser at the URL; returns the recording id. 409 while another recording runs. */
+  startRecording(startUrl: string): Promise<string>;
+  stopRecording(recordingId: string): Promise<void>;
+  subscribeRecording(streamId: string, recordingId: string, afterSequence: number): Promise<void>;
+  /** The browser plugin's activities for the steps the user kept (the Studio knows no browser activity). */
+  generateRecording(startUrl: string, steps: readonly RecordedStep[]): Promise<GeneratedActivities>;
 }
 
 const antiForgery = { 'X-MyRPA-Request': '1' };
@@ -141,5 +149,20 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
       await send('POST', `/api/streams/${encodeURIComponent(streamId)}/subscriptions`, JSON.stringify({ runId, afterSequence }));
     },
     streamUrl: (streamId) => `/api/streams/${encodeURIComponent(streamId)}`,
+    recordingInfo: async () => get<{ available: boolean; reason?: string | null }>('/api/recordings'),
+    async startRecording(startUrl) {
+      const response = await send('POST', '/api/recordings', JSON.stringify({ startUrl }));
+      return ((await response.json()) as { recordingId: string }).recordingId;
+    },
+    async stopRecording(recordingId) {
+      await send('DELETE', `/api/recordings/${encodeURIComponent(recordingId)}`);
+    },
+    async subscribeRecording(streamId, recordingId, afterSequence) {
+      await send('POST', `/api/streams/${encodeURIComponent(streamId)}/subscriptions`, JSON.stringify({ recordingId, afterSequence }));
+    },
+    async generateRecording(startUrl, steps) {
+      const response = await send('POST', '/api/recordings/generate', JSON.stringify({ startUrl, steps }));
+      return (await response.json()) as GeneratedActivities;
+    },
   };
 }

@@ -152,6 +152,11 @@ session is not a workflow run:
 
 Pop-up windows and frames are not recorded (Phase 6 scope).
 
+`IBrowserRecorder.GenerateActivities` turns the steps the user kept into this plugin's activities (PRD §6.4):
+`Browser.Open` at the start URL, then `Navigate`, `Click`, `TypeText`, `SelectOption`, `UploadFile` or `DownloadFile` per
+step (values as expression literals; a password as the In argument `password`; display names such as
+`Click button "Sign in"`), then `Browser.Close`. Selectors that do not parse and non-web URLs are refused.
+
 ## Security
 - **No JavaScript evaluation.** No activity runs workflow-supplied script in the page, and nothing in the plugin
   evaluates code in a page. Only recording sessions add the recorder's fixed script and binding (ADR-0039); an
