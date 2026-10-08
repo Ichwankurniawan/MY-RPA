@@ -50,7 +50,7 @@ public static class ArchitectureRules
             AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions", "Microsoft.Extensions.Logging.Abstractions"]),
         // ADR-0022/0025: the control-plane server; a composition root and the only src project allowed to use ASP.NET Core.
         new("MyRPA.Server", typeof(MyRPA.Server.ServerApplication).Assembly,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting"],
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting"],
             AllowedPackages: [],
             IsCompositionRoot: true,
             AllowsAspNetCore: true),

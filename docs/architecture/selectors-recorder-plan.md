@@ -35,6 +35,14 @@ A user can record a simple website interaction and insert the generated activiti
   Enter, so the script's own Enter handler (a duplicate click) was removed.
 - Validation: .NET 931/931 (Release; recorder tests 8/8 against real Chromium, headless), `dotnet format` clean.
 
+## S-3 result (2026-10-08)
+- Delivered: `GET/POST /api/recordings`, `GET/DELETE /api/recordings/{id}`; recording events (`recording.step`,
+  `recording.ended`, wire contract `RecordingEventMessage` in `MyRPA.Contracts`) on the tab's existing event stream: a
+  stream subscription now reads an `IStreamSource` (a run, unchanged, or a recording); one recording at a time,
+  session-bound; 503 without the browser plugin; `--recorder-headless` (tests only).
+- Validation: .NET 937/937 (Release; server recording tests 6/6 with the real browser plugin, headless; the 64 existing
+  server tests unchanged), `dotnet format` clean.
+
 ## Rules (unchanged)
 - No new runtime dependencies beyond the plugin's Playwright; the Studio keeps its CSP and libraries.
 - Workflow runs never run JavaScript in pages (ADR-0017); only recording sessions use the recorder script (ADR-0039).

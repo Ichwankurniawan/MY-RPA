@@ -97,4 +97,6 @@ public sealed record ExecutionErrorMessage(string Code, string Message, string? 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(ExecutionEventMessage))]
 [JsonSerializable(typeof(IReadOnlyList<ExecutionEventMessage>))]
+[JsonSerializable(typeof(Recording.RecordingEventMessage))]
+[JsonSerializable(typeof(IReadOnlyList<Recording.RecordedStepMessage>))]
 public sealed partial class ContractsJsonContext : JsonSerializerContext;

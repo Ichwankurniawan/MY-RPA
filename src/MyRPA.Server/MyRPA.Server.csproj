@@ -20,6 +20,7 @@
     <ProjectReference Include="..\MyRPA.Storage\MyRPA.Storage.csproj" />
     <ProjectReference Include="..\MyRPA.Plugins\MyRPA.Plugins.csproj" />
     <ProjectReference Include="..\MyRPA.Contracts\MyRPA.Contracts.csproj" />
+    <ProjectReference Include="..\MyRPA.Browser.Contracts\MyRPA.Browser.Contracts.csproj" />
     <ProjectReference Include="..\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
   </ItemGroup>
   <!--
