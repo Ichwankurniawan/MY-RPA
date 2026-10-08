@@ -179,6 +179,10 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.locator('.field-error').filter({ hasText: 'MYRPA1043' }).waitFor();
   const requestsBefore = runRequests;
   await runWithDefaults();
+  // UX-2: the failed check shows Problems; the toolbar and the Execution tab say the run did not start.
+  await page.getByRole('tab', { name: /^Problems/, selected: true }).waitFor();
+  await page.getByTestId('toolbar-run-status').filter({ hasText: 'Not started — validation failed' }).waitFor();
+  await page.getByRole('tab', { name: 'Execution' }).click();
   await runStatus.filter({ hasText: 'Not started — validation failed' }).waitFor();
   check(runRequests === requestsBefore, `an invalid workflow made ${runRequests - requestsBefore} run request(s)`);
   await page.screenshot({ path: join(results, 'studio-validation-error.png') });

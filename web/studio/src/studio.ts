@@ -23,6 +23,7 @@ import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
 import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
+import { isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 import {
   moveTo,
@@ -154,7 +155,53 @@ export interface StudioState {
   readonly insertTarget?: KeyedTarget;
   /** A request to show an argument or variable row (from the Problems list); `seq` makes repeats distinct. */
   readonly rowFocus?: { readonly list: DataList; readonly index: number; readonly seq: number };
+  /** Favorite activity types, in the order they were added (UX-2; remembered per browser). */
+  readonly favorites: readonly string[];
+  /** The last activity types inserted, most recent first, at most `maxRecent` (UX-2; remembered per browser). */
+  readonly recentActivities: readonly string[];
+  /** The bottom panel's tab (UX-2): Execution when a run starts; Problems after Validate or a run refused by validation. */
+  readonly outputTab: OutputTab;
+  /** Panel sizes (px, only once resized) and hidden panels (UX-2; remembered per browser). */
+  readonly panes: Panes;
 }
+
+/** The panels around the designer that can be resized and hidden. */
+export type PaneName = 'toolbox' | 'properties' | 'bottom';
+
+export interface Panes {
+  readonly toolbox?: number;
+  readonly properties?: number;
+  readonly bottom?: number;
+  readonly hidden: readonly PaneName[];
+}
+
+/** The smallest and largest size of each panel (px). */
+export const paneLimits: Record<PaneName, { readonly min: number; readonly max: number }> = {
+  toolbox: { min: 160, max: 520 },
+  properties: { min: 240, max: 680 },
+  bottom: { min: 120, max: 900 },
+};
+
+const paneNames: readonly PaneName[] = ['toolbox', 'properties', 'bottom'];
+
+const isPanes = (value: unknown): value is Panes => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const v = value as Record<string, unknown>;
+  return (
+    Array.isArray(v.hidden) &&
+    v.hidden.every((h) => paneNames.includes(h as PaneName)) &&
+    paneNames.every((name) => v[name] === undefined || (typeof v[name] === 'number' && Number.isFinite(v[name])))
+  );
+};
+
+/** The tabs of the bottom panel. */
+export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution';
+
+/** How many recently inserted activity types are remembered. */
+export const maxRecent = 10;
 
 /** The selection key of the workflow itself (its metadata in Properties); never a node key. */
 export const workflowKey = '@workflow';
@@ -181,6 +228,8 @@ export interface StudioOptions {
   readonly draftDelayMs?: number;
   /** How long typing pauses before the server validates the document (ms; undefined: never automatically). */
   readonly validateDelayMs?: number;
+  /** Where favorites and recent activities are remembered (the browser's local storage by default). */
+  readonly preferences?: PreferenceStore;
 }
 
 /** A new workflow's document: valid, with an empty root Sequence; its id comes from the file name. */
@@ -416,6 +465,7 @@ export class Studio {
 
   private readonly drafts: DraftStore;
   private readonly draftDelayMs: number;
+  private readonly preferences: PreferenceStore;
   private draftTimer?: ReturnType<typeof setTimeout>;
   private readonly validateDelayMs: number | undefined;
   private validateTimer?: ReturnType<typeof setTimeout>;
@@ -429,7 +479,12 @@ export class Studio {
     this.drafts = options.drafts ?? storageDrafts();
     this.draftDelayMs = options.draftDelayMs ?? 1000;
     this.validateDelayMs = 'validateDelayMs' in options ? options.validateDelayMs : 300;
+    this.preferences = options.preferences ?? storagePreferences();
     this.store = createStore<StudioState>({
+      favorites: this.preferences.read(preferenceKeys.favorites, isTypeList) ?? [],
+      recentActivities: (this.preferences.read(preferenceKeys.recent, isTypeList) ?? []).slice(0, maxRecent),
+      outputTab: 'problems',
+      panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
       connection: 'connecting',
       activities: [],
       catalog: new Map(),
@@ -626,6 +681,41 @@ export class Studio {
     }
   }
 
+  /** Shows a tab of the bottom panel. */
+  showOutput(tab: OutputTab): void {
+    this.store.set({ outputTab: tab });
+  }
+
+  /** Sets a panel's size (px, kept within its limits; remembered per browser). */
+  setPaneSize(name: PaneName, size: number): void {
+    const limits = paneLimits[name];
+    this.updatePanes({ ...this.state.panes, [name]: Math.round(Math.min(limits.max, Math.max(limits.min, size))) });
+  }
+
+  /** Shows a hidden panel, or hides a shown one (remembered per browser). */
+  togglePane(name: PaneName): void {
+    const hidden = this.state.panes.hidden.includes(name) ? this.state.panes.hidden.filter((h) => h !== name) : [...this.state.panes.hidden, name];
+    this.updatePanes({ ...this.state.panes, hidden });
+  }
+
+  private updatePanes(panes: Panes): void {
+    this.store.set({ panes });
+    this.preferences.write(preferenceKeys.panes, panes);
+  }
+
+  /** Adds an activity type to the favorites, or removes it (remembered per browser). */
+  toggleFavorite(type: string): void {
+    const favorites = this.state.favorites.includes(type) ? this.state.favorites.filter((t) => t !== type) : [...this.state.favorites, type];
+    this.store.set({ favorites });
+    this.preferences.write(preferenceKeys.favorites, favorites);
+  }
+
+  private rememberRecent(type: string): void {
+    const recentActivities = [type, ...this.state.recentActivities.filter((t) => t !== type)].slice(0, maxRecent);
+    this.store.set({ recentActivities });
+    this.preferences.write(preferenceKeys.recent, recentActivities);
+  }
+
   /** Selects the workflow itself: Properties shows its metadata. */
   selectWorkflow(): void {
     this.select(workflowKey);
@@ -643,7 +733,7 @@ export class Studio {
         this.selectNodeId(target.nodeId);
       }
     } else if (target.kind === 'row') {
-      this.store.set((state) => ({ rowFocus: { list: target.list, index: target.index, seq: (state.rowFocus?.seq ?? 0) + 1 } }));
+      this.store.set((state) => ({ outputTab: target.list, rowFocus: { list: target.list, index: target.index, seq: (state.rowFocus?.seq ?? 0) + 1 } }));
     } else {
       this.selectWorkflow();
     }
@@ -707,6 +797,7 @@ export class Studio {
     const document = state.document!;
     const node = createNode(document, activity);
     this.commit(place(document, target, node).document, keyOf(node), `Insert ${activity.displayName}`);
+    this.rememberRecent(type);
     this.store.set({ insertTarget: undefined });
     this.say(`Inserted ${activity.displayName} as ${node.id as string}${'slot' in target.position ? ` into ${target.position.slot}` : ''}.`);
   }
@@ -891,6 +982,8 @@ export class Studio {
       const errors = result.diagnostics.filter((d) => d.severity === 'Error').length;
       this.store.set({
         busy: undefined,
+        // The explicit Validate shows its result (also "No problems"); background validation never switches the tab.
+        outputTab: 'problems',
         message: result.valid
           ? `Valid${result.diagnostics.length > 0 ? ` with ${result.diagnostics.length} warning(s)` : ''}.`
           : `${errors} error(s) found.`,
@@ -1252,7 +1345,7 @@ export class Studio {
       runningNodes: [],
       missingEvents: 0,
     });
-    this.store.set({ busy: 'starting', message: `Validating ${file.path}…` });
+    this.store.set({ busy: 'starting', message: `Validating ${file.path}…`, outputTab: 'execution' });
 
     try {
       const validation = await this.api.validate(document);
@@ -1260,6 +1353,7 @@ export class Studio {
       if (!validation.valid) {
         const errors = validation.diagnostics.filter((d) => d.severity === 'Error').length;
         this.notStarted(key, 'validation', `Not started: the workflow has ${errors} validation error(s). Fix the problems listed, then run again.`);
+        this.showOutput('problems');
         return;
       }
     } catch (error) {
@@ -1279,6 +1373,7 @@ export class Studio {
       if (error instanceof ApiError && error.diagnostics) {
         this.showDiagnostics(error.diagnostics, document);
         this.notStarted(key, 'validation', 'Not started: the workflow has validation errors.');
+        this.showOutput('problems');
       } else {
         this.notStarted(key, 'request', `Not started: ${(error as Error).message}`);
       }

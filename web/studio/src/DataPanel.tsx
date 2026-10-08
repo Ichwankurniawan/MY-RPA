@@ -1,50 +1,56 @@
-// The lower-left panel (W4B, ADR-0032): Problems, Variables and Arguments as tabs. Rows are edited in place; every change
+// The bottom panel (W4B, ADR-0032; one tab strip with Execution since UX-2): Problems, Variables, Arguments. Rows are edited in place; every change
 // is one document edit (typing in one field merges into one undo step), and each row shows its own diagnostics.
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { useStudio, useStudioState } from './context';
 import { isObject } from './document';
+import { Icon, type IconName } from './icons';
 import { JsonField } from './PropertyEditors';
+import type { OutputTab } from './studio';
 import type { Diagnostic, Json, JsonObject } from './types';
 import { addRow, dataTypes, diagnosticTarget, directions, removeRow, rows, updateRow, type DataList } from './workflowData';
 
-type Tab = 'problems' | 'variables' | 'arguments';
+type Tab = OutputTab;
 
 const tabs: readonly { id: Tab; label: string }[] = [
   { id: 'problems', label: 'Problems' },
   { id: 'variables', label: 'Variables' },
   { id: 'arguments', label: 'Arguments' },
+  { id: 'execution', label: 'Execution' },
 ];
 
-export function DataPanel() {
+/**
+ * The bottom panel (UX-2): one tab strip for Problems, Variables, Arguments and Execution, with counts. The tab is Studio
+ * state, so the Studio can show Execution when a run starts and Problems when an explicit check finds errors.
+ */
+export function BottomPanel({ execution }: { execution: ReactNode }) {
+  const studio = useStudio();
   const id = useId();
-  const [tab, setTab] = useState<Tab>('problems');
-  const rowFocus = useStudioState((s) => s.rowFocus);
+  const tab = useStudioState((s) => s.outputTab);
   const errors = useStudioState((s) => s.diagnostics?.filter((d) => d.severity === 'Error').length ?? 0);
   const variables = useStudioState((s) => (s.document ? rows(s.document, 'variables').length : 0));
   const args = useStudioState((s) => (s.document ? rows(s.document, 'arguments').length : 0));
-  const counts: Record<Tab, string> = { problems: errors > 0 ? ` (${errors})` : '', variables: ` (${variables})`, arguments: ` (${args})` };
-  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ problems: null, variables: null, arguments: null });
-
-  useEffect(() => {
-    if (rowFocus) {
-      setTab(rowFocus.list);
-    }
-  }, [rowFocus]);
+  const counts: Record<Tab, string> = { problems: errors > 0 ? ` (${errors})` : '', variables: ` (${variables})`, arguments: ` (${args})`, execution: '' };
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const at = tabs.findIndex((t) => t.id === tab);
-    const next = event.key === 'ArrowRight' ? tabs[(at + 1) % tabs.length] : event.key === 'ArrowLeft' ? tabs[(at + tabs.length - 1) % tabs.length] : undefined;
+    const next =
+      event.key === 'ArrowRight' ? tabs[(at + 1) % tabs.length]
+      : event.key === 'ArrowLeft' ? tabs[(at + tabs.length - 1) % tabs.length]
+      : event.key === 'Home' ? tabs[0]
+      : event.key === 'End' ? tabs[tabs.length - 1]
+      : undefined;
     if (next) {
       event.preventDefault();
-      setTab(next.id);
+      studio.showOutput(next.id);
       tabRefs.current[next.id]?.focus();
     }
   };
 
   return (
-    <div className="data-panel">
-      <div role="tablist" aria-label="Workflow data" className="tabs" onKeyDown={onKeyDown}>
+    <div className="bottom-panel">
+      <div role="tablist" aria-label="Output" className="tabs" onKeyDown={onKeyDown}>
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -54,22 +60,26 @@ export function DataPanel() {
             type="button"
             role="tab"
             id={`${id}-${t.id}`}
+            className={t.id === 'problems' && errors > 0 ? 'has-errors' : undefined}
             aria-selected={tab === t.id}
             aria-controls={`${id}-${t.id}-panel`}
             tabIndex={tab === t.id ? 0 : -1}
-            onClick={() => setTab(t.id)}
+            onClick={() => studio.showOutput(t.id)}
           >
+            <Icon name={tabIcons[t.id]} size={14} />
             {t.label}
             {counts[t.id]}
           </button>
         ))}
       </div>
       <div role="tabpanel" id={`${id}-${tab}-panel`} aria-labelledby={`${id}-${tab}`} className="tab-panel">
-        {tab === 'problems' ? <ProblemsList /> : <RowsEditor list={tab} />}
+        {tab === 'problems' ? <ProblemsList /> : tab === 'execution' ? execution : <RowsEditor list={tab} />}
       </div>
     </div>
   );
 }
+
+const tabIcons: Record<Tab, IconName> = { problems: 'problems', variables: 'activity', arguments: 'plugin', execution: 'run' };
 
 function ProblemsList() {
   const studio = useStudio();

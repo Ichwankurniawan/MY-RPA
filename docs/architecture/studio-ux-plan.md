@@ -1,6 +1,6 @@
 # Studio UX slice — plan (proposed)
 
-Status: **approved** by the owner (2026-10-08), with the proposed answers below. UX-1 done (2026-10-08); next: UX-2. Follows Phase 5 (the Web Studio, ADR-0021 to ADR-0036).
+Status: **approved** by the owner (2026-10-08), with the proposed answers below. UX-1 and UX-2 done (2026-10-08); next: UX-3. Follows Phase 5 (the Web Studio, ADR-0021 to ADR-0036).
 Companion: [ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md) (flowchart and state machine, proposed).
 
 ## Goal
@@ -77,6 +77,24 @@ UX goes first if both are approved.
   earlier build and UX-1; CI measures it with its documented tolerance.
 - Validation: Vitest 209/209, typecheck, smoke, manual (steps 1–11), accessibility (0 serious or critical), perf as
   above.
+
+## UX-2 result (2026-10-08)
+- Delivered: Favorites (star toggle) and Recent (last 10) at the top of the activity panel, then namespaces (Built-in
+  first) and categories; one bottom tab strip (Problems, Variables, Arguments, Execution) whose tab is Studio state: a
+  run shows Execution, Validate or a run refused by validation shows Problems, background validation never switches;
+  splitters (drag, arrow keys, Home/End, announced as separators with their size) and View toggles for the activities,
+  properties and bottom panels; all remembered per browser (`preferences.ts`).
+- **Deferred: the right rail.** With Properties as the only right-hand panel it would be a placeholder (not allowed);
+  it comes with the first second panel.
+- Accessibility: the splitters first failed axe (a focusable separator needs `aria-valuenow`; they were outside every
+  landmark). They now always state their size and sit in a "Panel sizes" landmark (`display: contents`, so they stay
+  grid items): 0 violations of any impact in all 9 states again.
+- **Performance lesson 3:** toggling `drop-refused` on the root re-matched `.dragging.drop-refused *` on all ~18,000
+  elements. The drag cursor is inherited, so only the elements that set their own cursor (cards, buttons, files,
+  splitters) are overridden now. Drag movement p95 went from 51–52 ms to 46.7 / 47.3 ms (p50 14–15 ms), drag
+  activation p95 74 ms, keystroke p95 39–43 ms, undo 37–40 ms: every target met in two consecutive runs.
+- Validation: Vitest 218/218, typecheck, smoke (the error case now checks Problems, the toolbar status and the
+  Execution tab), manual (steps 1–11), accessibility (0 violations), perf as above.
 
 ## Owner decisions (2026-10-08)
 1. The three sub-slices are approved (the minimap stays optional).

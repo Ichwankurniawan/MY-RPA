@@ -100,6 +100,7 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 .icon { flex: none; }
 .with-icon { display: inline-flex; align-items: center; gap: 6px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+[hidden] { display: none !important; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .studio {
@@ -152,7 +153,17 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .toolbox input { width: 100%; margin-bottom: 8px; padding: 4px 6px; }
 .toolbox ul { list-style: none; margin: 0; padding: 0; }
 .toolbox li { padding: 1px 0; }
-.toolbox .category-toggle { width: 100%; text-align: left; border: none; background: none; padding: 4px 2px; font-weight: 600; color: var(--muted); }
+.toolbox .category-toggle { width: 100%; text-align: left; border: none; background: none; padding: 4px 2px 4px 10px; font-weight: 600; color: var(--muted); }
+/* UX-2: namespaces (Built-in, plugin namespaces) above categories; favorites and recent activities first. */
+.toolbox .namespace-toggle { width: 100%; text-align: left; border: none; background: none; padding: 6px 2px 2px; font-weight: 650; color: var(--text); }
+.toolbox .shortcuts { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.toolbox .shortcuts h3 { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 12px; font-weight: 650; color: var(--accent); }
+.toolbox .activity-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.toolbox .activity-entry .description { grid-column: 1 / -1; }
+.toolbox button.favorite { border: 1px solid transparent; background: none; padding: 3px 4px; color: var(--muted); line-height: 0; }
+.toolbox button.favorite:hover { color: var(--accent); }
+.toolbox button.favorite[aria-pressed='true'] { color: var(--accent); }
+.toolbox button.favorite[aria-pressed='true'] .icon path { fill: currentColor; }
 .toolbox button.insert { width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px 6px; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
 .toolbox button.insert:hover:not(:disabled):not([aria-disabled='true']) { border-color: var(--border); background: var(--panel-2); }
 .toolbox button.insert[aria-disabled='true'] { opacity: 0.55; }
@@ -188,8 +199,11 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .case-zone { display: inline-flex; gap: 4px; align-items: center; }
 .case-zone input { width: 8em; padding: 0 4px; font-size: 12px; }
 /* While dragging: one indicator line (before/after) or outline (a zone), positioned by dragdrop.ts. */
-.dragging, .dragging * { cursor: grabbing; user-select: none; }
-.dragging.drop-refused, .dragging.drop-refused * { cursor: not-allowed; }
+/* The cursor is inherited: only elements that set their own cursor are overridden, so toggling drop-refused on the root
+   recalculates those (cards, buttons, files, splitters), not all ~18,000 elements of a 3,000-node workflow (UX-2 perf). */
+.dragging { cursor: grabbing; user-select: none; }
+.dragging .node, .dragging button, .dragging .file, .dragging .splitter { cursor: grabbing; }
+.dragging.drop-refused, .dragging.drop-refused .node, .dragging.drop-refused button, .dragging.drop-refused .file, .dragging.drop-refused .splitter { cursor: not-allowed; }
 .drop-indicator { position: fixed; z-index: 10; height: 3px; margin-top: -2px; background: var(--accent); border-radius: 2px; pointer-events: none; }
 .drop-indicator.zone { margin-top: 0; background: none; border: 2px solid var(--accent); border-radius: 6px; }
 .badge { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--border); }
@@ -224,9 +238,21 @@ input.code, textarea.code { font-family: ui-monospace, Consolas, monospace; }
 .json-field .field-error { font-size: 12px; }
 
 /* Lower area: tabs (Problems, Variables, Arguments) beside the execution panel. */
-.output { grid-area: output; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; overflow: hidden; }
-/* Each half scrolls on its own, so a long event list is never clipped by the row. */
-.output > div { overflow: auto; min-height: 0; }
+.output { grid-area: output; border-top: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column; }
+/* UX-2: one tab strip; the active tab's panel scrolls on its own, so a long event list is never clipped by the row. */
+.bottom-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.bottom-panel .tab-panel { overflow: auto; min-height: 0; flex: 1; }
+.tabs [role='tab'] { display: inline-flex; align-items: center; gap: 5px; }
+.tabs [role='tab'].has-errors { color: var(--error); }
+/* UX-2: panel splitters on the panel edges (grid items over the edge; drag or arrow keys). */
+.splitters { display: contents; }
+.splitter { z-index: 5; background: transparent; touch-action: none; }
+.splitter:hover, .splitter:focus-visible { background: var(--accent); outline: none; }
+.splitter-toolbox, .splitter-properties { width: 6px; cursor: col-resize; }
+.splitter-toolbox { grid-area: toolbox; justify-self: end; margin-right: -3px; }
+.splitter-properties { grid-area: properties; justify-self: start; margin-left: -3px; }
+.splitter-bottom { grid-area: output; align-self: start; height: 6px; margin-top: -3px; cursor: row-resize; }
+button.command[aria-pressed='false'] .icon { color: var(--muted); }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 8px; position: sticky; top: 0; background: var(--panel); }
 .tabs [role='tab'] { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 4px 10px; color: var(--muted); }
 .tabs [role='tab'][aria-selected='true'] { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }

@@ -56,6 +56,14 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   which is its accessible name; a disabled command's tooltip says why. The workflow's name and description head the
   designer. The status bar shows the connection, the open file (saved, unsaved, read-only), validation and the current
   run, then the announced message. The favicon is the MyRPA mark.
+- **Panels (UX-2):** the activity panel lists **Favorites** (star an activity) and **Recent** (the last 10 inserted)
+  first, then the catalog by namespace (Built-in, then plugin namespaces) and category; Favorites and Recent entries
+  insert and drag like the catalog's, with their own accessible names ("Log (Core.Log) from Recent"). The bottom panel
+  is one tab strip: Problems (n), Variables (n), Arguments (n), Execution; a run shows Execution, Validate (or a run
+  refused by validation) shows Problems, background validation never switches the tab. Splitters on the panel edges
+  resize the activities, properties and bottom panels (drag, or focus and use the arrow keys; Home/End), and View ›
+  Activities / Properties / Bottom hides or shows them. Favorites, recent activities and panel sizes are remembered per
+  browser (`src/preferences.ts`, best effort).
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
@@ -161,6 +169,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | File | Responsibility |
 |---|---|
 | `src/types.ts` | Wire types (hand-written for W3, ADR-0028 decision 6) |
+| `src/preferences.ts` | Per-browser UI preferences (UX-2): favorites, recent activities, panel sizes; guarded storage, in-memory store for tests |
 | `src/icons.tsx` | The MyRPA icon set (UX-1): 34 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
 | `src/api.ts` | Fetch client: anti-forgery header on state changes, ETags, error bodies |
 | `src/document.ts` | Document model: immutable v1.0 JSON, client keys (`WeakMap`), index, path-copying edits, structural edits and their refusals, lossy-file detection, editability |
@@ -207,6 +216,9 @@ nothing about the client.
   reasons, the lifecycle from server events, failures, timeouts and `MYRPA2004`, Stop (Cancelling…, 409, errors,
   refusals), node mapping (own workflow only, open file only), the event cap, concurrent runs on one stream, the
   recent-runs cap, per-frame batching, and stream re-creation with replay and gaps.
+- `PanelsUi.test.tsx` (UX-2): namespaces, favorites (pin, remember, unknown types ignored), recent activities (order,
+  insert from there), the bottom tab strip (automatic tabs, keyboard), splitters (keyboard, limits, remembered sizes,
+  the grid), hiding and showing panels, malformed stored settings.
 - `ShellUi.test.tsx` (UX-1): every icon is a decorative SVG without style attributes; the command groups and their
   accessible names; disabled reasons; New workflow…; the status bar segments; the workflow title; the theme choice.
 - `ExecutionUi.test.tsx` (W5): the run dialog (required, defaults, timeout, Cancel), the lifecycle and node states on

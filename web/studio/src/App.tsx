@@ -1,6 +1,6 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { StudioContext, useStudio, useStudioState } from './context';
-import { DataPanel } from './DataPanel';
+import { BottomPanel } from './DataPanel';
 import { installDragAndDrop } from './dragdrop';
 import { Icon, type IconName } from './icons';
 import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel } from './document';
@@ -21,9 +21,11 @@ import {
   type Studio,
   type StudioDialog,
   type StudioState,
+  type PaneName,
+  paneLimits,
   workflowKey,
 } from './studio';
-import type { ExecutionEvent, JsonObject, WorkflowFile } from './types';
+import type { ActivityDescriptor, ExecutionEvent, JsonObject, WorkflowFile } from './types';
 
 
 export function App({ studio }: { studio: Studio }) {
@@ -124,19 +126,40 @@ function Shell() {
   // Drag-and-drop (W7): one controller on the root, by event delegation; it renders nothing while dragging.
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => (root.current ? installDragAndDrop(root.current, studio) : undefined), [studio]);
+  const panes = useStudioState((s) => s.panes);
+
+  // Panel sizes (UX-2) go to the grid through the CSSOM (CSP-safe); until a panel is resized, the stylesheet decides.
+  useEffect(() => {
+    const element = root.current;
+    if (!element) {
+      return;
+    }
+
+    const hidden = (name: PaneName) => panes.hidden.includes(name);
+    const size = (name: PaneName, fallback: string) => (hidden(name) ? '0px' : panes[name] !== undefined ? `${panes[name]}px` : fallback);
+    const custom = panes.hidden.length > 0 || panes.toolbox !== undefined || panes.properties !== undefined || panes.bottom !== undefined;
+    element.style.gridTemplateColumns = custom ? `${size('toolbox', '240px')} minmax(0, 1fr) ${size('properties', '340px')}` : '';
+    element.style.gridTemplateRows = custom ? `auto minmax(0, 1fr) ${size('bottom', 'minmax(240px, 40vh)')} auto` : '';
+  }, [panes]);
 
   return (
     <div className="studio" ref={root}>
       <Toolbar />
       {connection === 'ready' ? (
         <>
-          <div className="sidebar">
+          <div className="sidebar" hidden={panes.hidden.includes('toolbox')}>
             <FilesPanel />
             <Toolbox />
           </div>
           <WorkflowTree />
-          <PropertiesPanel />
-          <OutputPanel />
+          {!panes.hidden.includes('properties') && <PropertiesPanel />}
+          {!panes.hidden.includes('bottom') && <OutputPanel />}
+          {/* A landmark for the splitters (display: contents keeps them grid items on the panel edges). */}
+          <section className="splitters" aria-label="Panel sizes">
+            {!panes.hidden.includes('toolbox') && <Splitter pane="toolbox" label="Resize the activities panel" />}
+            {!panes.hidden.includes('properties') && <Splitter pane="properties" label="Resize the properties panel" />}
+            {!panes.hidden.includes('bottom') && <Splitter pane="bottom" label="Resize the bottom panel" />}
+          </section>
           <RunDialogHost />
           <StudioDialogHost />
         </>
@@ -145,6 +168,84 @@ function Shell() {
       )}
       <StatusBar />
     </div>
+  );
+}
+
+/** A panel's size before it is resized: the stylesheet's defaults (the bottom panel: 40% of the window, at least 240 px). */
+const defaultPaneSize = (pane: PaneName) => (pane === 'toolbox' ? 240 : pane === 'properties' ? 340 : Math.max(240, Math.round(window.innerHeight * 0.4)));
+
+/** The element whose size a splitter changes, and which way growing goes. */
+const splitterTargets: Record<PaneName, { readonly selector: string; readonly axis: 'x' | 'y'; readonly sign: 1 | -1 }> = {
+  toolbox: { selector: '.sidebar', axis: 'x', sign: 1 },
+  properties: { selector: '.properties', axis: 'x', sign: -1 },
+  bottom: { selector: '.output', axis: 'y', sign: -1 },
+};
+
+/**
+ * A panel splitter (UX-2): drag it, or focus it and use the arrow keys (16 px; Home/End: smallest/largest). It is a
+ * focusable separator with its value, so screen readers announce the size.
+ */
+function Splitter({ pane, label }: { pane: PaneName; label: string }) {
+  const studio = useStudio();
+  const size = useStudioState((s) => s.panes[pane]);
+  const target = splitterTargets[pane];
+  const limits = paneLimits[pane];
+  const current = () => {
+    const element = window.document.querySelector<HTMLElement>(target.selector);
+    const rect = element?.getBoundingClientRect();
+    return size ?? Math.round(target.axis === 'x' ? (rect?.width ?? limits.min) : (rect?.height ?? limits.min));
+  };
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const start = target.axis === 'x' ? event.clientX : event.clientY;
+    const from = current();
+    let frame = 0;
+    const move = (e: PointerEvent) => {
+      const delta = ((target.axis === 'x' ? e.clientX : e.clientY) - start) * target.sign;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => studio.setPaneSize(pane, from + delta));
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const grow = target.axis === 'x' ? (target.sign === 1 ? 'ArrowRight' : 'ArrowLeft') : 'ArrowUp';
+    const shrink = target.axis === 'x' ? (target.sign === 1 ? 'ArrowLeft' : 'ArrowRight') : 'ArrowDown';
+    const next =
+      event.key === grow ? current() + 16
+      : event.key === shrink ? current() - 16
+      : event.key === 'Home' ? limits.min
+      : event.key === 'End' ? limits.max
+      : undefined;
+    if (next !== undefined) {
+      event.preventDefault();
+      studio.setPaneSize(pane, next);
+    }
+  };
+
+  return (
+    <div
+      className={`splitter splitter-${pane}`}
+      role="separator"
+      tabIndex={0}
+      aria-label={label}
+      aria-orientation={target.axis === 'x' ? 'vertical' : 'horizontal'}
+      aria-valuemin={limits.min}
+      aria-valuemax={limits.max}
+      aria-valuenow={size ?? defaultPaneSize(pane)}
+      onPointerDown={onPointerDown}
+      onKeyDown={onKeyDown}
+    />
   );
 }
 
@@ -264,6 +365,18 @@ function Command({ icon, label, onClick, disabled, title }: { icon: IconName; la
     <button type="button" className="command" onClick={onClick} disabled={disabled} title={title}>
       <Icon name={icon} />
       <span>{label}</span>
+    </button>
+  );
+}
+
+/** Shows or hides a panel; pressed while the panel is shown. */
+function PaneToggle({ pane, icon, label }: { pane: PaneName; icon: IconName; label: string }) {
+  const studio = useStudio();
+  const shown = useStudioState((s) => !s.panes.hidden.includes(pane));
+  return (
+    <button type="button" className="command" aria-pressed={shown} onClick={() => studio.togglePane(pane)} title={shown ? `Hide the ${label.toLowerCase()}` : `Show the ${label.toLowerCase()}`}>
+      <Icon name={icon} />
+      <span>{label.replace(' panel', '')}</span>
     </button>
   );
 }
@@ -396,6 +509,9 @@ function Toolbar() {
             </span>
           </div>
           <div className="command-group" role="toolbar" aria-label="View">
+            <PaneToggle pane="toolbox" icon="panel-left" label="Activities panel" />
+            <PaneToggle pane="properties" icon="panel-right" label="Properties panel" />
+            <PaneToggle pane="bottom" icon="panel-bottom" label="Bottom panel" />
             <label className="command theme-choice">
               <Icon name="theme" />
               <select value={theme} onChange={(e) => setTheme(e.target.value as Theme)} aria-label="Theme">
@@ -416,28 +532,71 @@ function Toolbar() {
 
 const descriptionId = (type: string) => `activity-description-${type.replace(/[^A-Za-z0-9_-]/g, '-')}`;
 
+/** A namespace's heading: built-in activities first, then plugin namespaces by name. */
+const namespaceOf = (type: string) => type.split('.')[0];
+const namespaceLabel = (namespace: string) => (namespace === 'Core' ? 'Built-in' : namespace);
+
 function Toolbox() {
   const studio = useStudio();
   const activities = useStudioState((s) => s.activities);
+  const catalog = useStudioState((s) => s.catalog);
+  const favorites = useStudioState((s) => s.favorites);
+  const recent = useStudioState((s) => s.recentActivities);
   const refusal = useStudioState(insertRefusal);
   // Disabled only when nothing can be edited. When only the selection gives no place to insert, an entry is
   // aria-disabled: a click says why, and it can still be dragged onto a drop zone, which is a place of its own.
   const blocked = useStudioState((s) => editRefusal(s) !== undefined);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  // The catalog (built-in and plugin activities, ADR-0020) grouped by category; the search also matches descriptions.
-  const groups = useMemo(() => {
+  // The catalog (built-in and plugin activities, ADR-0020) by type namespace (UX-2), then by category; the search also
+  // matches descriptions.
+  const namespaces = useMemo(() => {
     const q = query.trim().toLowerCase();
     const shown = q === '' ? activities : activities.filter((a) => `${a.displayName} ${a.type} ${a.category} ${a.description ?? ''}`.toLowerCase().includes(q));
-    const byCategory = new Map<string, typeof activities>();
+    const byNamespace = new Map<string, Map<string, typeof activities>>();
     for (const activity of shown) {
-      byCategory.set(activity.category, [...(byCategory.get(activity.category) ?? []), activity]);
+      const categories = byNamespace.get(namespaceOf(activity.type)) ?? new Map<string, typeof activities>();
+      categories.set(activity.category, [...(categories.get(activity.category) ?? []), activity]);
+      byNamespace.set(namespaceOf(activity.type), categories);
     }
 
-    return [...byCategory].sort(([a], [b]) => a.localeCompare(b));
+    return [...byNamespace]
+      .sort(([a], [b]) => (a === 'Core' ? -1 : b === 'Core' ? 1 : a.localeCompare(b)))
+      .map(([namespace, categories]) => ({ namespace, categories: [...categories].sort(([a], [b]) => a.localeCompare(b)) }));
   }, [activities, query]);
   const searching = query.trim() !== '';
-  const toggle = (category: string) => setCollapsed((current) => new Set(current.has(category) ? [...current].filter((c) => c !== category) : [...current, category]));
+  const toggle = (group: string) => setCollapsed((current) => new Set(current.has(group) ? [...current].filter((c) => c !== group) : [...current, group]));
+  const insertProps = (a: ActivityDescriptor) => ({
+    type: 'button' as const,
+    'data-activity': a.type,
+    title: a.description,
+    disabled: blocked,
+    'aria-disabled': !blocked && refusal !== undefined ? true : undefined,
+    onClick: () => studio.insertActivity(a.type),
+  });
+  const shortcuts = (title: string, icon: IconName, types: readonly string[]) => {
+    const known = types.map((t) => catalog.get(t)).filter((a): a is ActivityDescriptor => a !== undefined);
+    return (
+      !searching &&
+      known.length > 0 && (
+        <section className="shortcuts" aria-label={title}>
+          <h3>
+            <Icon name={icon} size={14} /> {title}
+          </h3>
+          <ul>
+            {known.map((a) => (
+              <li key={a.type}>
+                {/* Its own accessible name ("Log (Core.Log) from Recent"): never the same as the catalog's insert button. */}
+                <button className="insert shortcut" aria-label={`${a.displayName} (${a.type}) from ${title}`} aria-describedby="toolbox-hint" {...insertProps(a)}>
+                  <span>{a.displayName}</span> <small>({a.type})</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    );
+  };
 
   return (
     <aside className="toolbox" aria-labelledby="toolbox-heading">
@@ -446,40 +605,65 @@ function Toolbox() {
       <p className="hint" id="toolbox-hint">
         {refusal ?? 'Inserts after the selected activity, or at the end of a selected Sequence.'}
       </p>
-      {groups.length === 0 && <p className="hint">{searching ? `No activity matches "${query.trim()}".` : 'The server has no activities.'}</p>}
+      {shortcuts('Favorites', 'star', favorites)}
+      {shortcuts('Recent', 'recent', recent)}
+      {namespaces.length === 0 && <p className="hint">{searching ? `No activity matches "${query.trim()}".` : 'The server has no activities.'}</p>}
       <ul aria-label="Activity catalog" className="catalog">
-        {groups.map(([category, members]) => {
-          const open = searching || !collapsed.has(category);
+        {namespaces.map(({ namespace, categories }) => {
+          const namespaceOpen = searching || !collapsed.has(`ns:${namespace}`);
+          const count = categories.reduce((n, [, members]) => n + members.length, 0);
           return (
-            <li key={category} className="category">
-              <button type="button" className="category-toggle" aria-expanded={open} onClick={() => toggle(category)}>
-                <span aria-hidden="true">{open ? '▾' : '▸'}</span> {category} <small>({members.length})</small>
+            <li key={namespace} className="namespace">
+              <button type="button" className="namespace-toggle" aria-expanded={namespaceOpen} onClick={() => toggle(`ns:${namespace}`)}>
+                <span aria-hidden="true">{namespaceOpen ? '▾' : '▸'}</span> {namespaceLabel(namespace)} <small>({count})</small>
               </button>
-              {open && (
-                <ul aria-label={category}>
-                  {members.map((a) => (
-                    <li key={a.type}>
-                      {/* The accessible name ("Insert Log (Core.Log)") contains the visible text; the description is outside. */}
-                      <button
-                        type="button"
-                        className="insert"
-                        data-activity={a.type}
-                        title={a.description}
-                        aria-label={`Insert ${a.displayName} (${a.type})`}
-                        aria-describedby={a.description ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
-                        disabled={blocked}
-                        aria-disabled={!blocked && refusal !== undefined ? true : undefined}
-                        onClick={() => studio.insertActivity(a.type)}
-                      >
-                        <span>{a.displayName}</span> <small>({a.type})</small>
-                      </button>
-                      {a.description && (
-                        <small className="description" id={descriptionId(a.type)}>
-                          {a.description}
-                        </small>
-                      )}
-                    </li>
-                  ))}
+              {namespaceOpen && (
+                <ul aria-label={namespaceLabel(namespace)}>
+                  {categories.map(([category, members]) => {
+                    const open = searching || !collapsed.has(`${namespace}:${category}`);
+                    return (
+                      <li key={category} className="category">
+                        <button type="button" className="category-toggle" aria-expanded={open} onClick={() => toggle(`${namespace}:${category}`)}>
+                          <span aria-hidden="true">{open ? '▾' : '▸'}</span> {category} <small>({members.length})</small>
+                        </button>
+                        {open && (
+                          <ul aria-label={category}>
+                            {members.map((a) => {
+                              const favorite = favorites.includes(a.type);
+                              return (
+                                <li key={a.type} className="activity-entry">
+                                  {/* The accessible name ("Insert Log (Core.Log)") contains the visible text; the description is outside. */}
+                                  <button
+                                    className="insert"
+                                    aria-label={`Insert ${a.displayName} (${a.type})`}
+                                    aria-describedby={a.description ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
+                                    {...insertProps(a)}
+                                  >
+                                    <span>{a.displayName}</span> <small>({a.type})</small>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="favorite"
+                                    aria-pressed={favorite}
+                                    aria-label={favorite ? `Remove ${a.displayName} from favorites` : `Add ${a.displayName} to favorites`}
+                                    title={favorite ? 'Remove from favorites' : 'Add to favorites'}
+                                    onClick={() => studio.toggleFavorite(a.type)}
+                                  >
+                                    <Icon name="star" size={14} />
+                                  </button>
+                                  {a.description && (
+                                    <small className="description" id={descriptionId(a.type)}>
+                                      {a.description}
+                                    </small>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </li>
@@ -1068,8 +1252,7 @@ function CaseZone({ parentKey, prefix, picked }: { parentKey: string; prefix: st
 function OutputPanel() {
   return (
     <section className="output" aria-label="Output">
-      <DataPanel />
-      <ExecutionPanel />
+      <BottomPanel execution={<ExecutionPanel />} />
     </section>
   );
 }

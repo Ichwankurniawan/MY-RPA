@@ -163,6 +163,10 @@ describe('Execution UI', () => {
 
     api.validation = { valid: false, diagnostics: [{ code: 'MYRPA1043', severity: 'Error', message: 'Syntax error.', path: '$.root', nodeId: 'main' }] };
     await click('Run');
+    // UX-2: an explicit Run that finds errors shows the problems; the run's own view stays one tab away.
+    expect(screen.getByRole('tab', { name: 'Problems (1)', selected: true })).toBeTruthy();
+    expect(screen.getByTestId('toolbar-run-status').textContent).toBe('Status: Not started — validation failed');
+    fireEvent.click(screen.getByRole('tab', { name: 'Execution' }));
     expect(status()).toContain('Not started — validation failed');
     expect(screen.getByTestId('run-not-started').textContent).toContain('Fix the problems listed');
     expect(api.runs).toHaveLength(1);
