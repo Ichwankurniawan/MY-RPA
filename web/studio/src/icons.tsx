@@ -73,6 +73,33 @@ const paths = {
   ),
   run: <path d="M7.5 4.8v14.4a.8.8 0 0 0 1.2.7l11.3-7.2a.8.8 0 0 0 0-1.4L8.7 4.1a.8.8 0 0 0-1.2.7z" />,
   stop: <rect x="5.5" y="5.5" width="13" height="13" rx="2.5" />,
+  // The debugger (ADR-0040): a beetle, pause bars, and arrows that go into, over and out of a step (the dot).
+  debug: (
+    <>
+      <path d="M8.5 9.5a3.5 3.5 0 0 1 7 0v5a3.5 3.5 0 0 1-7 0z" />
+      <path d="M12 9.5v8.5M8.5 12.5H5M15.5 12.5H19M9 7.2L7 5M15 7.2L17 5M8.7 16.5L6 18.5M15.3 16.5l2.7 2" />
+    </>
+  ),
+  pause: <path d="M8.5 5.5v13M15.5 5.5v13" />,
+  'step-into': (
+    <>
+      <path d="M12 3.5v10M7.5 9.5l4.5 4.5 4.5-4.5" />
+      <circle cx="12" cy="19" r="1.8" fill="currentColor" />
+    </>
+  ),
+  'step-over': (
+    <>
+      <path d="M4.5 13.5a7.5 7.5 0 0 1 14-3.7" />
+      <path d="M19 5.3v4.7h-4.7" />
+      <circle cx="12" cy="18.5" r="1.8" fill="currentColor" />
+    </>
+  ),
+  'step-out': (
+    <>
+      <path d="M12 14V4M7.5 8.5L12 4l4.5 4.5" />
+      <circle cx="12" cy="19" r="1.8" fill="currentColor" />
+    </>
+  ),
   'zoom-in': (
     <>
       <circle cx="10.5" cy="10.5" r="6.5" />

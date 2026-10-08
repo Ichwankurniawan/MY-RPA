@@ -31,6 +31,8 @@ const workflow = {
 
 await withStudio(async ({ project, page, startServer, problems }) => {
   writeFileSync(join(project, 'a11y.json'), JSON.stringify(workflow, null, 2));
+  // An untouched copy for the debugger scan (the keyboard pass below edits a11y.json).
+  writeFileSync(join(project, 'a11y-debug.json'), JSON.stringify({ ...workflow, id: 'a11y-debug' }, null, 2));
   await page.goto(await startServer());
   await page.getByText('Connected to MyRPA.Server').waitFor();
 
@@ -154,6 +156,24 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.getByRole('button', { name: 'Record', exact: true }).click();
   await page.getByRole('tab', { name: /^Recorder/ }).waitFor();
   await scan('Recorder tab (start a recording)');
+
+  // ADR-0040: the debugger paused at a breakpoint (the debug bar, the paused card, the values in scope). The flowchart
+  // edited above by keyboard is left unsaved.
+  await filesTree.locator('[data-path="a11y-debug.json"]').dblclick();
+  await page.getByRole('dialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByTestId('document-title').filter({ hasText: /^a11y-debug\.json$/ }).waitFor();
+  await page.locator('[role=treeitem][data-node-id="say"] > .node').click();
+  await page.keyboard.press('F9');
+  await page.getByRole('toolbar', { name: 'Run' }).getByRole('button', { name: 'Debug', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByTestId('debug-state').filter({ hasText: 'Paused before say' }).waitFor();
+  await page.getByRole('table', { name: 'Values in scope' }).waitFor();
+  await scan('Debugger paused at a breakpoint (debug bar, paused card, values)');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await scan('Dark theme, debugger paused');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByRole('toolbar', { name: 'Debug' }).getByRole('button', { name: 'Continue' }).click();
+  await page.getByTestId('run-status').filter({ hasText: 'Succeeded' }).waitFor();
 
   const blocking = findings.filter((f) => f.impact === 'serious' || f.impact === 'critical');
   check(blocking.length === 0, `${blocking.length} serious or critical accessibility violation(s)`);

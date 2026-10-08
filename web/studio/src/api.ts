@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, Diagnostic, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ServerInfo, ValidationResult, WorkflowFile } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ServerInfo, ValidationResult, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -27,6 +27,8 @@ export interface StartRunOptions {
   /** Input arguments as typed text, parsed by the server like the CLI's `--arg` (ADR-0030). */
   readonly argumentText?: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
+  /** Starts a debug run (ADR-0040): pause before these node ids of the workflow, or before its first node. */
+  readonly debug?: { readonly breakpoints: readonly string[]; readonly pauseAtStart?: boolean };
 }
 
 export interface StudioApi {
@@ -49,6 +51,12 @@ export interface StudioApi {
   run(runId: string): Promise<RunStatus>;
   /** Requests cooperative cancellation (202). 409 when the run already finished. The outcome arrives on the stream. */
   cancelRun(runId: string): Promise<void>;
+  /** A debug run's paused state with its values, and its breakpoints (ADR-0040). 404 for runs that are not this session's debug runs. */
+  debugState(runId: string): Promise<DebugState>;
+  /** Continues, steps or pauses a debug run (202). 409 when it is not paused (or, for pause, already paused or finished). */
+  debugCommand(runId: string, command: DebugCommandName): Promise<void>;
+  /** Replaces a debug run's breakpoints (node ids of its workflow), from its next node on. */
+  setBreakpoints(runId: string, breakpoints: readonly string[]): Promise<void>;
   createStream(): Promise<string>;
   subscribe(streamId: string, runId: string, afterSequence: number): Promise<void>;
   /** The SSE address of a stream. */
@@ -140,6 +148,13 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
     run: (runId) => get<RunStatus>(`/api/runs/${encodeURIComponent(runId)}`),
     async cancelRun(runId) {
       await send('POST', `/api/runs/${encodeURIComponent(runId)}/cancel`);
+    },
+    debugState: (runId) => get<DebugState>(`/api/runs/${encodeURIComponent(runId)}/debug`),
+    async debugCommand(runId, command) {
+      await send('POST', `/api/runs/${encodeURIComponent(runId)}/debug`, JSON.stringify({ command }));
+    },
+    async setBreakpoints(runId, breakpoints) {
+      await send('PUT', `/api/runs/${encodeURIComponent(runId)}/breakpoints`, JSON.stringify({ breakpoints }));
     },
     async createStream() {
       const response = await send('POST', '/api/streams');

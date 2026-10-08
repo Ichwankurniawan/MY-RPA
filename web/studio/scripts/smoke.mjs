@@ -637,6 +637,41 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.screenshot({ path: join(results, 'g3-state-machine.png') });
   step('G-3. State machine sample on the canvas: final state marked; ran (init → get work ⇄ process → end) and processed 3 items; the arrow taken last (get-work → end) highlighted');
 
+  // ADR-0040, the debugger: a breakpoint by F9, Debug pauses there before the activity runs, the values in scope are
+  // read from the server, Step over (F10) pauses at the next activity, Continue finishes the run.
+  writeFileSync(join(project, 'debug.json'), `${JSON.stringify({
+    schemaVersion: '1.0', id: 'debugged', name: 'Debugged', version: '1.0.0', variables: [{ name: 'n', type: 'Int', default: 0 }],
+    root: { id: 'main', type: 'Core.Sequence', children: [
+      { id: 'set', type: 'Core.Assign', properties: { to: 'n', value: '41' } },
+      { id: 'inc', type: 'Core.Assign', properties: { to: 'n', value: 'n + 1' } },
+      { id: 'say', type: 'Core.Log', properties: { message: "'n is ' + n" } },
+      { id: 'done', type: 'Core.Log', properties: { message: "'done'" } },
+    ] },
+  }, null, 2)}\n`);
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await openWorkflow('debug.json');
+  await page.locator('[role=treeitem][data-node-id="say"] > .node').click();
+  await page.keyboard.press('F9');
+  const sayBreakpoint = page.locator('[role=treeitem][data-node-id="say"] > .node').getByRole('button', { name: 'Breakpoint on Log' });
+  check((await sayBreakpoint.getAttribute('aria-pressed')) === 'true', 'F9 set a breakpoint on say');
+  await page.getByRole('toolbar', { name: 'Run' }).getByRole('button', { name: 'Debug', exact: true }).click();
+  const debugState = page.getByTestId('debug-state');
+  await debugState.filter({ hasText: 'Paused before say: breakpoint' }).waitFor();
+  check((await page.locator('[role=treeitem][data-node-id="say"] > .node').getAttribute('data-run-status')) === 'Paused', 'the paused card is marked');
+  const valueRow = page.getByRole('table', { name: 'Values in scope' }).getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'n' }) });
+  await valueRow.waitFor();
+  check((await valueRow.textContent()) === 'nVariableInt42', `the value of n before say: ${await valueRow.textContent()}`);
+  check(!(await page.locator('.events').textContent()).includes('n is'), 'say has not run while paused');
+  await page.screenshot({ path: join(results, 'debugger-paused.png') });
+  await page.keyboard.press('F10');
+  await debugState.filter({ hasText: 'Paused before done: step' }).waitFor();
+  check((await page.locator('.events .log').allTextContents()).some((t) => t.includes('n is 42')), 'Step over ran say');
+  await page.getByRole('toolbar', { name: 'Debug' }).getByRole('button', { name: 'Continue' }).click();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  check((await page.getByRole('toolbar', { name: 'Debug' }).count()) === 0, 'the debug bar closes when the run ends');
+  step('Debugger (ADR-0040). Breakpoint by F9; Debug paused before say (card marked, n = 42 read from the server, say not run); Step over (F10) ran say and paused before done; Continue: Succeeded');
+
   // W6-8: Single-command start: only --open <file> (no --project, no --web). The server serves the Studio bundled
   // next to it, makes the file's folder the project, and the Studio opens the file.
   const singleLink = await startServer(['--open', join(project, 'hello-world.json')]);

@@ -258,6 +258,20 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .badge.status-running { background: var(--info-bg); color: var(--accent); }
 .badge.status-cancelled { background: var(--warn-bg); color: var(--warn); }
 .node[data-run-status='Running'] { border-color: var(--accent); }
+/* Debugger (ADR-0040): the paused card, breakpoint dots, the debug bar and the values where the run is paused. */
+.badge.status-paused { background: var(--warn-bg); color: var(--warn); }
+.node[data-run-status='Paused'] { border-color: var(--warn); box-shadow: 0 0 0 2px var(--warn-bg); }
+.breakpoint-toggle { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: none; background: none; border-radius: 50%; cursor: pointer; flex: none; }
+.breakpoint-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--error); }
+.breakpoint-toggle.set .breakpoint-dot { background: var(--error); }
+.breakpoint-toggle:hover .breakpoint-dot { box-shadow: 0 0 0 3px var(--error-bg); }
+.debug-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; margin: 0 0 8px; border: 1px solid var(--warn); border-radius: var(--radius); background: var(--warn-bg); color: var(--text); }
+.debug-bar .debug-state { font-weight: 600; margin-right: 6px; color: var(--warn); }
+.paused { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--warn); border-radius: var(--radius); }
+.paused h3 { margin: 0 0 6px; font-size: 13px; color: var(--warn); }
+.debug-values { border-collapse: collapse; width: 100%; }
+.debug-values th, .debug-values td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.debug-values td code { white-space: pre-wrap; word-break: break-word; }
 /* A run of this file is shown: nodes without a run state were not executed. */
 .shows-run .node:not([data-run-status]) .label { color: var(--muted); font-weight: normal; }
 
