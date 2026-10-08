@@ -61,15 +61,28 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
         await using (scope.ConfigureAwait(false))
         {
             var events = new ExecutionEventSink(request.Observer, _logger);
-            var frame = new ExecutionFrame(workflow, identity, request.Location, request.Location, Depth: 0, scope.ServiceProvider, events);
+            var debug = request.Debugger is { } debugger ? new DebugControl(debugger, _time) : null;
+            var frame = new ExecutionFrame(workflow, identity, request.Location, request.Location, Depth: 0, scope.ServiceProvider, events, Debug: debug);
             return await ExecuteAsync(frame, request.Arguments, request.Timeout ?? _options.DefaultTimeout, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    internal async ValueTask ExecuteNodeAsync(ExecutionFrame frame, NodeDefinition node, VariableScope variables, CancellationToken cancellationToken, StepChoice? choice = null)
+    internal async ValueTask ExecuteNodeAsync(
+        ExecutionFrame frame,
+        NodeDefinition node,
+        VariableScope variables,
+        int depth,
+        CancellationToken cancellationToken,
+        StepChoice? choice = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var identity = frame.Identity.ForNode(node.Id);
+        if (frame.Debug is { } debug)
+        {
+            // Before the node starts (ADR-0040): a paused node has not started, and its span and events wait too.
+            await debug.BeforeNodeAsync(frame, node, identity, depth, variables, cancellationToken).ConfigureAwait(false);
+        }
+
         using var observed = _scopes.Begin(identity, node.Type.Value, [new(DiagnosticNames.ActivityTypeKey, node.Type.Value)]);
         if (frame.Events.IsActive)
         {
@@ -82,7 +95,7 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
             var activity = _activities.Create(node.Type, frame.Services);
             try
             {
-                var context = new ActivityContext(this, frame, node, identity, variables, _time, cancellationToken, choice);
+                var context = new ActivityContext(this, frame, node, identity, variables, depth, _time, cancellationToken, choice);
                 await activity.ExecuteAsync(context).ConfigureAwait(false);
             }
             catch (Exception original)
@@ -160,6 +173,7 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
         string reference,
         IReadOnlyDictionary<string, object?> arguments,
         TimeSpan? timeout,
+        int rootDepth,
         CancellationToken cancellationToken)
     {
         if (parent.Depth + 1 > _options.MaxInvocationDepth)
@@ -190,7 +204,7 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
 
         var childIdentity = parent.Identity.ForChildExecution(_ids.NewExecutionId(), resolution.Workflow.Id);
         var child = new ExecutionFrame(
-            resolution.Workflow, childIdentity, resolution.Location, parent.RootLocation, parent.Depth + 1, parent.Services, parent.Events, parent.Deadline);
+            resolution.Workflow, childIdentity, resolution.Location, parent.RootLocation, parent.Depth + 1, parent.Services, parent.Events, parent.Deadline, parent.Debug, rootDepth);
         var result = await ExecuteAsync(child, arguments, timeout, cancellationToken).ConfigureAwait(false);
 
         // The child reports "Cancelled" when our token was cancelled; propagate that as cancellation of this execution.
@@ -211,7 +225,9 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
         var workflow = frame.Workflow;
         var startedAt = _time.GetUtcNow();
         var startTimestamp = _time.GetTimestamp();
-        frame = frame with { Deadline = EarliestDeadline(frame.Deadline, timeout is { } limit ? startedAt + limit : null) };
+        // Debugged runs keep deadlines net of paused time (DebugControl); for other runs Paused is zero.
+        var pausedSoFar = frame.Debug?.Paused ?? TimeSpan.Zero;
+        frame = frame with { Deadline = EarliestDeadline(frame.Deadline, timeout is { } limit ? startedAt + limit - pausedSoFar : null) };
         using var observed = _scopes.Begin(frame.Identity, DiagnosticNames.WorkflowExecuteOperation);
         LogStarted(_logger, workflow.Id.Value, workflow.Name, workflow.Version);
         var identity = frame.Identity;
@@ -250,13 +266,14 @@ public sealed partial class WorkflowRunner : IWorkflowRunner
 
         var variables = VariableScope.CreateRoot(workflow, values, _time);
         using var timeoutSource = timeout is { } t ? new CancellationTokenSource(t, _time) : null;
+        using var pausable = timeoutSource is not null ? frame.Debug?.Track(timeoutSource, _time.GetUtcNow() + timeout!.Value) : null;
         using var linked = timeoutSource is null
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
             : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
 
         try
         {
-            await ExecuteNodeAsync(frame, workflow.Root, variables, linked.Token).ConfigureAwait(false);
+            await ExecuteNodeAsync(frame, workflow.Root, variables, frame.RootDepth, linked.Token).ConfigureAwait(false);
             return Finish(ExecutionStatus.Succeeded, variables.GetOutputs(), null, null);
         }
         catch (OperationCanceledException ex) when (timeoutSource?.IsCancellationRequested == true && !cancellationToken.IsCancellationRequested)
