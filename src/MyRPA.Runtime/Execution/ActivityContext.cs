@@ -12,6 +12,7 @@ internal sealed class ActivityContext(
     NodeDefinition node,
     ExecutionIdentity identity,
     VariableScope variables,
+    int depth,
     TimeProvider timeProvider,
     CancellationToken cancellationToken,
     StepChoice? choice = null) : IActivityContext
@@ -24,7 +25,7 @@ internal sealed class ActivityContext(
 
     public TimeProvider TimeProvider { get; } = timeProvider;
 
-    public DateTimeOffset? Deadline => frame.Deadline;
+    public DateTimeOffset? Deadline => frame.ClockDeadline;
 
     public bool HasProperty(string propertyName) => Node.Properties.ContainsKey(propertyName);
 
@@ -61,7 +62,7 @@ internal sealed class ActivityContext(
         }
 
         var scope = locals is null || locals.Count == 0 ? variables : variables.CreateChild(locals);
-        return runner.ExecuteNodeAsync(frame, node, scope, CancellationToken);
+        return runner.ExecuteNodeAsync(frame, node, scope, depth + 1, CancellationToken);
     }
 
     public async ValueTask<NodeDefinition?> ExecuteStepAsync(NodeDefinition node)
@@ -74,7 +75,7 @@ internal sealed class ActivityContext(
 
         // The step may choose its transition itself while it runs (ChooseTransition); otherwise it is chosen now.
         var stepChoice = new StepChoice(Node);
-        await runner.ExecuteNodeAsync(frame, node, variables, CancellationToken, stepChoice).ConfigureAwait(false);
+        await runner.ExecuteNodeAsync(frame, node, variables, depth + 1, CancellationToken, stepChoice).ConfigureAwait(false);
         return stepChoice.Made ? stepChoice.Target : SelectTransition(Node, node, variables);
     }
 
@@ -120,7 +121,7 @@ internal sealed class ActivityContext(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reference);
         ArgumentNullException.ThrowIfNull(arguments);
-        return runner.InvokeAsync(frame, reference, arguments, timeout, CancellationToken);
+        return runner.InvokeAsync(frame, reference, arguments, timeout, depth + 1, CancellationToken);
     }
 
     // Validation guarantees name properties are either assignment targets (checked writable) or read-only locals, which

@@ -174,6 +174,29 @@ registered globally, so an observer only sees its own run and the workflows it i
 `MyRPA.Execution.Hosting` builds on this. Per run it provides a sequenced, bounded replay buffer (a `stream.gap` event
 reports dropped events), routes the run's logs by correlation id, supports cancellation and limits concurrency.
 
+### Debugging (ADR-0040)
+
+A host that debugs a run sets `WorkflowRunRequest.Debugger` (an `IExecutionDebugger`, scoped to that run). Without it,
+nothing changes: the engine checks for it once per node and does nothing else.
+
+- **Before every node:** the engine awaits `BeforeNodeAsync(DebugStop)` before the node starts, before its span and its
+  `NodeStarted`. This covers graph steps and the nodes of invoked workflows. While the task is pending, the run is paused.
+  A cancelled pause ends the run as `Cancelled`; the paused node never started.
+- **`DebugStop`:** the node, its workflow id and identity, and its depth in the whole run: the root is 0, children and
+  slots add 1, and an invoked workflow's root is one deeper than the invoking node. `ReadValues()` returns the
+  arguments, variables and locals in scope, as canonical values. It is read while the run waits, never later.
+- **Timeouts while paused:** paused time does not count. The run's and invoked workflows' timeout timers are suspended
+  and resume with their remaining time. `IActivityContext.Deadline` moves later by the time paused.
+- **Activities and the SDK are unchanged:** an activity is never told it is being debugged.
+
+`ExecutionHost` provides the debugger for a run started with `ExecutionStartRequest.Debug`: a `DebugSession`
+(`ExecutionHandle.Debug`) with breakpoints (workflow id and node id), `RequestPause` and `Resume`. The resume commands
+are Continue, Step into (the next node), Step over (the next node at the same depth or shallower) and Step out (the next
+node shallower). Stopping is `ExecutionHost.Cancel`.
+
+Pausing and resuming append `debug.paused` (with a `reason`: `breakpoint`, `step` or `pause`) and `debug.resumed` (with
+the command) to the run's events. These events carry ids only. The values are read from `DebugSession.Paused`.
+
 ## 6. Lifetimes and state
 
 | Component | Lifetime | State |

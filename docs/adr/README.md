@@ -43,3 +43,4 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0037](0037-flowchart-and-state-machine-workflows.md) | Flowchart and state-machine workflows (graph containers) | Accepted (owner, 2026-10-08); implemented (G-1 to G-3) | post-5 |
 | [0038](0038-browser-selectors.md) | Browser selectors: final format, strategies and generation | Accepted (owner, 2026-10-08) | 6 |
 | [0039](0039-browser-recorder.md) | Browser recorder: recording sessions, the recorder script, browser contracts | Accepted (owner, 2026-10-08) | 6 |
+| [0040](0040-workflow-debugger.md) | Workflow debugger: breakpoints, pause, stepping, paused variable values | Accepted (owner, 2026-10-08) | debugger slice |

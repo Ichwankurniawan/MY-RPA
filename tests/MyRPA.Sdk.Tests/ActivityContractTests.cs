@@ -107,6 +107,22 @@ public sealed partial class ActivityContractTests
     }
 
     [Fact]
+    public async Task Context_Deadline_MovesByTheTimeADebuggedRunWasPaused()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 9, 23, 8, 0, 0, TimeSpan.Zero));
+        var start = time.GetUtcNow();
+        using var h = new SdkHarness(s => s.AddActivity<ContextProbeActivity>(SdkHarness.Descriptor("Test.Context")), time);
+        var debugger = new PauseOnceDebugger();
+
+        var run = h.RunAsync(SdkHarness.Workflow("""{ "id": "p", "type": "Test.Context" }"""), timeout: TimeSpan.FromSeconds(30), debugger: debugger);
+        time.Advance(TimeSpan.FromSeconds(10));
+        debugger.Release.TrySetResult();
+        await run;
+
+        Assert.Equal(start + TimeSpan.FromSeconds(40), h.Probe.Deadline);
+    }
+
+    [Fact]
     public async Task ActivityLogs_AreCorrelatedWithTheNode()
     {
         using var logs = new CapturingLoggerProvider();
@@ -150,6 +166,17 @@ public sealed partial class ActivityContractTests
             probe.NodeId = context.Identity.NodeId?.Value;
             return ActivityResult.CompletedTask;
         }
+    }
+
+    /// <summary>Pauses before the first node until released (ADR-0040).</summary>
+    private sealed class PauseOnceDebugger : IExecutionDebugger
+    {
+        private int _calls;
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask BeforeNodeAsync(DebugStop at, CancellationToken cancellationToken) =>
+            Interlocked.Increment(ref _calls) == 1 ? new ValueTask(Release.Task.WaitAsync(cancellationToken)) : ValueTask.CompletedTask;
     }
 
     public sealed partial class LoggingActivity(ILogger<LoggingActivity> logger) : IActivity

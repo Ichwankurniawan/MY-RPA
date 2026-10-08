@@ -25,4 +25,10 @@ public sealed class WorkflowRunRequest
     /// <see langword="null"/> (the default) emits no events. An observer cannot change the run's outcome.
     /// </summary>
     public IExecutionObserver? Observer { get; init; }
+
+    /// <summary>
+    /// Pauses the run before nodes and reads its values (ADR-0040). Scoped to this run only; <see langword="null"/> (the
+    /// default) runs exactly as without a debugger. Time spent paused does not count towards any timeout.
+    /// </summary>
+    public IExecutionDebugger? Debugger { get; init; }
 }

@@ -21,6 +21,9 @@ public sealed record ExecutionStartRequest
 
     /// <summary>Where the workflow was loaded from (resolves and confines <c>Core.InvokeWorkflow</c>, ADR-0012).</summary>
     public string? Location { get; init; }
+
+    /// <summary>Debugs the run (ADR-0040): breakpoints, pause and stepping through <see cref="ExecutionHandle.Debug"/>.</summary>
+    public DebugOptions? Debug { get; init; }
 }
 
 /// <summary>Where a run is in its life.</summary>
@@ -77,6 +80,7 @@ public sealed class ExecutionHost : IAsyncDisposable
 
         // Always a fresh correlation id: it is the run's identity for event and log routing, so it must be unique.
         var record = new ExecutionRecord(_ids.NewCorrelationId(), _options.EventBufferCapacity);
+        record.Debug = request.Debug is { } debug ? new DebugSession(record, debug, _time) : null;
         _registry.Add(record);
 
         // The engine may run long synchronous stretches (activities that never await); keep them off the caller's thread.
@@ -169,6 +173,7 @@ public sealed class ExecutionHost : IAsyncDisposable
                         Timeout = request.Timeout,
                         Location = request.Location,
                         Observer = record,
+                        Debugger = record.Debug,
                     },
                     record.Cancellation.Token).ConfigureAwait(false);
             }
@@ -186,6 +191,7 @@ public sealed class ExecutionHost : IAsyncDisposable
         }
         finally
         {
+            record.Debug?.End();
             if (result is not null)
             {
                 // The engine always emits the terminal event; this only covers runs that never reached the engine.
@@ -251,6 +257,9 @@ public sealed class ExecutionHandle
 
     /// <summary>The last event sequence number so far.</summary>
     public long LastSequence => _record.LastSequence;
+
+    /// <summary>The run's debugger, when it was started with <see cref="ExecutionStartRequest.Debug"/> (ADR-0040).</summary>
+    public DebugSession? Debug => _record.Debug;
 
     /// <summary>Completes with the engine's result (a cancelled result if the run was cancelled while queued).</summary>
     public Task<WorkflowExecutionResult> Completion => _record.Result.Task;

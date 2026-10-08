@@ -73,12 +73,12 @@ public sealed class SdkHarness : IDisposable
     public static string Workflow(string root, string arguments = "[]", string variables = "[]") =>
         $$"""{ "schemaVersion": "1.0", "id": "wf", "name": "Test", "version": "1.0.0", "arguments": {{arguments}}, "variables": {{variables}}, "root": {{root}} }""";
 
-    public Task<WorkflowExecutionResult> RunAsync(string json, TimeSpan? timeout = null, CancellationToken? cancellationToken = null)
+    public Task<WorkflowExecutionResult> RunAsync(string json, TimeSpan? timeout = null, CancellationToken? cancellationToken = null, IExecutionDebugger? debugger = null)
     {
         var load = _services.GetRequiredService<WorkflowLoader>().Load(json);
         Assert.True(load.IsValid, string.Join(Environment.NewLine, load.Diagnostics));
         return _services.GetRequiredService<IWorkflowRunner>().RunAsync(
-            load.Workflow!, new WorkflowRunRequest { Timeout = timeout }, cancellationToken ?? TestContext.Current.CancellationToken);
+            load.Workflow!, new WorkflowRunRequest { Timeout = timeout, Debugger = debugger }, cancellationToken ?? TestContext.Current.CancellationToken);
     }
 
     public void Dispose() => _services.Dispose();

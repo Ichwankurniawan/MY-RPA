@@ -25,6 +25,15 @@ public static class ExecutionEventKinds
     /// <see cref="ExecutionEventMessage.MissingToSequence"/> are no longer retained (the replay buffer is bounded).
     /// </summary>
     public const string Gap = "stream.gap";
+
+    /// <summary>
+    /// A debugged run paused before <see cref="ExecutionEventMessage.NodeId"/> started (ADR-0040);
+    /// <see cref="ExecutionEventMessage.Reason"/> says why. The paused values are not part of the event.
+    /// </summary>
+    public const string DebugPaused = "debug.paused";
+
+    /// <summary>A paused debugged run continues (<see cref="ExecutionEventMessage.Reason"/>: the command).</summary>
+    public const string DebugResumed = "debug.resumed";
 }
 
 /// <summary>
@@ -83,6 +92,12 @@ public sealed record ExecutionEventMessage
 
     /// <summary>Last sequence no longer retained (gap events).</summary>
     public long? MissingToSequence { get; init; }
+
+    /// <summary>
+    /// Why a debugged run paused (<c>breakpoint</c>, <c>step</c>, <c>pause</c>) or how it resumed (<c>continue</c>,
+    /// <c>stepInto</c>, <c>stepOver</c>, <c>stepOut</c>).
+    /// </summary>
+    public string? Reason { get; init; }
 }
 
 /// <summary>A failure, as reported to clients.</summary>

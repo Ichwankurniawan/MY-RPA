@@ -59,7 +59,13 @@ internal sealed class ExecutionRecord : IExecutionObserver, IDisposable
         }
     }
 
+    /// <summary>The run's debugger (ADR-0040), or <see langword="null"/> when the run is not debugged.</summary>
+    public DebugSession? Debug { get; set; }
+
     public void MarkRunning() => _state = ExecutionRunState.Running;
+
+    /// <summary>Adds a <c>debug.paused</c> / <c>debug.resumed</c> event (ignored once the run has completed).</summary>
+    public void AppendDebug(ExecutionEventMessage message) => Append(message, final: false);
 
     /// <inheritdoc />
     public void OnEvent(ExecutionEvent executionEvent)
