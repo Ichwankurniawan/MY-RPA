@@ -144,6 +144,7 @@ public sealed class ExecutionHost : IAsyncDisposable
     private async Task RunAsync(ExecutionRecord record, WorkflowDefinition workflow, ExecutionStartRequest request)
     {
         WorkflowExecutionResult? result = null;
+        Exception? failure = null;
         try
         {
             try
@@ -181,7 +182,7 @@ public sealed class ExecutionHost : IAsyncDisposable
 #pragma warning restore CA1031
         {
             record.CompleteWithHostFailure(_time.GetUtcNow(), ex.Message);
-            record.Result.TrySetException(ex);
+            failure = ex;
         }
         finally
         {
@@ -189,12 +190,22 @@ public sealed class ExecutionHost : IAsyncDisposable
             {
                 // The engine always emits the terminal event; this only covers runs that never reached the engine.
                 record.CompleteFrom(result);
-                record.Result.TrySetResult(result);
             }
 
             record.MarkCompleted();
             _active.TryRemove(record.RunId, out _);
             Retain(record);
+
+            // Completion last: whoever awaits it finds the run already finished in the host (state, active runs,
+            // retention), never in between.
+            if (failure is not null)
+            {
+                record.Result.TrySetException(failure);
+            }
+            else if (result is not null)
+            {
+                record.Result.TrySetResult(result);
+            }
         }
     }
 
