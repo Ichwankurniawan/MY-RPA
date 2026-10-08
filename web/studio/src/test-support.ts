@@ -2,7 +2,7 @@
 
 import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
-import type { ActivityDescriptor, ExecutionEvent, JsonObject, PluginReport, RunStatus, ValidationResult } from './types';
+import type { ActivityDescriptor, ExecutionEvent, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
 
 export const helloWorld = `{
   "schemaVersion": "1.0",
@@ -135,6 +135,46 @@ export class FakeApi implements StudioApi {
   }
 
   pluginReport: PluginReport = { plugins: [], diagnostics: [] };
+
+  // Recording (ADR-0039).
+  recordingAvailable = true;
+  recordingsStarted: string[] = [];
+  recordingsStopped: string[] = [];
+  recordingSubscriptions: { streamId: string; recordingId: string; afterSequence: number }[] = [];
+  generated: { startUrl: string; steps: readonly RecordedStep[] }[] = [];
+
+  async recordingInfo() {
+    return this.recordingAvailable ? { available: true } : { available: false, reason: 'Recording needs the browser plugin.' };
+  }
+
+  async startRecording(startUrl: string) {
+    this.recordingsStarted.push(startUrl);
+    return `rec-${this.recordingsStarted.length}`;
+  }
+
+  async stopRecording(recordingId: string) {
+    this.recordingsStopped.push(recordingId);
+  }
+
+  async subscribeRecording(streamId: string, recordingId: string, afterSequence: number) {
+    this.recordingSubscriptions.push({ streamId, recordingId, afterSequence });
+  }
+
+  /** Like the browser plugin: Open, one node per step, Close; a password is the `password` argument. */
+  async generateRecording(startUrl: string, steps: readonly RecordedStep[]): Promise<GeneratedActivities> {
+    this.generated.push({ startUrl, steps });
+    const nodes: JsonObject[] = [{ id: 'open-1', type: 'Browser.Open', properties: { url: `'${startUrl}'` } }];
+    steps.forEach((step, i) => {
+      const properties: JsonObject = step.kind === 'navigate' ? { url: `'${step.url}'` } : { selector: step.selector ?? '' };
+      if (step.kind === 'type') {
+        (properties as Record<string, string>).text = step.secret ? 'password' : `'${step.text ?? ''}'`;
+      }
+
+      nodes.push({ id: `${step.kind}-${i + 1}`, type: `Browser.${step.kind}`, properties });
+    });
+    nodes.push({ id: 'close-1', type: 'Browser.Close' });
+    return { nodes, arguments: steps.some((s) => s.secret) ? [{ name: 'password', direction: 'In', type: 'String', required: true }] : [] };
+  }
 
   async plugins() {
     return this.pluginReport;

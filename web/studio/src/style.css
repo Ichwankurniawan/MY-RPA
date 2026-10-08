@@ -120,9 +120,11 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 .brand h1 { color: var(--text); }
 .document-title { flex: 1; font-weight: 600; min-width: 120px; }
 .commands { display: flex; flex-wrap: wrap; align-items: stretch; padding: 4px 6px 0; }
-.command-group { display: flex; flex-wrap: wrap; align-items: center; align-content: space-between; gap: 2px; padding: 0 8px; border-right: 1px solid var(--border); }
+/* A group is a row of commands with its label spanning underneath (a grid, so the label never widens the group: the
+   bar stays one row at 1400 px with Record and a run status, Phase 6). */
+.command-group { display: grid; grid-auto-flow: column; grid-template-rows: 1fr auto; align-items: center; gap: 0 2px; padding: 0 8px; border-right: 1px solid var(--border); }
 .command-group:last-child { border-right: none; }
-.command-group .group-label { flex-basis: 100%; text-align: center; font-size: 11px; color: var(--muted); padding: 1px 0 3px; }
+.command-group .group-label { grid-row: 2; grid-column: 1 / -1; text-align: center; font-size: 11px; color: var(--muted); padding: 1px 0 3px; }
 button.command, label.command { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 52px; padding: 4px 6px; border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--text); font-size: 12px; line-height: 1.2; }
 button.command .icon { color: var(--accent); }
 button.command:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
@@ -130,7 +132,8 @@ button.command:active:not(:disabled) { background: var(--selected); }
 button.command:disabled .icon { color: var(--muted); }
 label.command { color: var(--accent); }
 label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
-.command-group .toolbar-status { align-self: center; font-size: 12px; padding: 0 6px; }
+/* The run status wraps to two short lines rather than widening the bar (it stays one row at 1400 px, Phase 6). */
+.command-group .toolbar-status { align-self: center; font-size: 12px; padding: 0 6px; max-width: 104px; line-height: 1.25; }
 .toolbox, .designer, .properties, .output, .connection { padding: 12px; overflow: auto; background: var(--panel); }
 /* The left column: project files above the activity catalog, each scrolling on its own. */
 .sidebar { grid-area: toolbox; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: var(--panel); }
@@ -377,3 +380,15 @@ button.command[aria-pressed='false'] .icon { color: var(--muted); }
 .add-transition { display: flex; align-items: flex-end; gap: 8px; margin-top: 8px; }
 .add-transition .field { flex: 1; }
 .start-step { margin: 4px 0 8px; }
+
+/* The Recorder tab (Phase 6, ADR-0039). */
+.recorder { display: grid; gap: 8px; }
+.recorder-start { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.recorder-start .field { flex: 1; min-width: 240px; }
+.recorder-status { margin: 0; }
+.recorded-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.recorded-step { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.recorded-what { font-weight: 600; min-width: 220px; align-self: center; }
+.recorded-step .field { min-width: 200px; flex: 1; }
+.recorded-value { align-self: center; color: var(--muted); }
+.recorder-actions { display: flex; gap: 8px; flex-wrap: wrap; }

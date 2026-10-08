@@ -7,6 +7,7 @@ import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel, type Ste
 import { arrowShape, arrowText, canvasPositions, canvasSize, isGraphActivity, isGraphNode, lastTaken, stepEntries, stepSize, transitionsOf, type Point } from './graph';
 import type { Position } from './placement';
 import { InlineProperties, PropertiesPanel } from './PropertyEditors';
+import { RecordingPanel } from './RecordingPanel';
 import {
   currentRun,
   deleteRefusalOf,
@@ -503,6 +504,7 @@ function Toolbar() {
             <Command icon="validate" label="Validate" onClick={() => void studio.validate()} disabled={!hasDocument || busy !== undefined} title="Check the workflow on the server" />
             <Command icon="run" label="Run" onClick={() => void studio.requestRun()} disabled={runRefusal !== undefined} title={runRefusal ?? 'Validate, then run (F5)'} />
             <Command icon="stop" label="Stop" onClick={() => void studio.stop()} disabled={stopRefusal !== undefined} title={stopRefusal ?? 'Stop the run (Shift+F5)'} />
+            <Command icon="record" label="Record" onClick={() => studio.openRecorder()} title="Record what you do on a website as browser activities" />
             <span className="toolbar-status" data-testid="toolbar-run-status">
               {run ? `Status: ${statusLabel(run)}` : ''}
             </span>
@@ -1861,7 +1863,7 @@ function CaseZone({ parentKey, prefix, picked }: { parentKey: string; prefix: st
 function OutputPanel() {
   return (
     <section className="output" aria-label="Output">
-      <BottomPanel execution={<ExecutionPanel />} />
+      <BottomPanel execution={<ExecutionPanel />} recording={<RecordingPanel />} />
     </section>
   );
 }

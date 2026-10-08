@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using MyRPA.Browser.Contracts;
 
@@ -114,6 +115,46 @@ public sealed class RecorderTests(BrowserHost host) : IClassFixture<BrowserHost>
         await session.Completion.WaitAsync(TimeSpan.FromSeconds(10), _token);
 
         Assert.Equal(RecordingEndReason.Stopped, probe.Ended?.Reason);
+    }
+
+    [Fact]
+    public async Task RecordedSteps_BecomeThePluginsActivities_AndTheyRun()
+    {
+        var (session, user, probe) = await StartAsync("login");
+        await user.FillAsync("label=Email", "ada@example.com", _token);
+        await user.FillAsync("label=Password", "s3cret", _token);
+        await user.ClickAsync("role=button|Sign in", _token);
+        await probe.WaitForAsync(s => s.Count == 3);
+        await session.StopAsync();
+        var recorder = Assert.Single(host.Services.GetServices<IBrowserRecorder>());
+
+        var json = recorder.GenerateActivities(session.StartUrl, probe.Current());
+        using var generated = JsonDocument.Parse(json);
+        var nodes = generated.RootElement.GetProperty("nodes").EnumerateArray().Select(n => n.GetRawText()).ToList();
+
+        Assert.Equal(["Browser.Open", "Browser.TypeText", "Browser.TypeText", "Browser.Click", "Browser.Close"],
+            generated.RootElement.GetProperty("nodes").EnumerateArray().Select(n => n.GetProperty("type").GetString()));
+        Assert.Contains("\"text\":\"'ada@example.com'\"", nodes[1], StringComparison.Ordinal);
+        Assert.Contains("\"text\":\"password\"", nodes[2], StringComparison.Ordinal);
+        Assert.Equal("password", generated.RootElement.GetProperty("arguments")[0].GetProperty("name").GetString());
+        Assert.DoesNotContain("s3cret", json, StringComparison.Ordinal);
+
+        // The generated activities run (headless) and sign in; here the password is written in, as the run's argument would.
+        var steps = nodes.Take(nodes.Count - 1).Select(n => n.Replace("\"text\":\"password\"", "\"text\":\"'s3cret'\"", StringComparison.Ordinal));
+        var result = await host.RunAsync(string.Join(", ", steps) + ", " + Nodes.Node("Browser.GetText", "\"selector\": \"#title\", \"to\": \"t\""), ["t"]);
+        Assert.True(result.Succeeded, result.Error?.Message);
+        Assert.Equal("Other", result.Outputs["t"]);
+    }
+
+    [Fact]
+    public void Generate_RefusesSelectorsThatDoNotParse_AndNonWebUrls()
+    {
+        var recorder = Assert.Single(host.Services.GetServices<IBrowserRecorder>());
+        var start = new Uri(host.Site.BaseUrl);
+
+        Assert.Throws<ArgumentException>(() => recorder.GenerateActivities(start, [new RecordedStep(1, RecordedStepKind.Click, DateTimeOffset.UnixEpoch) { Selector = "role=notarole" }]));
+        Assert.Throws<ArgumentException>(() => recorder.GenerateActivities(start, [new RecordedStep(1, RecordedStepKind.Navigate, DateTimeOffset.UnixEpoch) { Url = "file:///c:/x" }]));
+        Assert.Throws<ArgumentException>(() => recorder.GenerateActivities(new Uri("file:///c:/x"), []));
     }
 
     [Theory]

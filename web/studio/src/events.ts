@@ -1,10 +1,11 @@
-// One multiplexed event stream per browser tab (ADR-0024): a single EventSource; each run is added as a subscription.
+// One multiplexed event stream per browser tab (ADR-0024): a single EventSource; each run, and each recording (ADR-0039),
+// is added as a subscription.
 // The browser's own reconnect sends Last-Event-ID (the stream's position vector), so the server resumes every run.
 // If the stream itself is gone (server restart, retention expired), a new one is created and the unfinished runs are
 // subscribed again after the last sequence seen. Events at or below that sequence are ignored.
 
 import { ApiError, type StudioApi } from './api';
-import type { ExecutionEvent } from './types';
+import type { ExecutionEvent, RecordingEvent } from './types';
 
 export interface EventSourceLike {
   readonly readyState: number;
@@ -17,6 +18,8 @@ export type EventSourceFactory = (url: string) => EventSourceLike;
 
 export const executionEventKinds = ['execution.started', 'node.started', 'node.completed', 'execution.completed', 'log', 'stream.gap'];
 
+export const recordingEventKinds = ['recording.step', 'recording.ended'];
+
 /** Whether the tab's stream is delivering events; `idle` when no stream is open. */
 export type StreamStatus = 'idle' | 'connected' | 'reconnecting';
 
@@ -27,6 +30,7 @@ export class RunEventStream {
   private opening?: Promise<string>;
   private readonly lastSequence = new Map<string, number>();
   private readonly unfinished = new Set<string>();
+  private readonly recordings = new Set<string>();
 
   constructor(
     private readonly api: StudioApi,
@@ -34,7 +38,16 @@ export class RunEventStream {
     private readonly onEvent: (event: ExecutionEvent) => void,
     private readonly onError: (message: string) => void = () => {},
     private readonly onStatus: (status: StreamStatus) => void = () => {},
+    private readonly onRecording: (event: RecordingEvent) => void = () => {},
   ) {}
+
+  /** Follows a recording's steps on this tab's stream (ADR-0039). */
+  async followRecording(recordingId: string): Promise<void> {
+    this.recordings.add(recordingId);
+    this.unfinished.add(recordingId);
+    const streamId = await this.ensureOpen();
+    await this.subscribe(streamId, recordingId);
+  }
 
   /** Follows a run on this tab's stream (opening the stream on first use). */
   async follow(runId: string): Promise<void> {
@@ -61,6 +74,10 @@ export class RunEventStream {
       source.addEventListener(kind, (message) => this.receive(JSON.parse(message.data) as ExecutionEvent));
     }
 
+    for (const kind of recordingEventKinds) {
+      source.addEventListener(kind, (message) => this.receiveRecording(JSON.parse(message.data) as RecordingEvent));
+    }
+
     // Sent by the server on every connection, including the browser's own reconnects with Last-Event-ID.
     source.addEventListener('stream.opened', () => {
       if (this.source === source) {
@@ -82,9 +99,10 @@ export class RunEventStream {
     return streamId;
   }
 
-  private async subscribe(streamId: string, runId: string): Promise<void> {
+  private async subscribe(streamId: string, id: string): Promise<void> {
     try {
-      await this.api.subscribe(streamId, runId, this.lastSequence.get(runId) ?? 0);
+      const after = this.lastSequence.get(id) ?? 0;
+      await (this.recordings.has(id) ? this.api.subscribeRecording(streamId, id, after) : this.api.subscribe(streamId, id, after));
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 409)) {
         throw error;
@@ -106,6 +124,19 @@ export class RunEventStream {
     }
 
     this.onEvent(event);
+  }
+
+  private receiveRecording(event: RecordingEvent): void {
+    if (event.sequence <= (this.lastSequence.get(event.recordingId) ?? 0)) {
+      return;
+    }
+
+    this.lastSequence.set(event.recordingId, event.sequence);
+    if (event.kind === 'recording.ended') {
+      this.unfinished.delete(event.recordingId);
+    }
+
+    this.onRecording(event);
   }
 
   private reopen(): void {

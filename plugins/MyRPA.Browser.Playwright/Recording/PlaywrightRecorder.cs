@@ -35,7 +35,14 @@ public sealed class PlaywrightRecorder(IBrowserProvider provider) : IBrowserReco
         var driver = provider is PlaywrightBrowserProvider playwright
             ? await playwright.GetDriverAsync(cancellationToken).ConfigureAwait(false)
             : throw new InvalidOperationException("The recorder needs the Playwright browser provider.");
-        var browser = await driver.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = options.Headless }).WaitAsync(cancellationToken).ConfigureAwait(false);
+        var launch = new BrowserTypeLaunchOptions { Headless = options.Headless };
+        if (options.DebuggingPort is { } port)
+        {
+            // Tests only (RecordingOptions.DebuggingPort): lets an end-to-end test act as the user over DevTools.
+            launch.Args = [$"--remote-debugging-port={port}"];
+        }
+
+        var browser = await driver.Chromium.LaunchAsync(launch).WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var id = RandomNumberGenerator.GetHexString(16, lowercase: true);
@@ -59,6 +66,9 @@ public sealed class PlaywrightRecorder(IBrowserProvider provider) : IBrowserReco
             throw;
         }
     }
+
+    /// <inheritdoc />
+    public string GenerateActivities(Uri startUrl, IReadOnlyList<RecordedStep> steps) => RecordedActivities.Generate(startUrl, steps);
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()

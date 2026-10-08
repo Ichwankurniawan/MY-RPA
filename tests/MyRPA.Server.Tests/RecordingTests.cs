@@ -91,6 +91,26 @@ public sealed class RecordingTests
         Assert.Equal(HttpStatusCode.NoContent, stopAgain.StatusCode);
     }
 
+    [Fact]
+    public async Task Generate_ReturnsThePluginsActivities_ForTheReviewedSteps()
+    {
+        await using var h = await StartAsync();
+        var steps = new object[]
+        {
+            new { kind = "type", selector = "label=Name", text = "Ada", secret = false },
+            new { kind = "click", selector = "testid=go", element = "button \"Go\"", secret = false },
+        };
+
+        using var response = await h.SendAsync(h.Unsafe(HttpMethod.Post, "/api/recordings/generate", new { startUrl = "http://localhost:5000/", steps }));
+        var json = await ServerHarness.JsonAsync(response);
+        using var bad = await h.SendAsync(h.Unsafe(HttpMethod.Post, "/api/recordings/generate", new { startUrl = "http://localhost:5000/", steps = new[] { new { kind = "fly" } } }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["Browser.Open", "Browser.TypeText", "Browser.Click", "Browser.Close"], json.GetProperty("nodes").EnumerateArray().Select(n => n.GetProperty("type").GetString()));
+        Assert.Equal("Click button \"Go\"", json.GetProperty("nodes")[2].GetProperty("displayName").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
+
     [Theory]
     [InlineData("file:///c:/windows/win.ini")]
     [InlineData("not a url")]

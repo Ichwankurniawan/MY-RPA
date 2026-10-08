@@ -23,7 +23,7 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RunStatus, WorkflowFile } from './types';
+import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, WorkflowFile } from './types';
 import { isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 import {
@@ -190,6 +190,8 @@ export interface StudioState {
   readonly designerScope?: string;
   /** A transition to focus in Properties (an arrow was clicked on the canvas); `seq` repeats the request. */
   readonly transitionFocus?: { readonly key: string; readonly index: number; readonly seq: number };
+  /** The Recorder tab's recording (ADR-0039). */
+  readonly recorder?: RecorderState;
   /** The designer's zoom (UX-3): 1 is 100 %. */
   readonly zoom: number;
 }
@@ -230,7 +232,45 @@ const isPanes = (value: unknown): value is Panes => {
 };
 
 /** The tabs of the bottom panel. */
-export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution';
+export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution' | 'recording';
+
+/** One recorded step as the user keeps it (ADR-0039): the chosen selector and, for typing, the edited text. */
+export interface RecordedItem {
+  readonly step: RecordedStep;
+  readonly selector?: string;
+  readonly text?: string;
+}
+
+/** The Recorder tab (Phase 6): a recording being set up, running or ended, and its steps. */
+export interface RecorderState {
+  readonly phase: 'setup' | 'starting' | 'recording' | 'ended';
+  readonly startUrl: string;
+  readonly id?: string;
+  readonly items: readonly RecordedItem[];
+  readonly endReason?: string;
+  /** Why recording is not possible on this server (no browser plugin), when known. */
+  readonly unavailable?: string;
+  readonly error?: string;
+}
+
+/** Why the recorded steps cannot be inserted now (undefined when they can). */
+export function recordingInsertRefusal(state: StudioState): string | undefined {
+  const recorder = state.recorder;
+  if (recorder === undefined || recorder.items.length === 0) {
+    return 'Record some steps first.';
+  }
+
+  if (recorder.phase === 'starting') {
+    return 'The recording is starting.';
+  }
+
+  const target = insertionTargetOf(state);
+  if (typeof target === 'string') {
+    return target;
+  }
+
+  return 'slot' in target.position ? `The slot '${target.position.slot}' holds one activity; select a list (for example a Sequence) to insert the recording.` : undefined;
+}
 
 /** How many recently inserted activity types are remembered. */
 export const maxRecent = 10;
@@ -555,6 +595,7 @@ export class Studio {
       (event) => this.receive(event),
       (message) => this.say(message),
       (stream) => this.store.set({ stream }),
+      (event) => this.receiveRecording(event),
     );
 
     // Crash recovery: a changed document is written as a draft once typing pauses; saving or discarding removes it.
@@ -911,6 +952,169 @@ export class Studio {
     const id = nodeIdOf(document, key);
     this.commit(setStart(document, path).document, key, `Start at ${id}`);
     this.say(`${id} is now the start step.`);
+  }
+
+  // Recording (Phase 6, ADR-0039): the server opens a visible browser; its steps arrive on the tab's event stream; the
+  // browser plugin turns the kept steps into its activities, inserted here as one undo step.
+
+  /** Shows the Recorder tab, with a new recording to set up when none is open. */
+  openRecorder(): void {
+    if (this.state.recorder === undefined) {
+      this.store.set({ recorder: { phase: 'setup', startUrl: 'https://', items: [] } });
+      void this.api.recordingInfo().then(
+        (info) => this.updateRecorder((r) => ({ ...r, unavailable: info.available ? undefined : (info.reason ?? 'Recording is not available on this server.') })),
+        () => undefined,
+      );
+    }
+
+    this.store.set({ outputTab: 'recording' });
+  }
+
+  setRecorderUrl(startUrl: string): void {
+    this.updateRecorder((r) => (r.phase === 'setup' ? { ...r, startUrl, error: undefined } : r));
+  }
+
+  /** Opens the recording browser at the start URL; the steps then appear in the Recorder tab. */
+  async startRecording(): Promise<void> {
+    const recorder = this.state.recorder;
+    if (recorder === undefined || recorder.phase !== 'setup') {
+      return;
+    }
+
+    const url = recorder.startUrl.trim();
+    if (!/^https?:\/\/[^/\s]+/i.test(url)) {
+      this.updateRecorder((r) => ({ ...r, error: 'Enter the address of a web page (http:// or https://).' }));
+      return;
+    }
+
+    this.updateRecorder((r) => ({ ...r, phase: 'starting', startUrl: url, error: undefined, items: [] }));
+    try {
+      const id = await this.api.startRecording(url);
+      this.updateRecorder((r) => ({ ...r, phase: 'recording', id }));
+      this.say('Recording: do the steps in the browser window that opened, then press Stop here.');
+      await this.events.followRecording(id);
+    } catch (error) {
+      this.updateRecorder((r) => ({ ...r, phase: 'setup', error: (error as Error).message }));
+    }
+  }
+
+  /** Stops the recording and closes its browser; the steps stay to be reviewed and inserted. */
+  async stopRecording(): Promise<void> {
+    const id = this.state.recorder?.id;
+    if (id !== undefined && this.state.recorder?.phase === 'recording') {
+      try {
+        await this.api.stopRecording(id);
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 404)) {
+          this.say(`Cannot stop the recording: ${(error as Error).message}`);
+        }
+      }
+    }
+  }
+
+  chooseRecordedSelector(sequence: number, selector: string): void {
+    this.updateItem(sequence, (item) => ({ ...item, selector }));
+  }
+
+  editRecordedText(sequence: number, text: string): void {
+    this.updateItem(sequence, (item) => ({ ...item, text }));
+  }
+
+  removeRecordedStep(sequence: number): void {
+    this.updateRecorder((r) => ({ ...r, items: r.items.filter((item) => item.step.sequence !== sequence) }));
+  }
+
+  /** Closes the Recorder's recording (stopping it first) without inserting anything. */
+  async discardRecording(): Promise<void> {
+    await this.stopRecording();
+    this.store.set({ recorder: undefined });
+  }
+
+  /**
+   * Inserts the kept steps where an insert would go (W7: the picked place or the selection), as the browser plugin's
+   * activities: Open, the steps, Close; a recorded password becomes the In argument `password`. One undo step.
+   */
+  async insertRecording(): Promise<void> {
+    const refusal = recordingInsertRefusal(this.state);
+    const recorder = this.state.recorder;
+    if (refusal !== undefined || recorder === undefined) {
+      this.say(`Cannot insert the recording: ${refusal}`);
+      return;
+    }
+
+    await this.stopRecording();
+    let generated;
+    try {
+      generated = await this.api.generateRecording(
+        recorder.startUrl,
+        recorder.items.map(({ step, selector, text }) => ({ ...step, selector: selector ?? step.selector, text: text ?? step.text })),
+      );
+    } catch (error) {
+      this.say(`Cannot insert the recording: ${(error as Error).message}`);
+      return;
+    }
+
+    const state = this.state;
+    const target = insertionTargetOf(state);
+    if (typeof target === 'string' || 'slot' in target.position || state.document === undefined) {
+      this.say(`Cannot insert the recording: ${recordingInsertRefusal(state) ?? 'the place to insert is gone.'}`);
+      return;
+    }
+
+    let document = state.document;
+    const start = target.position.index;
+    const nodes = prepareForPaste(generated.nodes, document);
+    nodes.forEach((node, i) => {
+      document = place(document, { parentPath: target.parentPath, position: { index: start + i } }, node).document;
+    });
+    const existing = new Set((Array.isArray(document.arguments) ? document.arguments : []).flatMap((a) => (isObject(a) && typeof a.name === 'string' ? [a.name] : [])));
+    const added = generated.arguments.filter((a) => typeof a.name === 'string' && !existing.has(a.name));
+    if (added.length > 0) {
+      document = { ...document, arguments: [...(Array.isArray(document.arguments) ? document.arguments : []), ...added] };
+    }
+
+    this.commit(document, keyOf(nodes[0]), `Insert recording (${nodes.length} activities)`);
+    this.store.set({ recorder: undefined, insertTarget: undefined });
+    this.say(`Inserted the recording: ${nodes.length} activities${added.length > 0 ? `, and the argument ${added.map((a) => a.name as string).join(', ')} (supply it when running)` : ''}.`);
+  }
+
+  private receiveRecording(event: RecordingEvent): void {
+    const recorder = this.state.recorder;
+    if (recorder === undefined || recorder.id !== event.recordingId) {
+      return;
+    }
+
+    if (event.kind === 'recording.ended') {
+      this.updateRecorder((r) => ({ ...r, phase: 'ended', endReason: event.endReason }));
+      return;
+    }
+
+    const step = event.step;
+    if (step === undefined) {
+      return;
+    }
+
+    this.updateRecorder((r) => {
+      const at = step.replaces == null ? -1 : r.items.findIndex((item) => item.step.sequence === step.replaces);
+      if (at < 0) {
+        return { ...r, items: [...r.items, { step }] };
+      }
+
+      const items = r.items.slice();
+      items[at] = { step };
+      return { ...r, items };
+    });
+  }
+
+  private updateRecorder(update: (recorder: RecorderState) => RecorderState): void {
+    const recorder = this.state.recorder;
+    if (recorder !== undefined) {
+      this.store.set({ recorder: update(recorder) });
+    }
+  }
+
+  private updateItem(sequence: number, update: (item: RecordedItem) => RecordedItem): void {
+    this.updateRecorder((r) => ({ ...r, items: r.items.map((item) => (item.step.sequence === sequence ? update(item) : item)) }));
   }
 
   /** Shows a tab of the bottom panel. */

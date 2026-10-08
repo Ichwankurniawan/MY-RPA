@@ -150,6 +150,11 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check((await tree.locator('[role=treeitem][data-node-id="wait"] .badge.start').count()) === 1, 'Set as start step by keyboard');
   step('Keyboard only (flowchart): arrows through the steps in the list view, a transition added and a start step set from Properties');
 
+  // Phase 6: the Recorder tab (this server has no browser plugin, so Start explains why it is unavailable).
+  await page.getByRole('button', { name: 'Record', exact: true }).click();
+  await page.getByRole('tab', { name: /^Recorder/ }).waitFor();
+  await scan('Recorder tab (start a recording)');
+
   const blocking = findings.filter((f) => f.impact === 'serious' || f.impact === 'critical');
   check(blocking.length === 0, `${blocking.length} serious or critical accessibility violation(s)`);
   check(problems.length === 0, `browser errors: ${problems.join('; ')}`);

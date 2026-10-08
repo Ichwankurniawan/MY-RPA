@@ -207,6 +207,13 @@ const paths = {
   'chevron-down': <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />,
   'chevron-right': <path d="M9.5 6.5l5.5 5.5-5.5 5.5" />,
   'chevron-left': <path d="M14.5 6.5L9 12l5.5 5.5" />,
+  // Phase 6: record (a filled dot in a ring).
+  record: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4" fill="currentColor" />
+    </>
+  ),
   // G-2: a flowchart (two boxes joined by an arrow that loops back) and a decision (a diamond with two ways out).
   flowchart: (
     <>

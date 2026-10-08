@@ -41,7 +41,8 @@ internal sealed class Recordings(IEnumerable<IBrowserRecorder> recorders, Server
 
         try
         {
-            handle.Attach(await _recorder.StartAsync(new RecordingOptions { StartUrl = startUrl, Headless = options.RecorderHeadless }, handle, cancellationToken).ConfigureAwait(false));
+            var recordingOptions = new RecordingOptions { StartUrl = startUrl, Headless = options.RecorderHeadless, DebuggingPort = options.RecorderDebuggingPort };
+            handle.Attach(await _recorder.StartAsync(recordingOptions, handle, cancellationToken).ConfigureAwait(false));
             lock (_gate)
             {
                 _all[handle.Id] = handle;
@@ -58,6 +59,24 @@ internal sealed class Recordings(IEnumerable<IBrowserRecorder> recorders, Server
         {
             Forget(handle);
             return (null, StatusCodes.Status500InternalServerError, $"The recording browser could not start: {ex.Message}");
+        }
+    }
+
+    /// <summary>The workflow nodes for reviewed steps (the browser plugin knows its activities), or the reason it cannot.</summary>
+    public (string? Json, int Status, string? Error) Generate(Uri startUrl, IReadOnlyList<RecordedStep> steps)
+    {
+        if (_recorder is null)
+        {
+            return (null, StatusCodes.Status503ServiceUnavailable, Unavailable);
+        }
+
+        try
+        {
+            return (_recorder.GenerateActivities(startUrl, steps), StatusCodes.Status200OK, null);
+        }
+        catch (ArgumentException ex)
+        {
+            return (null, StatusCodes.Status400BadRequest, ex.Message);
         }
     }
 

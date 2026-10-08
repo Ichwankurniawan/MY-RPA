@@ -116,3 +116,36 @@ export interface RunStatus {
     error?: ExecutionError;
   };
 }
+
+/** A recorded step (ADR-0039), as the server sends it on the event stream (`recording.step`). */
+export interface RecordedStep {
+  sequence: number;
+  kind: 'navigate' | 'click' | 'type' | 'select' | 'upload' | 'download';
+  selector?: string | null;
+  alternatives?: string[];
+  element?: string | null;
+  text?: string | null;
+  secret?: boolean;
+  values?: string[];
+  url?: string | null;
+  fileName?: string | null;
+  /** The sequence of the earlier step this one takes the place of (more typing; a click that downloaded). */
+  replaces?: number | null;
+}
+
+/** `recording.step` / `recording.ended` on the tab's event stream. */
+export interface RecordingEvent {
+  sequence: number;
+  kind: string;
+  recordingId: string;
+  time: string;
+  step?: RecordedStep;
+  endReason?: string;
+  message?: string;
+}
+
+/** `POST /api/recordings/generate`: the browser plugin's activities for the kept steps, and the arguments they need. */
+export interface GeneratedActivities {
+  nodes: JsonObject[];
+  arguments: JsonObject[];
+}

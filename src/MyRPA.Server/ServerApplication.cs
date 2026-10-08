@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.FileProviders.Physical;
 using MyRPA.Activities;
+using MyRPA.Browser.Contracts;
 using MyRPA.Core.Activities;
 using MyRPA.Core.Diagnostics;
 using MyRPA.Execution.Hosting;
@@ -524,6 +525,44 @@ internal static class ServerApplication
                 : Results.Json(new { recordingId = handle.Id, startUrl = handle.StartUrl.AbsoluteUri }, statusCode: StatusCodes.Status201Created);
         });
 
+        // The reviewed steps (as the Studio kept and edited them) become activities of the plugin that recorded them.
+        api.MapPost("/recordings/generate", (GenerateRecordingRequest request, Recordings recordings) =>
+        {
+            if (!Uri.TryCreate(request.StartUrl, UriKind.Absolute, out var url))
+            {
+                return BadRequest("startUrl must be an absolute http or https URL.");
+            }
+
+            if (request.Steps is not { Count: <= 1000 } steps)
+            {
+                return BadRequest("steps must be a list of at most 1000 recorded steps.");
+            }
+
+            var recorded = new List<RecordedStep>();
+            for (var i = 0; i < steps.Count; i++)
+            {
+                var step = steps[i];
+                if (!Enum.TryParse<RecordedStepKind>(step.Kind, ignoreCase: true, out var kind) || !Enum.IsDefined(kind) || int.TryParse(step.Kind, out _))
+                {
+                    return BadRequest($"Step {i + 1}: '{step.Kind}' is not a recorded step kind.");
+                }
+
+                recorded.Add(new RecordedStep(i + 1, kind, DateTimeOffset.UnixEpoch)
+                {
+                    Selector = step.Selector,
+                    Element = step.Element,
+                    Text = step.Secret ? null : step.Text,
+                    Secret = step.Secret,
+                    Values = step.Values ?? [],
+                    Url = step.Url,
+                    FileName = step.FileName,
+                });
+            }
+
+            var (json, status, error) = recordings.Generate(url, recorded);
+            return json is null ? Problem(status, error!) : Results.Text(json, "application/json");
+        });
+
         api.MapGet("/recordings/{recordingId}", (string recordingId, HttpContext context, Recordings recordings) =>
             recordings.Find(recordingId, Session(context)) is { } handle
                 ? Results.Text(RecordingJson(handle), "application/json")
@@ -632,3 +671,9 @@ internal sealed record SubscribeRequest(string? RunId, long? AfterSequence, stri
 
 /// <summary><c>POST /api/recordings</c> (ADR-0039).</summary>
 internal sealed record StartRecordingRequest(string? StartUrl);
+
+/// <summary><c>POST /api/recordings/generate</c>: the steps as the user kept them (ADR-0039).</summary>
+internal sealed record GenerateRecordingRequest(string? StartUrl, List<GenerateRecordingStep>? Steps);
+
+/// <summary>One step to generate an activity for.</summary>
+internal sealed record GenerateRecordingStep(string? Kind, string? Selector, string? Element, string? Text, bool Secret, List<string>? Values, string? Url, string? FileName);
