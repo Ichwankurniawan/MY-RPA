@@ -324,7 +324,7 @@ Initial technology choices:
 | ------------------ | ---------------------------------------------------- |
 | Language           | C#                                                   |
 | Framework          | .NET 10                                              |
-| Studio             | WPF                                                  |
+| Studio             | Web: React + TypeScript, served by MyRPA.Server (ADR-0021; the WPF Studio is archived, ADR-0036) |
 | Browser            | Playwright                                           |
 | Windows Automation | Windows UI Automation / appropriate modern framework |
 | API                | ASP.NET Core / HttpClient                            |
@@ -929,7 +929,8 @@ Create the visual workflow designer.
 
 ## 5.1 Technology
 
-WPF.
+WPF. *Amended by ADR-0021 and ADR-0036:* the Studio is a web application (React + TypeScript, served by MyRPA.Server);
+the WPF Studio built first in this phase is archived (`archive/wpf-studio`).
 
 ---
 

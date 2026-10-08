@@ -1,5 +1,6 @@
-// W9 corpus parity (ADR-0035). The shared corpus (tests/corpus) is validated by the WPF Studio's DraftValidator in
-// CorpusParityTests (.NET), which records where WPF places every diagnostic (tests/corpus/expected/locations.json).
+// W9 corpus parity (ADR-0035). The shared corpus (tests/corpus) was validated by the WPF Studio's DraftValidator in
+// CorpusParityTests (archive/wpf-studio since W10, ADR-0036), which recorded where WPF places every diagnostic in
+// tests/corpus/expected/locations.json: now the frozen reference.
 // Here the Web Studio opens the same files and must place the same diagnostics on the same node, property, row or the
 // workflow, and must write every file it can edit back unchanged.
 import { readFileSync, readdirSync } from 'node:fs';

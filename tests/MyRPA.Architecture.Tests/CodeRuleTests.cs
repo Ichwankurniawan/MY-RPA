@@ -9,10 +9,9 @@ namespace MyRPA.Architecture.Tests;
 /// </summary>
 public sealed class CodeRuleTests
 {
-    // The desktop Studio shell (no assembly here) is checked with the same detectors in MyRPA.Studio.Tests.
-    public static TheoryData<string> SourceProjectNames() => [.. ArchitectureRules.SourceProjects.Where(r => r.Assembly is not null).Select(r => r.Name)];
+    public static TheoryData<string> SourceProjectNames() => [.. ArchitectureRules.SourceProjects.Select(r => r.Name)];
 
-    private static Assembly AssemblyOf(string name) => ArchitectureRules.SourceProjects.Single(r => r.Name == name).Assembly!;
+    private static Assembly AssemblyOf(string name) => ArchitectureRules.SourceProjects.Single(r => r.Name == name).Assembly;
 
     [Theory]
     [MemberData(nameof(SourceProjectNames))]

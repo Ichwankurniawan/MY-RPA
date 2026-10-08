@@ -44,17 +44,6 @@ public static class ArchitectureRules
         new("MyRPA.Execution.Hosting", typeof(MyRPA.Execution.Hosting.ExecutionHost).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Contracts"],
             AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions", "Microsoft.Extensions.Logging.Abstractions"]),
-        // ADR-0018: Studio logic is platform-neutral (reusable by a future web Studio); only MyRPA.Studio uses WPF.
-        new("MyRPA.Studio.Core", typeof(MyRPA.Studio.Documents.WorkflowDraft).Assembly,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow"],
-            AllowedPackages: ["CommunityToolkit.Mvvm", "Microsoft.Extensions.Logging.Abstractions"]),
-        // ADR-0018: the desktop Studio shell is the only project that may use WPF (net10.0-windows). This project cannot
-        // reference it (it targets plain net10.0), so its compiled-code rules run in MyRPA.Studio.Tests.
-        new("MyRPA.Studio", Assembly: null,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Plugins", "MyRPA.Studio.Core"],
-            AllowedPackages: ["Microsoft.Extensions.Hosting", "CommunityToolkit.Mvvm"],
-            IsCompositionRoot: true,
-            IsDesktopUi: true),
         // ADR-0022/0025: the control-plane server; a composition root and the only src project allowed to use ASP.NET Core.
         new("MyRPA.Server", typeof(MyRPA.Server.ServerApplication).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting"],
@@ -197,15 +186,11 @@ public static class ArchitectureRules
         // The browser plugin is tested through the real plugin host (it is only built, never compiled against).
         ["MyRPA.Browser.Playwright.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
-        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Studio.Core", "MyRPA.Server", "MyRPA.Cli"],
+        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Server", "MyRPA.Cli"],
         // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.
         ["MyRPA.Server.Tests"] = ["MyRPA.Server"],
         // Execution hosting runs the real engine with the built-in activities.
         ["MyRPA.Execution.Hosting.Tests"] = ["MyRPA.Execution.Hosting", "MyRPA.Contracts", "MyRPA.Runtime", "MyRPA.Activities"],
-        // Studio logic is tested headless, with the real engine and built-in activities.
-        ["MyRPA.Studio.Core.Tests"] = ["MyRPA.Studio.Core", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage"],
-        // The WPF shell: window smoke tests and the code rules on its compiled assembly.
-        ["MyRPA.Studio.Tests"] = ["MyRPA.Studio"],
     };
 
     /// <summary>A banned API allowed in one type.</summary>
@@ -213,19 +198,17 @@ public static class ArchitectureRules
 
     /// <summary>A src project and its dependency allow-lists.</summary>
     /// <param name="Name">Project name.</param>
-    /// <param name="Assembly">Its compiled assembly; null for a desktop project this net10.0 test project cannot reference.</param>
+    /// <param name="Assembly">Its compiled assembly.</param>
     /// <param name="AllowedProjects">Projects it may reference.</param>
     /// <param name="AllowedPackages">Packages it may reference.</param>
     /// <param name="IsCompositionRoot">Whether it is an executable that composes the application.</param>
-    /// <param name="IsDesktopUi">Whether it may target net10.0-windows and use WPF (ADR-0018).</param>
     /// <param name="AllowsAspNetCore">Whether it may reference ASP.NET Core (server executables only, ADR-0022).</param>
     public sealed record ProjectRule(
         string Name,
-        Assembly? Assembly,
+        Assembly Assembly,
         string[] AllowedProjects,
         string[] AllowedPackages,
         bool IsCompositionRoot = false,
-        bool IsDesktopUi = false,
         bool AllowsAspNetCore = false)
     {
         public override string ToString() => Name;

@@ -1,5 +1,11 @@
 # HANDOFF — MyRPA (written 2026-09-25, end of Web Studio W4A; updated after W4A approval)
 
+> **Superseded state (2026-10-08):** Phase 5 is complete (W4B–W10). The WPF Studio is archived in `archive/wpf-studio`
+> (ADR-0036). Current state: `CLAUDE.md` (phase line), [web-studio-roadmap.md](docs/architecture/web-studio-roadmap.md),
+> [web-studio-parity.md](docs/architecture/web-studio-parity.md) and ADR-0030 to ADR-0036. The rest of this file is the
+> W4A-era handoff, kept for its history and the owner's standing instructions (§3 onwards still apply, except where it
+> says WPF is frozen: it is archived now).
+
 For a fresh Claude Code session with no memory of earlier work. Read this, then `CLAUDE.md`, then the ADRs it names.
 `CLAUDE.md` is the standing rulebook and wins where the two differ on rules. This file covers state, history, and
 things the owner said that are not written down elsewhere.

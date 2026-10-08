@@ -3,9 +3,10 @@
 A modern, extensible RPA platform in C#/.NET 10, inspired by OpenRPA and redesigned from the
 [Phase 0 research](docs/research/openrpa-analysis.md). Product requirements: [MyRPA-PRD.md](MyRPA-PRD.md).
 
-**Status:** Phase 5 — MyRPA Studio. Versioned JSON workflows are validated and executed by a deterministic async
-engine with 12 control-flow activities, via the `myrpa` CLI and **MyRPA Studio**, a WPF designer (drag/drop, nesting,
-properties, variables, arguments, undo/redo, copy/paste, save/open, run) that uses the same model and engine. Plugins
+**Status:** Phase 5 complete — MyRPA Studio. Versioned JSON workflows are validated and executed by a deterministic
+async engine with 12 control-flow activities, via the `myrpa` CLI and **MyRPA Studio**, a web designer served by
+`MyRPA.Server` (drag-and-drop, slots, properties, variables, arguments, undo/redo, cut/copy/paste, files, runs with live
+node states) that uses the same model and engine. The earlier WPF Studio is archived in `archive/wpf-studio`. Plugins
 add activities and automation providers through the Automation SDK and are loaded into isolated
 `AssemblyLoadContext`s. The first real provider is the Playwright browser plugin (Chromium, 11 `Browser.*`
 activities). No recorder and no desktop automation yet.
@@ -23,20 +24,23 @@ src/
   MyRPA.Sdk           Automation SDK: plugin contract, provider/element/selector abstractions
   MyRPA.Plugins       plugin host: manifests, discovery, trust checks, AssemblyLoadContext loading, lifecycle
   MyRPA.Cli           `myrpa` command-line host (composition root)
-  MyRPA.Studio.Core   Studio logic: document model, edits, undo/redo, validation mapping, view models (no UI framework)
-  MyRPA.Studio        MyRPA Studio, the WPF designer (composition root; Windows only)
+  MyRPA.Contracts     control-plane wire contracts (execution events)
+  MyRPA.Execution.Hosting  run hosting for the server: start, cancel, events with replay
+  MyRPA.Server        control plane (ASP.NET Core, local mode); serves MyRPA Studio
+web/studio/           MyRPA Studio: React + TypeScript + Vite (npm project, outside the solution)
 plugins/
   MyRPA.Browser.Playwright  browser automation provider (Playwright; the only Playwright reference)
 tests/
   MyRPA.*.Tests       unit tests per library (Sdk: the activity contract; Plugins: loading and lifecycle)
   MyRPA.Integration.Tests   CLI in-process and as a real process
-  MyRPA.Studio.Core.Tests   Studio logic headless, through the real engine
-  MyRPA.Studio.Tests        WPF window smoke tests with screenshots (Windows only)
+  MyRPA.Server.Tests        the real server on loopback: security, files, runs, event streams
+  corpus/             shared workflow corpus (round trip and diagnostic locations)
   MyRPA.Architecture.Tests  dependency, platform and security rules
   fixtures/           plugins used by the plugin tests
 samples/              example workflows
   plugins/            sample plugin (MyRPA.Samples.DemoPlugin) and a workflow that uses it
 docs/                 architecture, ADRs, research
+archive/wpf-studio/   the archived WPF Studio (not built; tag `wpf-studio-final`)
 reference/            read-only OpenRPA clone for research (git-ignored)
 ```
 
@@ -46,7 +50,8 @@ Workflow format: [docs/architecture/workflow-format.md](docs/architecture/workfl
 SDK: [docs/architecture/automation-sdk.md](docs/architecture/automation-sdk.md) ·
 Plugins: [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) ·
 Browser: [docs/architecture/browser-automation.md](docs/architecture/browser-automation.md) ·
-Studio: [docs/architecture/studio.md](docs/architecture/studio.md).
+Server: [docs/architecture/server.md](docs/architecture/server.md) ·
+Studio: [docs/architecture/web-studio.md](docs/architecture/web-studio.md).
 
 ## Development setup
 
@@ -124,12 +129,15 @@ A minimal workflow:
 ## Use Studio
 
 ```bash
-dotnet run --project src/MyRPA.Studio -- samples/control-flow.json
+cd web/studio && npm ci && npm run build && cd ../..   # once (npm.cmd on Windows PowerShell)
+dotnet build MyRPA.sln -c Release                      # the server bundles the built Studio
+dotnet run --project src/MyRPA.Server -c Release -- --open samples/control-flow.json
 ```
 
-Drag activities from the left onto the designer, edit their properties on the right, and press F5 to run. Studio
-accepts the same `--plugin` / `--plugin-config` options as the CLI. See
-[docs/architecture/studio.md](docs/architecture/studio.md) (includes a manual test script).
+Open the printed start link. Drag activities from the left onto the designer, edit their properties on the right, and
+press F5 to run. The server accepts the same `--plugin` / `--plugin-config` options as the CLI. See
+[docs/architecture/web-studio.md](docs/architecture/web-studio.md) and the manual test script in
+[docs/architecture/web-studio-parity.md](docs/architecture/web-studio-parity.md).
 
 ## Contributing
 

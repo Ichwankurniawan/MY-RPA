@@ -5,7 +5,7 @@ below map the open [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) e
 **proposal** for later briefs. Each slice starts only with the owner's explicit authorization, and its brief sets the
 final scope.
 
-Phase 5 is complete when W10 removes the WPF Studio. After that, the PRD continues with Phases 6–12 (Phase 6 recorder
+Phase 5 is complete when W10 removes the WPF Studio from the build (archived by the owner's decision, ADR-0036). After that, the PRD continues with Phases 6–12 (Phase 6 recorder
 backend work may start in parallel once authorized; see ADR-0021 "Consequences").
 
 | Work | Scope | Status |
@@ -20,8 +20,8 @@ backend work may start in parallel once authorized; see ADR-0021 "Consequences")
 | **W6** | Project/file management | ✅ Done (2026-10-07; ADR-0031) |
 | **W7** | Advanced authoring / parity | ✅ Done (2026-10-08; ADR-0033) |
 | **W8** | Performance + accessibility + hardening | ✅ Done (2026-10-08; ADR-0034) |
-| **W9** | WPF exit criteria + migration | 🟡 Automated evidence done (2026-10-08; ADR-0035, [parity](web-studio-parity.md)); awaiting the manual run, CI on GitHub and the owner's sign-off |
-| **W10** | WPF removal / Phase 5 completion | ⬜ |
+| **W9** | WPF exit criteria + migration | ✅ Done (2026-10-08; ADR-0035, [parity](web-studio-parity.md); exit record in ADR-0036) |
+| **W10** | WPF removal / Phase 5 completion | ✅ Done (2026-10-08; WPF archived in `archive/wpf-studio`, tag `wpf-studio-final`; ADR-0036) |
 
 ## Exit criteria status
 

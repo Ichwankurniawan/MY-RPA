@@ -14,8 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Linux proves the platform-neutral projects stay platform-neutral (ADR-0004). The WPF Studio (ADR-0018) is
-        # compiled on Linux (EnableWindowsTargeting) and tested on Windows only.
+        # Linux proves the projects stay platform-neutral (ADR-0004). Nothing in the solution is Windows-only since the
+        # WPF Studio was archived (W10, ADR-0036).
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
@@ -49,7 +49,7 @@ jobs:
         shell: pwsh
         run: ./plugins/MyRPA.Browser.Playwright/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
 
-      - name: Test (unit, integration, architecture, browser; Studio window tests on Windows)
+      - name: Test (unit, integration, architecture, server, browser)
         run: dotnet test --solution MyRPA.sln --configuration Release --no-build
 
       - name: CLI smoke test

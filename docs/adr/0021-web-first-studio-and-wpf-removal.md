@@ -1,6 +1,6 @@
 # ADR-0021: Web-first Studio; the WPF Studio is temporary and will be removed
 
-- Status: Accepted
+- Status: Accepted; W10 amended by [ADR-0036](0036-wpf-studio-archived.md) (the WPF Studio is archived, not deleted)
 - Date: 2026-09-25
 - Phase: Web Studio W0
 - Supersedes: [ADR-0018](0018-studio-architecture.md) for the long-term Studio direction

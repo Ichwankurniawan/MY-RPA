@@ -10,8 +10,7 @@
 | [architecture/browser-automation.md](architecture/browser-automation.md) | Playwright browser plugin: sessions, activities, selectors, errors, security, browser installation |
 | [architecture/server.md](architecture/server.md) | MyRPA.Server (local mode): start, security, HTTP API, multiplexed event stream |
 | [architecture/web-studio-roadmap.md](architecture/web-studio-roadmap.md) | Web Studio roadmap W0–W10 to Phase 5 completion, with the ADR-0021 exit criteria mapped onto the slices |
-| [architecture/web-studio.md](architecture/web-studio.md) | Web Studio (W3 slice and W4A structural editing): run, what it does, structure, tests, deferred work |
-| [architecture/studio.md](architecture/studio.md) | MyRPA Studio: projects, document model, designer, validation, running, manual test script |
+| [architecture/web-studio.md](architecture/web-studio.md) | MyRPA Studio (the Web Studio): what it does, structure, tests; [parity](architecture/web-studio-parity.md) with the archived WPF Studio and the manual test script |
 | [architecture/phase-1-reconciliation.md](architecture/phase-1-reconciliation.md) | How the PRD was reconciled with the Phase 0 findings |
 | [adr/](adr/README.md) | Architecture Decision Records (the PRD's `docs/decisions/` lives here; see ADR-0001) |
 | [research/w0-web-studio-spike.md](research/w0-web-studio-spike.md) | W0 Web Studio spike: React designer and SSE measurements behind ADR-0021 to ADR-0025 |

@@ -30,7 +30,7 @@ the docs and manual script migrated, a person running the script, and the owner'
    out of its draft model; they are excluded from the comparison and listed in the parity document.
 4. **Evidence lives in one document.** [web-studio-parity.md](../architecture/web-studio-parity.md) maps every WPF test
    group to Web evidence, lists the known differences with proposed dispositions, holds the Web Studio manual test
-   script (replacing [studio.md](../architecture/studio.md) §8) with a screen-reader pass, and the sign-off table.
+   script (replacing [studio.md](../../archive/wpf-studio/studio.md) §8, archived in W10) with a screen-reader pass, and the sign-off table.
 5. **W10 stays blocked** until a person has run the script, CI has run on GitHub, and the owner has signed off.
 
 ## Consequences

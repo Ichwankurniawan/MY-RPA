@@ -121,7 +121,7 @@ Web Studio every keystroke is already an edit of the document: there is no uncom
 
 ## 4. Manual test script (Web Studio, PRD 5.5)
 
-Replaces the WPF script in [studio.md](studio.md) §8. Prepare: `npm ci && npm run build` in `web/studio`, then
+Replaces the WPF script (archived: `archive/wpf-studio/studio.md` §8). Prepare: `npm ci && npm run build` in `web/studio`, then
 `dotnet build MyRPA.sln -c Release`. Use a scratch copy of `samples/`.
 
 1. **Start:** `dotnet run --project src/MyRPA.Server -c Release -- --project <scratch>`; open the printed start link.
@@ -171,7 +171,7 @@ screenshot per step. It cannot observe the browser's own leave prompt (step 11) 
 | # | Item | Status |
 |---|---|---|
 | 1 | Criteria 1-13 met with the evidence above; full local validation green (W9 report, 2026-10-08) | ✅ automated |
-| 2 | CI green on Linux and Windows including smoke, accessibility and performance | ⬜ needs a push (not done without the owner) |
-| 3 | A person ran §4 steps 1-12 (name, date, browser, screen reader, findings) | ⬜ |
-| 4 | The owner accepted the known differences (§3) | ⬜ |
-| 5 | The owner signed off the exit review; W10 may delete the WPF Studio | ⬜ |
+| 2 | CI green on Linux and Windows including smoke, accessibility and performance | Web Studio jobs ✅ on both; .NET job must be green before W10 merges (ADR-0036) |
+| 3 | A person ran §4 steps 1-12 (name, date, browser, screen reader, findings) | Steps 1-11 by `npm run manual` (findings fixed); owner ran steps 1-3; leave prompt and screen reader not done by a person |
+| 4 | The owner accepted the known differences (§3) | Proposed dispositions stand (not decided individually) |
+| 5 | The owner signed off the exit review; W10 may delete the WPF Studio | ✅ 2026-10-08: "Finish the phase 5 first but keep the WPF studio in archive" (ADR-0036) |

@@ -1,6 +1,6 @@
 # ADR-0018: Studio architecture (platform-neutral Studio.Core, WPF shell)
 
-- Status: Superseded by [ADR-0021](0021-web-first-studio-and-wpf-removal.md). The WPF Studio is a frozen, temporary reference that will be removed; Studio.Core is not a shared layer for the Web Studio.
+- Status: Superseded by [ADR-0021](0021-web-first-studio-and-wpf-removal.md). The WPF Studio was archived in W10 ([ADR-0036](0036-wpf-studio-archived.md), `archive/wpf-studio`, tag `wpf-studio-final`); Studio.Core is not a shared layer for the Web Studio.
 - Date: 2026-09-25
 - Phase: 5
 - Amends: ADR-0003 (two new projects), ADR-0004 (one project may use WPF)

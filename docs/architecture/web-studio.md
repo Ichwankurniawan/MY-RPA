@@ -1,6 +1,6 @@
 # Web Studio
 
-Status: Web Studio W9 (parity evidence for the WPF exit review; W3–W8 done). Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
+Status: Phase 5 complete (W3–W10; the WPF Studio is archived, ADR-0036). The Studio of MyRPA. Decisions: [ADR-0021](../adr/0021-web-first-studio-and-wpf-removal.md) (web-first Studio),
 [ADR-0022](../adr/0022-server-control-plane-and-project-structure.md) (server serves the Studio),
 [ADR-0024](../adr/0024-execution-event-streaming-sse.md) (one event stream per tab),
 [ADR-0025](../adr/0025-local-mode-security.md) (local-mode security),

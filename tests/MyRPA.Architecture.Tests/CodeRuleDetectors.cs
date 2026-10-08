@@ -4,8 +4,7 @@ using System.Runtime.CompilerServices;
 namespace MyRPA.Architecture.Tests;
 
 /// <summary>
-/// Detectors for the code rules (ADR-0005, ADR-0008) on compiled types. Shared (as a linked file) with test projects
-/// that inspect assemblies this project cannot reference, such as the net10.0-windows Studio (ADR-0018).
+/// Detectors for the code rules (ADR-0005, ADR-0008) on compiled types.
 /// </summary>
 public static class CodeRuleDetectors
 {

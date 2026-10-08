@@ -4,11 +4,9 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Web Studio — completing Phase 5 (W4B–W8
-  done; W9 automated evidence done, see `docs/architecture/web-studio-parity.md`; W7–W10 authorized by the owner on
-  2026-10-08).** See `docs/architecture/web-studio-roadmap.md`. W10 (WPF deletion) is blocked until a person runs the
-  manual script (parity §4), CI has run on GitHub, and the owner signs off (parity §5). Phase 6 must not start without
-  authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 5 complete (W0–W10, 2026-10-08;
+  the WPF Studio is archived, ADR-0036).** The next phase (6, Selectors & Recorder) must not start without the owner's
+  explicit authorization ("Proceed to Phase 6").
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -19,8 +17,8 @@ Guidance for AI agents and contributors working in this repository.
 1. `MyRPA-PRD.md` — requirements and phases.
 2. `docs/adr/` — accepted decisions (they refine the PRD).
 3. `docs/architecture/overview.md`, `execution-model.md`, `workflow-format.md`, `automation-sdk.md`,
-   `plugin-system.md`, `browser-automation.md`, `studio.md`, `server.md`, `web-studio.md` — current architecture;
-   `web-studio-roadmap.md` — the owner's W-roadmap to Phase 5 completion.
+   `plugin-system.md`, `browser-automation.md`, `server.md`, `web-studio.md` — current architecture;
+   `web-studio-roadmap.md` and `web-studio-parity.md` — how Phase 5 was completed (W-roadmap, WPF exit evidence).
 4. `docs/research/` — Phase 0 OpenRPA evidence (codes R#/D#/N# in `openrpa-analysis.md`).
 5. `reference/openrpa/` — read-only OpenRPA clone (MPL-2.0). Never modify it; never copy its code into MyRPA.
 
@@ -32,10 +30,10 @@ dotnet test --solution MyRPA.sln
 dotnet run --project src/MyRPA.Cli -- validate samples/control-flow.json
 dotnet run --project src/MyRPA.Cli -- run samples/hello-world.json --arg userName=Ada
 dotnet run --project src/MyRPA.Cli -- --plugin samples/plugins/MyRPA.Samples.DemoPlugin/bin/Debug/net10.0 run samples/plugins/demo-plugin.json
-dotnet run --project src/MyRPA.Studio -- samples/control-flow.json   # Studio (Windows)
-dotnet run --project src/MyRPA.Server -- --project samples --port 0      # control plane; open the printed link
-dotnet run --project src/MyRPA.Server -- --project samples --web web/studio/dist --port 0   # with the Web Studio
-cd web/studio && npm ci && npm test && npm run build   # Web Studio; `npm run smoke` = end-to-end (needs Release build)
+cd web/studio && npm ci && npm test && npm run build   # the Studio (npm.cmd in Windows PowerShell)
+dotnet run --project src/MyRPA.Server -- --open samples/control-flow.json   # Studio + control plane (bundled Studio needs a build after npm run build)
+dotnet run --project src/MyRPA.Server -- --project samples --web web/studio/dist --port 0   # serve web/studio/dist directly
+cd web/studio && npm run smoke && npm run manual && npm run a11y && npm run perf   # end to end (needs the Release build)
 dotnet format MyRPA.sln --verify-no-changes   # CI enforces naming rules the build does not
 pwsh plugins/MyRPA.Browser.Playwright/bin/Debug/net10.0/playwright.ps1 install chromium   # once, for browser tests
 ```
@@ -47,7 +45,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 
 - Dependency direction (ADR-0003, amended by ADR-0010 and ADR-0013): Core ← Workflow; Core, Workflow ← Activities;
   Core, Workflow ← Runtime; Core, Workflow ← Storage; Core, Workflow ← Sdk; Core, Workflow, Sdk, Activities ← Plugins;
-  Core, Workflow ← Studio.Core; everything but Cli ← Studio; everything ← Cli (ADR-0018); Contracts has no references;
+  everything ← Cli; Contracts has no references;
   Core, Workflow, Contracts ← Execution.Hosting (ADR-0022); engine, Plugins, Contracts, Execution.Hosting ← Server. The engine and plugin host never reference Contracts or
   Execution.Hosting. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
   Plugins. Nothing references a composition root.
@@ -60,7 +58,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 - Browser plugin rules (ADR-0017): no JavaScript evaluation (`EvaluateAsync`), http/https/about:blank URLs only, file
   access only through `BrowserFilePolicy`, one browser per session, sessions closed when the run ends.
 - Libraries may use only `Microsoft.Extensions.*.Abstractions`; only composition roots use `Microsoft.Extensions.Hosting`.
-- Forbidden in `src`: WPF/WinForms/XAML (except the `MyRPA.Studio` shell, the only `net10.0-windows` project, ADR-0018), Playwright/browser libs, FlaUI/UIA, WF4/CoreWF, DB drivers/ORMs, AI SDKs,
+- Forbidden everywhere: WPF/WinForms/XAML and Windows-only target frameworks (ADR-0036). Forbidden in `src`: Playwright/browser libs, FlaUI/UIA, WF4/CoreWF, DB drivers/ORMs, AI SDKs,
   MCP SDKs, messaging, ASP.NET Core (except the `MyRPA.Server` composition root, ADR-0022).
 - No `async void`, no mutable static fields, no static service locators, no implicit discovery/assembly scanning (ADR-0005).
 - Banned APIs (IL scan, ADR-0008/0012/0014): `Type.GetType(string)`, `Assembly.Load*`, `Assembly.GetType(string)`,
@@ -101,10 +99,10 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 
 ## Web-first direction (ADR-0021 to ADR-0025)
 
-- The Web Studio (React + TypeScript + Vite, `web/studio`) will be the only Studio UI; `MyRPA.Server` is the control plane.
+- The Web Studio (React + TypeScript + Vite, `web/studio`) is the only Studio UI; `MyRPA.Server` is the control plane.
   The v1.0 JSON stays the only workflow format.
-- The WPF Studio (`MyRPA.Studio`, `MyRPA.Studio.Core`, their tests) is a **frozen temporary reference**: no features, no
-  refactoring for new layers, and never a design constraint. It is removed when the ADR-0021 exit criteria pass.
+- The WPF Studio is archived in `archive/wpf-studio` (ADR-0036; tag `wpf-studio-final`): not built, not tested, never
+  referenced, never a design constraint. Do not change it or restore it into the solution.
 - Progress and events come from the per-run observer (`WorkflowRunRequest.Observer`, ADR-0023), never from span
   listeners; observer failures never change a run's outcome; events carry no workflow data. Hosts use
   `MyRPA.Execution.Hosting` (`ExecutionHost`) rather than calling the runner and capturing events themselves.
@@ -115,15 +113,14 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   Structural edits and undo/redo follow ADR-0029: pure edits with refusal reasons, snapshot history (200 steps, typing
   merged), dirty = not the saved object.
 
-## Studio conventions (Phase 5, ADR-0018; frozen reference, see ADR-0021)
+## Studio conventions (Web Studio, ADR-0028 to ADR-0035)
 
-- All Studio logic goes into `MyRPA.Studio.Core` (plain `net10.0`, no UI framework); `MyRPA.Studio` holds only WPF
-  views, templates, behaviors and the dialog/clipboard/dispatcher implementations.
-- The designer edits a `WorkflowDraft` through `DraftEdits` (pure functions; refusal = `EditException`) and
-  `StudioViewModel.Edit`, which records undo history. Validation always goes through the engine's `WorkflowLoader`;
-  runs always go through `IWorkflowRunner`. Never add Studio-only activity knowledge — use `ActivityDescriptor`.
-- UI code never blocks: async commands, `IUiDispatcher.Post` for results from other threads, no `async void`, no `.Wait()`.
-- The code rules on the WPF assembly run in `MyRPA.Studio.Tests` (linked `IlScanner.cs`/`CodeRuleDetectors.cs`).
+- The Studio talks only to its own `MyRPA.Server` origin. Validation always goes through the server (`WorkflowLoader`);
+  runs always go through `ExecutionHost`. The browser never executes workflows and never duplicates loader rules.
+- Never add Studio-only activity knowledge: everything comes from the catalog (`ActivityDescriptor`).
+- Edits are pure functions on the v1.0 JSON with refusal reasons (`document.ts`, `placement.ts`, `workflowData.ts`); the
+  store is the small `useSyncExternalStore` store; diagnostics are located like WPF did (corpus parity, ADR-0035).
+- Keep the CSP (`default-src 'self'`: no inline styles or scripts), the session, Origin and anti-forgery checks.
 
 ## Code style
 

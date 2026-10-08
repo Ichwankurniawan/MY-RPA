@@ -11,38 +11,32 @@ public sealed class PlatformNeutralityTests
 {
     public static TheoryData<string> SourceProjectNames() => [.. ArchitectureRules.SourceProjects.Select(r => r.Name)];
 
-    public static TheoryData<string> CompiledProjectNames() => [.. ArchitectureRules.SourceProjects.Where(r => r.Assembly is not null).Select(r => r.Name)];
+    public static TheoryData<string> CompiledProjectNames() => [.. ArchitectureRules.SourceProjects.Select(r => r.Name)];
 
-    public static TheoryData<string> PlatformNeutralProjectNames() => [.. ArchitectureRules.SourceProjects.Where(r => !r.IsDesktopUi).Select(r => r.Name)];
+    public static TheoryData<string> PlatformNeutralProjectNames() => [.. ArchitectureRules.SourceProjects.Select(r => r.Name)];
 
     private static ArchitectureRules.ProjectRule Rule(string name) => ArchitectureRules.SourceProjects.Single(r => r.Name == name);
 
     private static ProjectFile Project(string name) => Repository.SourceProjects.Single(p => p.Name == name);
 
     [Fact]
-    public void OnlyDesktopProjects_AreNotInspectedHere()
+    public void NoProjectInTheRepository_UsesDesktopUi()
     {
-        // Every platform-neutral project is compiled into this test run; only the WPF shell is checked in MyRPA.Studio.Tests.
-        Assert.All(ArchitectureRules.SourceProjects.Where(r => r.Assembly is null), r => Assert.True(r.IsDesktopUi, r.Name));
-    }
-
-    [Fact]
-    public void DesktopUi_IsOnlyInTheStudioShell()
-    {
-        Assert.Equal(["MyRPA.Studio"], ArchitectureRules.SourceProjects.Where(r => r.IsDesktopUi).Select(r => r.Name));
-
-        var studio = Project("MyRPA.Studio");
-        Assert.Equal("net10.0-windows", studio.TargetFramework);
-        Assert.True(studio.UseWpf, "The Studio shell uses WPF.");
-        Assert.False(studio.UseWindowsForms, "UseWindowsForms is not allowed.");
-        Assert.Empty(studio.FrameworkReferences);
+        // ADR-0021/ADR-0036: the WPF Studio is archived (archive/wpf-studio, not built); WPF and Windows Forms are forbidden
+        // in every built project (src, tests, plugins, samples), and nothing targets a Windows-only framework.
+        Assert.All(Repository.AllProjects, project =>
+        {
+            Assert.False(project.UseWpf, $"{project.Name}: UseWPF is not allowed.");
+            Assert.False(project.UseWindowsForms, $"{project.Name}: UseWindowsForms is not allowed.");
+            Assert.DoesNotContain("-windows", project.TargetFramework ?? string.Empty, StringComparison.Ordinal);
+        });
     }
 
     [Theory]
     [MemberData(nameof(CompiledProjectNames))]
     public void CompiledAssembly_TargetsPlainNet10(string name)
     {
-        var assembly = Rule(name).Assembly!;
+        var assembly = Rule(name).Assembly;
 
         Assert.Equal(".NETCoreApp,Version=v10.0", assembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName);
         Assert.Null(assembly.GetCustomAttribute<TargetPlatformAttribute>()); // e.g. net10.0-windows
@@ -83,7 +77,7 @@ public sealed class PlatformNeutralityTests
     public void CompiledReferences_ContainNoForbiddenTechnology(string name)
     {
         var rule = Rule(name);
-        var forbidden = rule.Assembly!.GetReferencedAssemblies()
+        var forbidden = rule.Assembly.GetReferencedAssemblies()
             .Select(a => a.Name!)
             .Where(n => ArchitectureRules.MatchForbidden(n) is { } prefix && !(rule.AllowsAspNetCore && prefix == "Microsoft.AspNetCore"));
 
@@ -95,10 +89,10 @@ public sealed class PlatformNeutralityTests
     {
         // ADR-0022: ASP.NET Core only in server executables. The Web SDK adds it implicitly, so compiled references are checked.
         Assert.Equal(["MyRPA.Server"], ArchitectureRules.SourceProjects.Where(r => r.AllowsAspNetCore).Select(r => r.Name));
-        Assert.Contains(Rule("MyRPA.Server").Assembly!.GetReferencedAssemblies(), a => a.Name!.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
+        Assert.Contains(Rule("MyRPA.Server").Assembly.GetReferencedAssemblies(), a => a.Name!.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
         Assert.All(
             ArchitectureRules.SourceProjects.Where(r => r.Assembly is not null && !r.AllowsAspNetCore),
-            r => Assert.DoesNotContain(r.Assembly!.GetReferencedAssemblies(), a => a.Name!.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal)));
+            r => Assert.DoesNotContain(r.Assembly.GetReferencedAssemblies(), a => a.Name!.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal)));
     }
 
     [Theory]
@@ -107,7 +101,7 @@ public sealed class PlatformNeutralityTests
     public void CoreAndWorkflow_ReferenceOnlyTheBclAndAllowedProjects(string name)
     {
         var rule = Rule(name);
-        var nonBcl = rule.Assembly!.GetReferencedAssemblies()
+        var nonBcl = rule.Assembly.GetReferencedAssemblies()
             .Select(a => a.Name!)
             .Where(n => !ArchitectureRules.IsBclAssembly(n) && !rule.AllowedProjects.Contains(n));
 
@@ -123,7 +117,7 @@ public sealed class PlatformNeutralityTests
     public void Contracts_ReferenceOnlyTheBcl_WithNoProjectsOrPackages()
     {
         // Wire contracts are shared with future agents and robots (ADR-0022): nothing but the BCL.
-        var nonBcl = Rule("MyRPA.Contracts").Assembly!.GetReferencedAssemblies().Select(a => a.Name!).Where(n => !ArchitectureRules.IsBclAssembly(n));
+        var nonBcl = Rule("MyRPA.Contracts").Assembly.GetReferencedAssemblies().Select(a => a.Name!).Where(n => !ArchitectureRules.IsBclAssembly(n));
 
         Assert.Empty(nonBcl);
         Assert.Empty(Project("MyRPA.Contracts").ProjectReferences);
@@ -135,7 +129,7 @@ public sealed class PlatformNeutralityTests
     {
         var offenders = ArchitectureRules.SourceProjects
             .Where(r => !r.IsCompositionRoot)
-            .Where(r => r.Assembly!.GetReferencedAssemblies().Any(a => a.Name == "Microsoft.Extensions.Hosting"
+            .Where(r => r.Assembly.GetReferencedAssemblies().Any(a => a.Name == "Microsoft.Extensions.Hosting"
                 || a.Name == "Microsoft.Extensions.Hosting.Abstractions"))
             .Select(r => r.Name);
 
