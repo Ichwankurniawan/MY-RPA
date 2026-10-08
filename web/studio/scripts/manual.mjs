@@ -25,13 +25,22 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const badges = (id) => row(id).locator('.badge').allTextContents();
   const slotOf = async (id) => (await page.locator(`[role=treeitem][data-node-id="${id}"] .slot`).first().textContent()) ?? '';
   const drag = async (from, to, at = 0.5) => {
+    // Let live validation finish first: an error appearing in a card while dragging would move the target.
+    if ((await page.getByTestId('status-validation').count()) > 0) {
+      await page.getByTestId('status-validation').filter({ hasNotText: 'Checking' }).waitFor();
+    }
     await from.scrollIntoViewIfNeeded();
+    // UX-3: a selected card shows its editors, so a drop target inside it can be below the visible area.
+    await to.scrollIntoViewIfNeeded();
     const a = await from.boundingBox();
     const b = await to.boundingBox();
     await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
     await page.mouse.down();
     await page.mouse.move(a.x + a.width / 2 + 10, a.y + a.height / 2 + 10, { steps: 3 });
     await page.mouse.move(b.x + b.width / 2, b.y + b.height * at, { steps: 10 });
+    // Like a person following the target: live validation can change a card (an error appears) while dragging.
+    const settled = await to.boundingBox();
+    await page.mouse.move(settled.x + settled.width / 2, settled.y + settled.height * at, { steps: 2 });
     await page.mouse.up();
   };
   const problemsTab = () => page.getByRole('tab', { name: /^Problems/ });
@@ -59,7 +68,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   // 3. Add activities by dragging from the toolbox
   await drag(tool('Assign'), page.getByRole('button', { name: 'Empty list: insert here' }));
   await appears('assign-1');
-  await drag(tool('If'), row('assign-1'), 0.85);
+  await drag(tool('If'), row('assign-1'), 0.6);
   await appears('if-1');
   await drag(tool('Log'), zone('if-1', 'then: empty (required)'));
   await appears('log-1');
@@ -155,7 +164,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   ok(`9. F5, who = Ada, Start: Succeeded; log "${logs.find((l) => l.includes('Hello'))}"; node states ${states.join(' ')}`);
 
   // 10. Failure: a Throw at the end
-  await drag(tool('Throw'), row('if-1'), 0.85);
+  await drag(tool('Throw'), row('if-1'), 0.6);
   await appears('throw-1');
   check((await ids()) === 'main,assign-1,if-1,log-1,throw-1', `throw at the end: ${await ids()}`);
   await row('throw-1').click();

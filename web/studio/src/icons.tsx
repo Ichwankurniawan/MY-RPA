@@ -157,6 +157,57 @@ const paths = {
     </>
   ),
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  // UX-3: activity kinds on designer cards, and the designer's own controls.
+  sequence: (
+    <>
+      <rect x="6" y="3.5" width="12" height="4.5" rx="1.5" />
+      <rect x="6" y="16" width="12" height="4.5" rx="1.5" />
+      <path d="M12 8v8M9.5 13.5L12 16l2.5-2.5" />
+    </>
+  ),
+  branch: <path d="M12 3.5v5M12 8.5l-6 5.5v6.5M12 8.5l6 5.5v6.5M4 18.5l2 2 2-2M16 18.5l2 2 2-2" />,
+  loop: <path d="M17 8.5A6.5 6.5 0 1 0 18.5 12M17 3.5v5h-5" />,
+  data: (
+    <>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+      <path d="M8 10.5h8M8 14h8" />
+    </>
+  ),
+  log: (
+    <>
+      <path d="M6 3.5h9.5l3 3V20a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z" />
+      <path d="M8.5 9h7M8.5 12.5h7M8.5 16h4.5" />
+    </>
+  ),
+  invoke: (
+    <>
+      <rect x="3.5" y="3.5" width="12" height="12" rx="2" />
+      <path d="M12 12l8.5 8.5M20.5 14.5v6h-6" />
+    </>
+  ),
+  browser: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2" />
+      <path d="M3 9h18M6 6.8h.01M8.5 6.8h.01" />
+    </>
+  ),
+  catch: (
+    <>
+      <path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z" />
+      <path d="M12 8.5v4.5M12 15.8v.2" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="12" cy="5.5" r="1.4" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+      <circle cx="12" cy="18.5" r="1.4" fill="currentColor" />
+    </>
+  ),
+  'chevron-down': <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />,
+  'chevron-right': <path d="M9.5 6.5l5.5 5.5-5.5 5.5" />,
+  'expand-all': <path d="M7 4.5l5 5 5-5M7 14.5l5 5 5-5" />,
+  'collapse-all': <path d="M7 9.5l5-5 5 5M7 19.5l5-5 5 5" />,
 } satisfies Record<string, ReactNode>;
 
 /** Every icon of the set, by name. */

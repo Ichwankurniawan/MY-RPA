@@ -6,6 +6,10 @@ import { App } from './App';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, settle } from './test-support';
 
+/** The Properties panel (UX-3: the selected card has the same editors inline). */
+const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
+
+
 async function renderStudio(api = new FakeApi()) {
   const studio = new Studio(api, (url) => new FakeEventSource(url));
   render(<App studio={studio} />);
@@ -56,8 +60,8 @@ describe('structural editing UI', () => {
     expect(treeIds()).toEqual(['main', 'build-greeting', 'log-1', 'log-greeting']);
     expect(selectedId()).toBe('log-1');
     expect(screen.getByTestId('node-type').textContent).toBe('Core.Log');
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'new'" } });
-    expect((screen.getByLabelText(/^message/) as HTMLInputElement).value).toBe("'new'");
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "'new'" } });
+    expect((properties().getByLabelText(/^message/) as HTMLInputElement).value).toBe("'new'");
     expect(screen.getByTestId('document-title').textContent).toBe('hello-world.json •');
     expect(editButton('Undo').title).toBe('Undo: Edit message (Ctrl+Z)');
   });

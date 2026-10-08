@@ -36,5 +36,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test-setup.ts'],
+    // The UI tests render the whole Studio in jsdom; with every file running in parallel the slowest (about 3 s alone)
+    // can pass the 5 s default. A hang still fails, just later.
+    testTimeout: 15_000,
   },
 });

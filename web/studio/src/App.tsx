@@ -3,9 +3,9 @@ import { StudioContext, useStudio, useStudioState } from './context';
 import { BottomPanel } from './DataPanel';
 import { installDragAndDrop } from './dragdrop';
 import { Icon, type IconName } from './icons';
-import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel } from './document';
+import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel, type Step } from './document';
 import type { Position } from './placement';
-import { PropertiesPanel } from './PropertyEditors';
+import { InlineProperties, PropertiesPanel } from './PropertyEditors';
 import {
   currentRun,
   deleteRefusalOf,
@@ -24,8 +24,9 @@ import {
   type PaneName,
   paneLimits,
   workflowKey,
+  zoomLimits,
 } from './studio';
-import type { ActivityDescriptor, ExecutionEvent, JsonObject, WorkflowFile } from './types';
+import type { ActivityDescriptor, ExecutionEvent, Json, JsonObject, WorkflowFile } from './types';
 
 
 export function App({ studio }: { studio: Studio }) {
@@ -963,19 +964,29 @@ function WorkflowTree() {
   const document = useStudioState((s) => s.document);
   const selectedKey = useStudioState((s) => s.selectedKey);
   const showsRun = useStudioState((s) => s.treeShowsRun);
+  const collapsed = useStudioState((s) => s.collapsed);
+  const zoom = useStudioState((s) => s.zoom);
   const tree = useRef<HTMLUListElement>(null);
+  const designer = useRef<HTMLElement>(null);
   const refocus = useRef(false);
 
   // Keep keyboard focus on the selected item while the user works in the tree, also when a command removed or moved
-  // the focused item.
+  // the focused item; never while typing in the selected card's own editors (UX-3).
   useEffect(() => {
     const root = tree.current;
-    if (root && selectedKey && (refocus.current || root.contains(window.document.activeElement))) {
+    const active = window.document.activeElement;
+    const onTreeItem = active instanceof HTMLElement && active.getAttribute('role') === 'treeitem';
+    if (root && selectedKey && (refocus.current || (root.contains(active) && onTreeItem))) {
       root.querySelector<HTMLElement>(`[data-key="${selectedKey}"]`)?.focus();
     }
 
     refocus.current = false;
   }, [selectedKey, document]);
+
+  // UX-3: zoom through the CSSOM (CSP-safe). CSS zoom also scales layout and hit-testing, so drag-and-drop stays exact.
+  useEffect(() => {
+    tree.current?.style.setProperty('zoom', zoom === 1 ? '' : String(zoom));
+  }, [zoom, document]);
 
   if (document === undefined) {
     return (
@@ -987,6 +998,11 @@ function WorkflowTree() {
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+    // Only keys pressed on a tree item: typing in a card's editors or using its buttons is never a tree command.
+    if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'treeitem') {
+      return;
+    }
+
     if (event.key === 'Delete' || (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown'))) {
       event.preventDefault();
       refocus.current = true;
@@ -999,13 +1015,22 @@ function WorkflowTree() {
       return;
     }
 
-    const entries = indexDocument(document).entries;
-    const at = entries.findIndex((e) => e.key === selectedKey);
+    // Visible items only: the children of a collapsed container are skipped.
+    const visible = indexDocument(document).entries.filter((e) => !hiddenByCollapse(document, e.path, collapsed));
+    const at = visible.findIndex((e) => e.key === selectedKey);
+    const current = visible[at];
+    const expandable = current !== undefined && current.path.length > 0 && childSteps(current.node).length > 0;
+    if (expandable && ((event.key === 'ArrowRight' && collapsed.has(current.key)) || (event.key === 'ArrowLeft' && !collapsed.has(current.key)))) {
+      event.preventDefault();
+      studio.toggleCollapsed(current.key);
+      return;
+    }
+
     const target =
-      event.key === 'ArrowDown' ? entries[Math.min(at + 1, entries.length - 1)]
-      : event.key === 'ArrowUp' ? entries[Math.max(at - 1, 0)]
-      : event.key === 'Home' ? entries[0]
-      : event.key === 'End' ? entries[entries.length - 1]
+      event.key === 'ArrowDown' ? visible[Math.min(at + 1, visible.length - 1)]
+      : event.key === 'ArrowUp' ? visible[Math.max(at - 1, 0)]
+      : event.key === 'Home' ? visible[0]
+      : event.key === 'End' ? visible[visible.length - 1]
       : undefined;
     if (target) {
       event.preventDefault();
@@ -1013,19 +1038,81 @@ function WorkflowTree() {
     }
   };
 
+  // Ctrl+= / Ctrl+- / Ctrl+0 zoom the designer while the focus is in it (elsewhere the browser keeps its own zoom).
+  const onDesignerKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+      return;
+    }
+
+    const next = event.key === '=' || event.key === '+' ? zoom + zoomLimits.step : event.key === '-' ? zoom - zoomLimits.step : event.key === '0' ? 1 : undefined;
+    if (next !== undefined) {
+      event.preventDefault();
+      studio.setZoom(next);
+    }
+  };
+
+  const fitWidth = () => {
+    const element = tree.current;
+    const available = (designer.current?.clientWidth ?? 0) - 32;
+    if (element && available > 0) {
+      studio.setZoom(Math.min(1, available / (element.scrollWidth / zoom)));
+    }
+  };
+
   const root = document.root;
   return (
-    <main className="designer" aria-labelledby="designer-heading">
+    <main className="designer" aria-labelledby="designer-heading" ref={designer} onKeyDown={onDesignerKeyDown}>
       <h2 id="designer-heading">Workflow</h2>
       <WorkflowTitle document={document} />
       <PluginNotice />
-      <Breadcrumbs />
+      <div className="designer-bar">
+        <Breadcrumbs />
+        <div className="designer-actions" role="toolbar" aria-label="Designer">
+          <button type="button" className="with-icon small" onClick={() => studio.expandAll()} title="Show the activities inside every container">
+            <Icon name="expand-all" size={14} />
+            <span>Expand all</span>
+          </button>
+          <button type="button" className="with-icon small" onClick={() => studio.collapseAll()} title="Hide the activities inside every container (the selection stays visible)">
+            <Icon name="collapse-all" size={14} />
+            <span>Collapse all</span>
+          </button>
+        </div>
+      </div>
       {/* While a run of this file is shown, nodes without a run state were not executed (styled as such). */}
       <ul role="tree" aria-labelledby="designer-heading" ref={tree} onKeyDown={onKeyDown} className={showsRun ? 'shows-run' : undefined}>
         {isObject(root) && <TreeNode node={root} depth={1} />}
       </ul>
+      <div className="zoom-controls" role="toolbar" aria-label="Zoom">
+        <button type="button" onClick={() => studio.setZoom(zoom - zoomLimits.step)} disabled={zoom <= zoomLimits.min} aria-label="Zoom out" title="Zoom out (Ctrl+-)">
+          <Icon name="zoom-out" size={16} />
+        </button>
+        <button type="button" className="zoom-level" onClick={() => studio.setZoom(1)} aria-label={`${Math.round(zoom * 100)}%, reset zoom`} title="Reset to 100% (Ctrl+0)">
+          {Math.round(zoom * 100)}%
+        </button>
+        <button type="button" onClick={() => studio.setZoom(zoom + zoomLimits.step)} disabled={zoom >= zoomLimits.max} aria-label="Zoom in" title="Zoom in (Ctrl+=)">
+          <Icon name="zoom-in" size={16} />
+        </button>
+        <button type="button" onClick={fitWidth} aria-label="Fit to width" title="Fit the workflow to the designer's width">
+          <Icon name="zoom-fit" size={16} />
+        </button>
+      </div>
     </main>
   );
+}
+
+/** Whether a node is inside a collapsed container (any container above it), so it is not shown. */
+function hiddenByCollapse(document: JsonObject, path: readonly Step[], collapsed: ReadonlySet<string>): boolean {
+  if (collapsed.size === 0) {
+    return false;
+  }
+
+  for (let depth = 0; depth < path.length; depth++) {
+    if (collapsed.has(keyOf(nodeAt(document, path.slice(0, depth))))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** The workflow's name and description above the designer (edited through the Workflow breadcrumb). */
@@ -1119,39 +1206,95 @@ function toSystemClipboard(text: string | undefined): void {
 }
 
 /** One node. Memoized on the node object: an edit re-renders only the edited node and its ancestors. */
-const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObject; depth: number; slot?: string }) {
+/** The icon of an activity on its card (UX-3): by type for the built-ins, by namespace for browser activities. */
+const typeIcons: Record<string, IconName> = {
+  'Core.Sequence': 'sequence',
+  'Core.If': 'branch',
+  'Core.Switch': 'branch',
+  'Core.While': 'loop',
+  'Core.DoWhile': 'loop',
+  'Core.ForEach': 'loop',
+  'Core.TryCatch': 'catch',
+  'Core.Throw': 'problems',
+  'Core.Assign': 'data',
+  'Core.Log': 'log',
+  'Core.Delay': 'recent',
+  'Core.InvokeWorkflow': 'invoke',
+};
+
+const activityIcon = (type: string | undefined): IconName => (type === undefined ? 'activity' : (typeIcons[type] ?? (type.startsWith('Browser.') ? 'browser' : 'activity')));
+
+const summaries = new WeakMap<JsonObject, string>();
+
+/** One line of a card's key values (UX-3), e.g. `message: 'Hello' · level: Warning`; cached per node version. */
+export function propertySummary(node: JsonObject, activity: ActivityDescriptor | undefined): string {
+  const cached = summaries.get(node);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const properties = isObject(node.properties) ? node.properties : {};
+  const names = activity ? activity.properties.map((p) => p.name).filter((name) => name in properties) : Object.keys(properties);
+  const text = (value: Json): string => {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (isObject(value)) {
+      const count = Object.keys(value).length;
+      return `{${count} entr${count === 1 ? 'y' : 'ies'}}`;
+    }
+
+    return JSON.stringify(value);
+  };
+  const line = names.map((name) => `${name}: ${text(properties[name])}`).join(' · ');
+  const summary = line.length > 110 ? `${line.slice(0, 109)}…` : line;
+  summaries.set(node, summary);
+  return summary;
+}
+
+// The inner function has its own name on purpose: a function expression named TreeNode would bind that name inside
+// itself, so the children below would render the un-memoized function and every card would re-render whenever the
+// root does (any document change: typing, undo, insert). Children must render the memo wrapper.
+const TreeNode = memo(function TreeNodeCard({ node, depth, slot }: { node: JsonObject; depth: number; slot?: string }) {
   const studio = useStudio();
   const key = keyOf(node);
   const id = typeof node.id === 'string' ? node.id : undefined;
   const type = typeof node.type === 'string' ? node.type : undefined;
-  // One subscription for everything per-node that changes often (selection, error, run state, picked zone): with
-  // 3,000 nodes each extra subscription is 3,000 more listener calls per keystroke. The snapshot is a string, so the
-  // store's identity check stays exact. Fields are separated by NUL (never in ids, statuses or slot names).
+  // One subscription for everything per-node that changes often (selection, error, run state, picked zone, collapsed):
+  // with 3,000 nodes each extra subscription is 3,000 more listener calls per keystroke. The snapshot is a string, so
+  // the store's identity check stays exact. Fields are separated by NUL (never in ids, statuses or slot names).
   const view = useStudioState(
     (s) =>
-      `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}`,
+      `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}\0${s.collapsed.has(key) ? 1 : 0}`,
   );
-  const [selectedFlag, errorFlag, statusText, pickedText] = view.split('\0');
+  const [selectedFlag, errorFlag, statusText, pickedText, collapsedFlag] = view.split('\0');
   const selected = selectedFlag === '1';
   const hasError = errorFlag === '1';
   const status = statusText === '' ? undefined : statusText;
   const picked = pickedText === '' ? undefined : pickedText;
   const activity = useStudioState((s) => (type === undefined ? undefined : s.catalog.get(type)));
   const children = childSteps(node);
-  // Containers (a list or slots) get a visible boundary; empty ones say so in the card (not as tree items).
+  // Containers (a list or slots) are boxes holding their children; empty ones say so in the card (not as tree items).
   const container = activity !== undefined && (activity.allowsChildren || activity.slots.length > 0);
   const emptyList = activity?.allowsChildren === true && !(Array.isArray(node.children) && node.children.length > 0);
   const presentSlots = isObject(node.slots) ? node.slots : {};
   const missingSlots = activity?.slots.filter((s) => !s.prefix && !(s.name in presentSlots)) ?? [];
   const prefixSlots = activity?.slots.filter((s) => s.prefix) ?? [];
+  // The root is the workflow itself and never collapses.
+  const collapsible = depth > 1 && children.length > 0;
+  const collapsed = collapsible && collapsedFlag === '1';
+  const label = nodeLabel(node, activity);
+  const summary = selected ? '' : propertySummary(node, activity);
 
   return (
     <li
       role="treeitem"
       aria-level={depth}
       aria-selected={selected}
-      aria-expanded={children.length > 0 ? true : undefined}
+      aria-expanded={children.length > 0 ? !collapsed : undefined}
       tabIndex={selected ? 0 : -1}
+      className={`item${container ? ' container-item' : ''}${selected ? ' selected' : ''}`}
       data-key={key}
       data-node-id={id}
       onClick={(event) => {
@@ -1160,13 +1303,41 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
       }}
     >
       <div className={`node${container ? ' container' : ''}${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
-        {slot !== undefined && <span className="slot">{slot}:</span>}
-        <span className="label">{nodeLabel(node, activity)}</span>
-        <span className="type">{type}</span>
-        {id !== undefined && <span className="id">#{id}</span>}
-        {hasError && <span className="badge error">error</span>}
-        {status !== undefined && <span className={`badge status-${status.toLowerCase()}`}>{status}</span>}
-        {activity === undefined && type !== undefined && <span className="badge">not in catalog</span>}
+        <div className="card-header">
+          {collapsible && (
+            <button
+              type="button"
+              className="card-toggle"
+              aria-expanded={!collapsed}
+              aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${label}`}
+              title={collapsed ? 'Show the activities inside' : 'Hide the activities inside'}
+              onClick={(event) => {
+                event.stopPropagation();
+                studio.toggleCollapsed(key);
+              }}
+            >
+              <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={14} />
+            </button>
+          )}
+          <Icon name={activityIcon(type)} size={16} />
+          <span className="title">
+            {slot !== undefined && <span className="slot">{slot}:</span>}{slot !== undefined && ' '}
+            <span className="label">{label}</span> <span className="type">{type}</span> {id !== undefined && <span className="id">#{id}</span>}
+            {hasError && ' '}
+            {hasError && <span className="badge error">error</span>}
+            {status !== undefined && ' '}
+            {status !== undefined && <span className={`badge status-${status.toLowerCase()}`}>{status}</span>}
+            {activity === undefined && type !== undefined && ' '}
+            {activity === undefined && type !== undefined && <span className="badge">not in catalog</span>}
+          </span>
+          {selected && <CardMenu label={label} />}
+        </div>
+        {selected ? <InlineProperties nodeKey={key} /> : summary !== '' && <p className="summary">{summary}</p>}
+        {collapsed && (
+          <p className="collapsed-note">
+            {children.length} activit{children.length === 1 ? 'y' : 'ies'} inside (collapsed)
+          </p>
+        )}
         {(emptyList || missingSlots.length > 0 || prefixSlots.length > 0) && (
           <span className="zones">
             {emptyList && <Zone parentKey={key} position={{ index: 0 }} label="Empty list: insert here" picked={picked} />}
@@ -1179,8 +1350,8 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
           </span>
         )}
       </div>
-      {children.length > 0 && (
-        <ul role="group">
+      {children.length > 0 && !collapsed && (
+        <ul role="group" className={Array.isArray(node.children) && node.children.length > 0 ? 'flow' : 'branches'}>
           {children.map((child) => (
             <TreeNode key={keyOf(child.node)} node={child.node} depth={depth + 1} slot={child.slot} />
           ))}
@@ -1189,6 +1360,111 @@ const TreeNode = memo(function TreeNode({ node, depth, slot }: { node: JsonObjec
     </li>
   );
 });
+
+/**
+ * The selected card's actions (UX-3): a menu button with Cut, Copy, Paste, Delete and Move up/down, each disabled with
+ * its reason. Arrow keys move through the items; Escape closes and returns to the button.
+ */
+function CardMenu({ label }: { label: string }) {
+  const studio = useStudio();
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLUListElement>(null);
+  const remove = useStudioState(deleteRefusalOf);
+  const moveUp = useStudioState((s) => moveRefusalOf(s, -1));
+  const moveDown = useStudioState((s) => moveRefusalOf(s, 1));
+  const pasteRefusal = useStudioState(insertRefusal);
+  const items: { label: string; refusal?: string; run: () => void }[] = [
+    { label: 'Cut', refusal: remove, run: () => toSystemClipboard(studio.cutSelected()) },
+    { label: 'Copy', run: () => toSystemClipboard(studio.copySelected()) },
+    { label: 'Paste', refusal: pasteRefusal, run: () => studio.paste() },
+    { label: 'Delete', refusal: remove, run: () => studio.deleteSelected() },
+    { label: 'Move up', refusal: moveUp, run: () => studio.moveSelected(-1) },
+    { label: 'Move down', refusal: moveDown, run: () => studio.moveSelected(1) },
+  ];
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    const outside = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !(menu.current?.contains(event.target) || button.current?.contains(event.target))) {
+        setOpen(false);
+      }
+    };
+    window.document.addEventListener('pointerdown', outside);
+    return () => window.document.removeEventListener('pointerdown', outside);
+  }, [open]);
+
+  const close = () => {
+    setOpen(false);
+    button.current?.focus();
+  };
+
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+    const entries = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+    const at = entries.indexOf(window.document.activeElement as HTMLElement);
+    const next =
+      event.key === 'ArrowDown' ? entries[(at + 1) % entries.length]
+      : event.key === 'ArrowUp' ? entries[(at - 1 + entries.length) % entries.length]
+      : event.key === 'Home' ? entries[0]
+      : event.key === 'End' ? entries[entries.length - 1]
+      : undefined;
+    event.stopPropagation();
+    if (next) {
+      event.preventDefault();
+      next.focus();
+    } else if (event.key === 'Escape' || event.key === 'Tab') {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  return (
+    <span className="card-menu">
+      <button
+        ref={button}
+        type="button"
+        className="card-menu-button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Actions for ${label}`}
+        title="Actions"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <Icon name="more" size={16} />
+      </button>
+      {open && (
+        <ul ref={menu} role="menu" aria-label={`Actions for ${label}`} onKeyDown={onMenuKeyDown} onClick={(event) => event.stopPropagation()}>
+          {items.map((item) => (
+            <li key={item.label} role="none">
+              <button
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                aria-disabled={item.refusal !== undefined ? true : undefined}
+                title={item.refusal}
+                onClick={() => {
+                  if (item.refusal === undefined) {
+                    setOpen(false);
+                    item.run();
+                  }
+                }}
+              >
+                {item.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </span>
+  );
+}
 
 /**
  * An empty slot or an empty list inside a card (W7): clicking it (or Enter) picks it as the place for the next insert

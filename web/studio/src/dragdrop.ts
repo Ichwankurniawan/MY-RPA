@@ -72,9 +72,17 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
   const indicator = page.createElement('div');
   indicator.className = 'drop-indicator';
   indicator.setAttribute('aria-hidden', 'true');
+  // While dragging, one transparent overlay over the page carries the cursor (grabbing / not-allowed) and keeps text from
+  // being selected. Changing the cursor on the page root instead (an inherited property) restyles every element, which
+  // on a 3,000-node workflow is the slowest part of a drag (UX-3). Hit-testing looks through the overlay.
+  const overlay = page.createElement('div');
+  overlay.className = 'drag-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  const under = (x: number, y: number) => page.elementsFromPoint(x, y).find((element) => element !== overlay && element !== indicator) ?? null;
 
   const sourceAt = (target: EventTarget | null): Source | undefined => {
-    if (!(target instanceof Element) || target.closest('input, textarea, select, .drop-zone')) {
+    // A card's own controls and its inline editors (UX-3) never start a drag.
+    if (!(target instanceof Element) || target.closest('input, textarea, select, .drop-zone, .inline-properties, .node button, [role="menu"]')) {
       return undefined;
     }
 
@@ -89,7 +97,9 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
 
   const show = (next: DropCandidate | undefined) => {
     candidate = next;
-    root.classList.toggle('drop-refused', next === undefined || next.refusal !== undefined);
+    const refused = next === undefined || next.refusal !== undefined;
+    root.classList.toggle('drop-refused', refused);
+    overlay.classList.toggle('refused', refused);
     if (next === undefined || next.refusal !== undefined) {
       indicator.hidden = true;
       return;
@@ -109,6 +119,8 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
     dragging = false;
     candidate = undefined;
     indicator.remove();
+    overlay.remove();
+    overlay.classList.remove('refused');
     root.classList.remove('dragging', 'drop-refused');
   };
 
@@ -130,11 +142,11 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
       dragging = true;
       root.classList.add('dragging');
       indicator.hidden = true;
-      page.body.append(indicator);
+      page.body.append(overlay, indicator);
     }
 
     event.preventDefault();
-    show(dropCandidate(studio, page.elementFromPoint(event.clientX, event.clientY), event.clientY, press.source));
+    show(dropCandidate(studio, under(event.clientX, event.clientY), event.clientY, press.source));
   };
 
   const onUp = (event: PointerEvent) => {

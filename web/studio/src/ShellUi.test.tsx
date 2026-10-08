@@ -5,6 +5,10 @@ import { Icon, iconNames } from './icons';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, immediately, settle } from './test-support';
 
+/** The Properties panel (UX-3: the selected card has the same editors inline). */
+const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
+
+
 // UX-1 (studio-ux-plan.md): the icon set, the command bar, the status bar and the theme choice.
 
 async function renderStudio(api = new FakeApi()) {
@@ -78,7 +82,7 @@ describe('Command bar', () => {
     expect(undo.title).toBe('Nothing to undo');
 
     fireEvent.click(treeItem('log-greeting'));
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'changed'" } });
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "'changed'" } });
 
     expect(save.disabled).toBe(false);
     expect(undo.disabled).toBe(false);
@@ -104,7 +108,7 @@ describe('Status bar and title', () => {
     expect(screen.getByTestId('status-validation').textContent).toContain('Not validated');
 
     fireEvent.click(treeItem('log-greeting'));
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'changed'" } });
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "'changed'" } });
 
     expect(screen.getByTestId('status-file').textContent).toContain('Unsaved changes');
     await act(async () => {

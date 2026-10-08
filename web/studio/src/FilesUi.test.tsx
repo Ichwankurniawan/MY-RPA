@@ -5,6 +5,10 @@ import { memoryDrafts, type DraftStore } from './drafts';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, helloWorld, immediately, settle } from './test-support';
 
+/** The Properties panel (UX-3: the selected card has the same editors inline). */
+const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
+
+
 async function renderStudio(api = new FakeApi(), drafts: DraftStore = memoryDrafts()) {
   api.files.set('other.json', { text: helloWorld.replace('"hello-world"', '"other"'), etag: 1 });
   api.files.set('flows/nested.json', { text: helloWorld, etag: 1 });
@@ -89,7 +93,7 @@ describe('In-app prompts', () => {
     await renderStudio();
     await act$(() => fireEvent.doubleClick(fileItem('hello-world.json')));
     fireEvent.click(document.querySelector('[role="treeitem"][data-node-id="log-greeting"]')!);
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'changed'" } });
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "'changed'" } });
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Workflow' }), { target: { value: 'other.json' } });
     await act$(() => fireEvent.click(screen.getByRole('button', { name: 'Open' })));
@@ -105,7 +109,7 @@ describe('In-app prompts', () => {
     const { api } = await renderStudio();
     await act$(() => fireEvent.doubleClick(fileItem('hello-world.json')));
     fireEvent.click(document.querySelector('[role="treeitem"][data-node-id="log-greeting"]')!);
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'mine'" } });
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "'mine'" } });
     api.files.get('hello-world.json')!.etag = 8;
 
     await act$(() => fireEvent.click(screen.getByRole('button', { name: 'Save' })));
@@ -128,6 +132,6 @@ describe('In-app prompts', () => {
 
     expect(title()).toBe('hello-world.json •');
     fireEvent.click(document.querySelector('[role="treeitem"][data-node-id="log-greeting"]')!);
-    expect((screen.getByLabelText(/^message/) as HTMLInputElement).value).toBe("'recovered'");
+    expect((properties().getByLabelText(/^message/) as HTMLInputElement).value).toBe("'recovered'");
   });
 });

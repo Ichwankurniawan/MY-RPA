@@ -1,6 +1,6 @@
 # Studio UX slice — plan (proposed)
 
-Status: **approved** by the owner (2026-10-08), with the proposed answers below. UX-1 and UX-2 done (2026-10-08); next: UX-3. Follows Phase 5 (the Web Studio, ADR-0021 to ADR-0036).
+Status: **approved** by the owner (2026-10-08), with the proposed answers below. UX-1, UX-2 and UX-3 done (2026-10-08); next: graph workflows (ADR-0037). Follows Phase 5 (the Web Studio, ADR-0021 to ADR-0036).
 Companion: [ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md) (flowchart and state machine, proposed).
 
 ## Goal
@@ -95,6 +95,30 @@ UX goes first if both are approved.
   activation p95 74 ms, keystroke p95 39–43 ms, undo 37–40 ms: every target met in two consecutive runs.
 - Validation: Vitest 218/218, typecheck, smoke (the error case now checks Problems, the toolbar status and the
   Execution tab), manual (steps 1–11), accessibility (0 violations), perf as above.
+
+## UX-3 result (2026-10-08)
+- Delivered: the designer as centred cards joined by connectors, each with an icon header (type icon, display name,
+  slot, badges); the selected card shows its property editors inline (the same editors as Properties) and a ⋮ menu
+  (Cut, Copy, Paste, Delete, Move up/down, with the refusal as the reason for a disabled item); other cards show a
+  one-line summary of their values. Containers collapse and expand (toggle, ArrowLeft/ArrowRight, Expand all /
+  Collapse all); selecting a node inside a collapsed container expands its ancestors. Zoom 50–200 % (Ctrl+= / Ctrl+- /
+  Ctrl+0, buttons, fit to width) with the level shown.
+- **Changed from the plan:** zoom uses the CSS `zoom` property (set through the CSSOM, CSP-safe), not `transform`:
+  layout and `elementsFromPoint` see the zoomed boxes, so drag-and-drop hit-testing needs no coordinate mapping.
+  No breakpoint marker (there is no debugger). Minimap not built (optional).
+- Accessibility: card names come from their content (an `aria-labelledby` name failed axe's label-content rule); the
+  zoom level button's name starts with its visible text ("110%, reset zoom"). 0 serious or critical violations.
+- **Performance lesson 4:** the recursive `memo` card referred to itself by the inner function's name, so children
+  were the unmemoized function and every undo re-rendered all 3,001 cards (keystroke p95 ~87 ms). The inner function
+  is now `TreeNodeCard` and children use the `TreeNode` wrapper: keystroke p95 26–40 ms, undo/redo ~40–42 ms.
+- **Performance lesson 5:** cards roughly doubled the DOM (~35,000 elements), and the UX-2 drag rules on the root's
+  `dragging` / `drop-refused` classes made drag activation p95 196 ms and movement 107 ms. During a drag, one
+  transparent full-window overlay now carries the cursor and blocks text selection; hit-testing looks through it
+  (`elementsFromPoint`); no CSS rule depends on the root classes. Drag activation p95 29.6 ms, movement 31.5–31.7 ms;
+  every target met in two consecutive runs.
+- Known gap: no automatic scrolling while dragging near the designer's edge (drag, then scroll; or use cut/paste).
+- Validation: Vitest 226/226, typecheck, smoke (new UX-3 step in Chromium: inline editor equals Properties, summaries,
+  computed zoom, collapse/expand all), manual (steps 1–11), accessibility (0 serious or critical), perf as above.
 
 ## Owner decisions (2026-10-08)
 1. The three sub-slices are approved (the minimap stays optional).

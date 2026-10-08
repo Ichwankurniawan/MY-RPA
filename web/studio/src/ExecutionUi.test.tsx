@@ -5,6 +5,10 @@ import { Studio } from './studio';
 import { FakeApi, FakeEventSource, immediately, settle } from './test-support';
 import type { ExecutionEvent } from './types';
 
+/** The Properties panel (UX-3: the selected card has the same editors inline). */
+const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
+
+
 const workflow = (args: object[]) =>
   JSON.stringify({
     schemaVersion: '1.0',
@@ -150,7 +154,7 @@ describe('Execution UI', () => {
     expect(node('after').textContent).toContain('Failed');
     await click('Select failed node');
     expect(node('after').parentElement!.getAttribute('aria-selected')).toBe('true');
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'fixed'" } });
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "'fixed'" } });
     expect(screen.getByTestId('document-title').textContent).toBe('plain.json •');
   });
 

@@ -7,6 +7,10 @@ import { Studio } from './studio';
 import { catalog, FakeApi, FakeEventSource, immediately, settle } from './test-support';
 import type { ActivityDescriptor, JsonObject } from './types';
 
+/** The Properties panel (UX-3: the selected card has the same editors inline). */
+const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
+
+
 const switchActivity: ActivityDescriptor = {
   type: 'Core.Switch',
   displayName: 'Switch',
@@ -63,13 +67,13 @@ function clipboard(type: 'copy' | 'cut' | 'paste', text = ''): { event: Event; t
   return { event, text: () => data };
 }
 
-/** A pointer drag from one element to another (jsdom has no layout: elementFromPoint is pointed at `over`). */
+/** A pointer drag from one element to another (jsdom has no layout: elementsFromPoint is pointed at `over`). */
 function drag(from: HTMLElement, over: HTMLElement, y = 10) {
-  if (!('elementFromPoint' in document)) {
-    Object.defineProperty(document, 'elementFromPoint', { value: () => null, configurable: true, writable: true });
+  if (!('elementsFromPoint' in document)) {
+    Object.defineProperty(document, 'elementsFromPoint', { value: () => [], configurable: true, writable: true });
   }
 
-  const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(over);
+  const spy = vi.spyOn(document, 'elementsFromPoint').mockReturnValue([over]);
   fireEvent(from, new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0, clientY: 0 }));
   fireEvent(document, new MouseEvent('pointermove', { bubbles: true, clientX: 0, clientY: y }));
   fireEvent(document, new MouseEvent('pointerup', { bubbles: true, clientX: 0, clientY: y }));
@@ -155,7 +159,7 @@ describe('Cut, copy and paste', () => {
     expect(ids(state().document)).toBe('main,a,check,pick,b,if-1');
 
     fireEvent.click(item('b'));
-    const input = screen.getByLabelText(/^message/);
+    const input = properties().getByLabelText(/^message/);
     input.focus();
     const native = clipboard('copy');
     window.dispatchEvent(native.event);

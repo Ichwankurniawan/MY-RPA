@@ -64,6 +64,12 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   resize the activities, properties and bottom panels (drag, or focus and use the arrow keys; Home/End), and View ›
   Activities / Properties / Bottom hides or shows them. Favorites, recent activities and panel sizes are remembered per
   browser (`src/preferences.ts`, best effort).
+- **Designer (UX-3):** activities are cards in a centred flow with connectors; each card has an icon header (type icon,
+  display name, slot, badges). The selected card edits its properties inline (the same editors as the Properties
+  panel) and has a ⋮ menu (Cut, Copy, Paste, Delete, Move up/down); other cards show a one-line summary of their
+  values. Containers collapse and expand (the card's toggle, ArrowLeft/ArrowRight, Expand all / Collapse all); a
+  selection inside a collapsed container expands it. Zoom 50–200 % with Ctrl+= / Ctrl+- / Ctrl+0, the zoom buttons
+  and fit to width (CSS `zoom` set through the CSSOM). While dragging, one transparent overlay carries the cursor.
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
@@ -170,7 +176,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 |---|---|
 | `src/types.ts` | Wire types (hand-written for W3, ADR-0028 decision 6) |
 | `src/preferences.ts` | Per-browser UI preferences (UX-2): favorites, recent activities, panel sizes; guarded storage, in-memory store for tests |
-| `src/icons.tsx` | The MyRPA icon set (UX-1): 34 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
+| `src/icons.tsx` | The MyRPA icon set (UX-1, UX-3): 47 icons on a 24 × 24 grid, `currentColor` strokes, attributes only (CSP), decorative unless labelled |
 | `src/api.ts` | Fetch client: anti-forgery header on state changes, ETags, error bodies |
 | `src/document.ts` | Document model: immutable v1.0 JSON, client keys (`WeakMap`), index, path-copying edits, structural edits and their refusals, lossy-file detection, editability |
 | `src/events.ts` | The tab's `EventSource`, subscriptions, de-duplication, stream re-creation, stream status |
@@ -178,12 +184,12 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `src/drafts.ts` | Crash-recovery drafts in local storage (guarded; in memory for tests) |
 | `src/workflowData.ts` | Workflow-level edits (metadata, arguments, variables, node ids, property values) and diagnostic locations |
 | `src/context.ts` | The Studio context and slice-subscription hooks |
-| `src/PropertyEditors.tsx` | Properties: node and workflow editors, one per property kind, raw JSON |
+| `src/PropertyEditors.tsx` | Properties: node and workflow editors, one per property kind, raw JSON; the selected card's inline editors |
 | `src/DataPanel.tsx` | Problems, Variables and Arguments tabs |
 | `src/placement.ts` | Targets (list index or slot), placing, moving across containers, insert/paste targets, the clipboard format and id renaming |
-| `src/dragdrop.ts` | Drag-and-drop by pointer hit-testing (no library), one indicator element |
+| `src/dragdrop.ts` | Drag-and-drop by pointer hit-testing (no library), one indicator element and one cursor overlay |
 | `src/studio.ts` | State and commands: connect, open, select, edit, insert, delete, move, undo/redo history, validate, save; runs (validate first, run dialog, recent runs, Stop, per-frame event batching); files (new, rename, delete, save as, unsaved prompt, conflicts, recovery) |
-| `src/App.tsx` | Layout: toolbar (Save as, Run, Stop, status), Files panel, toolbox (Insert), edit bar (Undo, Redo, Move, Delete), tree, properties, problems, Execution panel, run and file dialogs, status bar |
+| `src/App.tsx` | Layout: command bar, Files panel, toolbox (Insert), the card designer (cards, card menu, collapse, zoom), properties, bottom tabs, Execution panel, run and file dialogs, status bar |
 | `scripts/harness.mjs` | Shared by the browser scripts: throwaway project, real server with `--web`, headless Chromium |
 | `scripts/smoke.mjs` | End-to-end smoke test |
 | `scripts/perf.mjs` | 3,000-node performance measurement |
@@ -219,6 +225,9 @@ nothing about the client.
 - `PanelsUi.test.tsx` (UX-2): namespaces, favorites (pin, remember, unknown types ignored), recent activities (order,
   insert from there), the bottom tab strip (automatic tabs, keyboard), splitters (keyboard, limits, remembered sizes,
   the grid), hiding and showing panels, malformed stored settings.
+- `DesignerUi.test.tsx` (UX-3): card summaries and inline editors (editing on a card does not move the selection),
+  card names, the card menu by keyboard, collapse with reveal of the selection, Expand all / Collapse all,
+  ArrowLeft/ArrowRight, zoom state and limits.
 - `ShellUi.test.tsx` (UX-1): every icon is a decorative SVG without style attributes; the command groups and their
   accessible names; disabled reasons; New workflow…; the status bar segments; the workflow title; the theme choice.
 - `ExecutionUi.test.tsx` (W5): the run dialog (required, defaults, timeout, Cancel), the lifecycle and node states on

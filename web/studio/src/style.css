@@ -183,27 +183,70 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 [role='tree'], [role='group'] { list-style: none; margin: 0; padding: 0; }
 [role='group'] { padding-left: 20px; border-left: 1px dashed var(--border-strong); margin-left: 10px; }
 [role='treeitem'] { outline: none; }
-[role='treeitem']:focus-visible > .node { outline: 2px solid var(--accent); }
-.node { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 6px 10px; margin: 4px 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; box-shadow: var(--shadow); }
-.node.container { background: var(--container); border-left: 3px solid var(--border-strong); }
+[role='treeitem']:focus-visible > .node { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* UX-3: the designer as a flow of cards. A sequence's steps are centred in one column with a connector and an arrow
+   between them (backgrounds of a pseudo-element: no extra elements per step); a container is a box holding its steps,
+   its header being its card; the selected card shows its editors, the others a one-line summary. */
+.designer [role='tree'] { padding: 6px 0 64px; }
+.designer [role='tree'] > [role='treeitem'] { max-width: 700px; margin: 0 auto; }
+.designer [role='group'] { border-left: none; margin: 0; padding: 8px 14px 12px; }
+.designer [role='group'].branches > [role='treeitem'] + [role='treeitem'] { margin-top: 10px; }
+.designer [role='group'].flow > [role='treeitem'] + [role='treeitem']::before {
+  content: '';
+  display: block;
+  width: 10px;
+  height: 22px;
+  margin: 0 auto;
+  background:
+    linear-gradient(var(--border-strong), var(--border-strong)) top center / 2px 16px no-repeat,
+    conic-gradient(from -45deg at 50% 100%, var(--border-strong) 90deg, transparent 0) bottom center / 10px 6px no-repeat;
+}
+.designer .container-item { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--container); box-shadow: var(--shadow); }
+.designer .container-item.selected { border-color: var(--accent); }
+.node { display: block; padding: 7px 10px; margin: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; box-shadow: var(--shadow); }
+.node.container { border: none; border-bottom: 1px solid var(--border); border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: transparent; box-shadow: none; }
+.container-item[aria-expanded='false'] > .node.container, .container-item:not([aria-expanded]) > .node.container { border-bottom: none; border-radius: var(--radius-lg); }
 .node.selected { background: var(--selected); border-color: var(--accent); }
 .node.has-error { border-color: var(--error); }
+.node.container.has-error { box-shadow: inset 3px 0 0 var(--error); }
+.card-header { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.card-header > .icon { color: var(--accent); }
+.card-header .title { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.card-toggle, .card-menu-button { border: none; background: none; padding: 2px; line-height: 0; color: var(--muted); }
+.card-toggle:hover, .card-menu-button:hover { color: var(--accent); }
+.card-menu { position: relative; }
+.card-menu [role='menu'] { position: absolute; right: 0; top: 100%; z-index: 20; min-width: 160px; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); }
+.card-menu [role='menuitem'] { display: block; width: 100%; text-align: left; border: none; background: none; padding: 5px 10px; border-radius: 4px; }
+.card-menu [role='menuitem']:focus { background: var(--accent-soft); outline: none; }
+.card-menu [role='menuitem'][aria-disabled='true'] { color: var(--muted); }
 .node .slot { color: var(--accent); font-weight: 600; }
 .node .label { font-weight: 600; }
 .node .type, .node .id { color: var(--muted); font-size: 12px; }
+.node .summary { margin: 4px 0 0 22px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node .collapsed-note { margin: 4px 0 0 22px; font-size: 12px; color: var(--muted); font-style: italic; }
+.inline-properties { margin: 8px 0 2px; padding-top: 8px; border-top: 1px solid var(--border); cursor: auto; }
+.inline-properties .field { margin-bottom: 8px; }
+.designer-bar { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.designer-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+.designer-actions button { font-size: 12px; }
+/* The zoom control floats at the bottom right of the designer while it scrolls. */
+.zoom-controls { position: sticky; bottom: 10px; z-index: 6; display: flex; align-items: center; gap: 2px; width: max-content; margin: -44px 4px 0 auto; padding: 3px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); }
+.zoom-controls button { border: none; background: none; padding: 4px 6px; line-height: 0; color: var(--text); }
+.zoom-controls button:hover:not(:disabled) { background: var(--accent-soft); }
+.zoom-controls .zoom-level { line-height: normal; min-width: 52px; font-size: 12px; }
 /* Empty slots and lists (W7): places to insert, paste or drop. */
-.node .zones { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.node .zones { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px; }
 .drop-zone { font-size: 12px; padding: 2px 8px; border: 1px dashed var(--border-strong); border-radius: 4px; background: var(--panel); color: var(--muted); }
 .drop-zone.required-slot { border-color: var(--error); color: var(--error); }
 .drop-zone.picked, .drop-zone[aria-pressed='true'] { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--info-bg); }
 .case-zone { display: inline-flex; gap: 4px; align-items: center; }
 .case-zone input { width: 8em; padding: 0 4px; font-size: 12px; }
 /* While dragging: one indicator line (before/after) or outline (a zone), positioned by dragdrop.ts. */
-/* The cursor is inherited: only elements that set their own cursor are overridden, so toggling drop-refused on the root
-   recalculates those (cards, buttons, files, splitters), not all ~18,000 elements of a 3,000-node workflow (UX-2 perf). */
-.dragging { cursor: grabbing; user-select: none; }
-.dragging .node, .dragging button, .dragging .file, .dragging .splitter { cursor: grabbing; }
-.dragging.drop-refused, .dragging.drop-refused .node, .dragging.drop-refused button, .dragging.drop-refused .file, .dragging.drop-refused .splitter { cursor: not-allowed; }
+/* The drag cursor lives on one overlay over the page (UX-3): no rule depends on the root's dragging/drop-refused
+   classes, so starting a drag or crossing a refused place restyles one element, not the ~35,000 of a 3,000-node
+   workflow. The overlay also keeps text from being selected while dragging. */
+.drag-overlay { position: fixed; inset: 0; z-index: 9; cursor: grabbing; user-select: none; }
+.drag-overlay.refused { cursor: not-allowed; }
 .drop-indicator { position: fixed; z-index: 10; height: 3px; margin-top: -2px; background: var(--accent); border-radius: 2px; pointer-events: none; }
 .drop-indicator.zone { margin-top: 0; background: none; border: 2px solid var(--accent); border-radius: 6px; }
 .badge { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--border); }

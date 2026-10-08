@@ -5,6 +5,7 @@ import { ApiError, type StudioApi } from './api';
 import {
   createNode,
   deleteRefusal,
+  childSteps,
   indexDocument,
   isObject,
   keyOf,
@@ -163,7 +164,14 @@ export interface StudioState {
   readonly outputTab: OutputTab;
   /** Panel sizes (px, only once resized) and hidden panels (UX-2; remembered per browser). */
   readonly panes: Panes;
+  /** Containers whose children are hidden in the designer (UX-3; never an ancestor of the selection). */
+  readonly collapsed: ReadonlySet<string>;
+  /** The designer's zoom (UX-3): 1 is 100 %. */
+  readonly zoom: number;
 }
+
+/** The designer's zoom range and step (UX-3). */
+export const zoomLimits = { min: 0.5, max: 2, step: 0.1 } as const;
 
 /** The panels around the designer that can be resized and hidden. */
 export type PaneName = 'toolbox' | 'properties' | 'bottom';
@@ -485,6 +493,8 @@ export class Studio {
       recentActivities: (this.preferences.read(preferenceKeys.recent, isTypeList) ?? []).slice(0, maxRecent),
       outputTab: 'problems',
       panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
+      collapsed: new Set(),
+      zoom: 1,
       connection: 'connecting',
       activities: [],
       catalog: new Map(),
@@ -508,7 +518,13 @@ export class Studio {
 
     // Crash recovery: a changed document is written as a draft once typing pauses; saving or discarding removes it.
     let document = this.state.document;
+    let selectedKey = this.state.selectedKey;
     this.store.subscribe(() => {
+      if (this.state.selectedKey !== selectedKey || this.state.document !== document) {
+        selectedKey = this.state.selectedKey;
+        this.revealSelection();
+      }
+
       if (this.state.document !== document) {
         document = this.state.document;
         clearTimeout(this.draftTimer);
@@ -678,6 +694,59 @@ export class Studio {
     const { document } = this.state;
     if (document !== undefined && editRefusal(this.state) === undefined) {
       this.commit(apply(document), this.state.selectedKey, label, mergeKey);
+    }
+  }
+
+  /** Collapses a container in the designer, or expands it (UX-3). */
+  toggleCollapsed(key: string): void {
+    const collapsed = new Set(this.state.collapsed);
+    if (!collapsed.delete(key)) {
+      collapsed.add(key);
+    }
+
+    this.store.set({ collapsed });
+  }
+
+  /** Collapses every container below the root (the root stays open: it is the workflow). */
+  collapseAll(): void {
+    const document = this.state.document;
+    if (document === undefined) {
+      return;
+    }
+
+    const keys = indexDocument(document).entries.filter((e) => e.path.length > 0 && childSteps(e.node).length > 0).map((e) => e.key);
+    this.store.set({ collapsed: new Set(keys) });
+    this.revealSelection();
+  }
+
+  /** Expands every container. */
+  expandAll(): void {
+    this.store.set({ collapsed: new Set() });
+  }
+
+  /** Sets the designer's zoom, kept within its limits (UX-3). */
+  setZoom(zoom: number): void {
+    const clamped = Math.round(Math.min(zoomLimits.max, Math.max(zoomLimits.min, zoom)) * 100) / 100;
+    if (clamped !== this.state.zoom) {
+      this.store.set({ zoom: clamped });
+    }
+  }
+
+  /** The selection is never hidden: containers above it are expanded (after a select, an insert, a paste, an undo…). */
+  private revealSelection(): void {
+    const { document, selectedKey, collapsed } = this.state;
+    if (document === undefined || selectedKey === undefined || collapsed.size === 0) {
+      return;
+    }
+
+    const path = indexDocument(document).byKey.get(selectedKey)?.path;
+    if (path === undefined) {
+      return;
+    }
+
+    const ancestors = Array.from({ length: path.length }, (_, depth) => keyOf(nodeAt(document, path.slice(0, depth))));
+    if (ancestors.some((key) => collapsed.has(key))) {
+      this.store.set({ collapsed: new Set([...collapsed].filter((key) => !ancestors.includes(key))) });
     }
   }
 

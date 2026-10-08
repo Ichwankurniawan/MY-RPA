@@ -5,6 +5,10 @@ import { memoryDrafts } from './drafts';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, immediately, helloWorldEvents, settle } from './test-support';
 
+/** The Properties panel (UX-3: the selected card has the same editors inline). */
+const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
+
+
 async function renderStudio(api = new FakeApi()) {
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately);
   render(<App studio={studio} />);
@@ -55,9 +59,9 @@ describe('App', () => {
     const { api } = await renderStudio();
     fireEvent.click(treeItem('log-greeting'));
 
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "greeting + ' again'" } });
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "greeting + ' again'" } });
 
-    expect((screen.getByLabelText(/^message/) as HTMLInputElement).value).toBe("greeting + ' again'");
+    expect((properties().getByLabelText(/^message/) as HTMLInputElement).value).toBe("greeting + ' again'");
     expect(screen.getByTestId('document-title').textContent).toBe('hello-world.json •');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -83,8 +87,8 @@ describe('App', () => {
     fireEvent.click(within(screen.getByRole('list', { name: 'Problems' })).getByRole('button'));
 
     expect(treeItem('log-greeting').getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByLabelText(/^message/).getAttribute('aria-invalid')).toBe('true');
-    expect(screen.getByText(/MYRPA1043: Unexpected end of expression\./, { selector: '.field-error' })).toBeTruthy();
+    expect(properties().getByLabelText(/^message/).getAttribute('aria-invalid')).toBe('true');
+    expect(properties().getByText(/MYRPA1043: Unexpected end of expression\./, { selector: '.field-error' })).toBeTruthy();
     expect(screen.getByRole('status').textContent).toBe('1 error(s) found.');
   });
 
@@ -130,7 +134,7 @@ describe('Shortcuts and leaving with focus still in an edited field', () => {
   it('Ctrl+S saves the value just typed', async () => {
     const { api } = await renderStudio();
     fireEvent.click(treeItem('log-greeting'));
-    const field = screen.getByLabelText(/^message/);
+    const field = properties().getByLabelText(/^message/);
     field.focus();
 
     fireEvent.change(field, { target: { value: "'typed'" } });
@@ -147,7 +151,7 @@ describe('Shortcuts and leaving with focus still in an edited field', () => {
   it('F5 runs the value just typed (as the unsaved buffer)', async () => {
     const { api } = await renderStudio();
     fireEvent.click(treeItem('log-greeting'));
-    const field = screen.getByLabelText(/^message/);
+    const field = properties().getByLabelText(/^message/);
     field.focus();
 
     fireEvent.change(field, { target: { value: "'typed'" } });
@@ -175,7 +179,7 @@ describe('Shortcuts and leaving with focus still in an edited field', () => {
 
     expect(leave()).toBe(false);
     fireEvent.click(treeItem('log-greeting'));
-    const field = screen.getByLabelText(/^message/);
+    const field = properties().getByLabelText(/^message/);
     field.focus();
     fireEvent.change(field, { target: { value: "'typed'" } });
 
@@ -191,7 +195,7 @@ describe('Shortcuts and leaving with focus still in an edited field', () => {
       await studio.open('hello-world.json');
     });
     fireEvent.click(treeItem('log-greeting'));
-    fireEvent.change(screen.getByLabelText(/^message/), { target: { value: "'typed'" } });
+    fireEvent.change(properties().getByLabelText(/^message/), { target: { value: "'typed'" } });
     expect(drafts.entries.size).toBe(0);
 
     window.dispatchEvent(new Event('pagehide'));

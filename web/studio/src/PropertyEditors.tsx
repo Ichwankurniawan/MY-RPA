@@ -19,6 +19,42 @@ function propertyDiagnostics(diagnostics: readonly Diagnostic[] | undefined, val
   });
 }
 
+/**
+ * The selected card's own editors (UX-3): the activity's properties with the same editors as the Properties panel (one
+ * document, so both always agree). Id, display name and raw properties stay in the panel.
+ */
+export function InlineProperties({ nodeKey }: { nodeKey: string }) {
+  const document = useStudioState((s) => s.document);
+  const readOnlyReason = useStudioState((s) => s.file?.readOnlyReason);
+  const diagnostics = useStudioState((s) => s.diagnostics);
+  const validated = useStudioState((s) => s.validated);
+  const catalog = useStudioState((s) => s.catalog);
+  const entry = document ? indexDocument(document).byKey.get(nodeKey) : undefined;
+  const type = typeof entry?.node.type === 'string' ? entry.node.type : '';
+  const activity = catalog.get(type);
+  if (document === undefined || entry === undefined || activity === undefined || activity.properties.length === 0) {
+    return null;
+  }
+
+  const properties = isObject(entry.node.properties) ? entry.node.properties : {};
+  const names = assignableNames(document);
+  return (
+    <div className="inline-properties">
+      {activity.properties.map((descriptor) => (
+        <PropertyEditor
+          key={descriptor.name}
+          nodeKey={nodeKey}
+          descriptor={descriptor}
+          value={properties[descriptor.name]}
+          disabled={readOnlyReason !== undefined}
+          names={names}
+          errors={propertyDiagnostics(diagnostics, validated, nodeKey, descriptor.name)}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function PropertiesPanel() {
   const selectedKey = useStudioState((s) => s.selectedKey);
   return (

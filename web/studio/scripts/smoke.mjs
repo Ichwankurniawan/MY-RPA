@@ -58,7 +58,8 @@ await withStudio(async ({ project, page, startServer, problems }) => {
 
   const title = page.getByTestId('document-title');
   const runStatus = page.getByTestId('run-status');
-  const message = page.getByLabel(/^message/);
+  // UX-3: the selected card has the same editors inline; the Properties panel is the one this script types into.
+  const message = page.getByRole('complementary', { name: 'Properties' }).getByLabel(/^message/);
   const click = (name) => page.getByRole('button', { name, exact: true }).click();
   const edit = (name) => page.getByRole('toolbar', { name: 'Edit' }).getByRole('button', { name, exact: true });
   const item = (id) => page.locator(`[role=treeitem][data-node-id="${id}"]`);
@@ -176,7 +177,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   // Error case (W3, now validate-before-run, W5): the server finds the syntax error and the run is never requested.
   await message.fill('greeting +');
   await click('Validate');
-  await page.locator('.field-error').filter({ hasText: 'MYRPA1043' }).waitFor();
+  await page.getByRole('complementary', { name: 'Properties' }).locator('.field-error').filter({ hasText: 'MYRPA1043' }).waitFor();
   const requestsBefore = runRequests;
   await runWithDefaults();
   // UX-2: the failed check shows Problems; the toolbar and the Execution tab say the run did not start.
@@ -500,6 +501,22 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await fileRow('flows/w6-renamed.json').waitFor({ state: 'detached' });
   check(!exists('flows/w6-renamed.json'), 'deleted on disk');
   step('W6-7. Delete (Delete key): confirmed in the Studio; the file is gone from disk and from the Files panel');
+
+  // UX-3: the card designer in Chromium: the selected card's own editor, collapse, and CSS zoom (jsdom has no zoom).
+  await openHelloWorld();
+  await row('log-greeting').click();
+  const inlineMessage = row('log-greeting').getByLabel(/^message/);
+  check((await inlineMessage.inputValue()) === (await message.inputValue()), 'the card and the Properties panel show the same value');
+  check((await row('build-greeting').locator('.summary').textContent()).startsWith('to: greeting'), 'unselected cards show a summary');
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  const zoom = await page.getByRole('tree', { name: 'Workflow', exact: true }).evaluate((tree) => getComputedStyle(tree).zoom);
+  check(zoom === '1.1', `computed zoom ${zoom}`);
+  await page.getByRole('button', { name: /, reset zoom$/ }).click();
+  const before = await treeIds();
+  await page.getByRole('button', { name: 'Collapse all', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand all', exact: true }).click();
+  check((await treeIds()) === before, `expanded again: ${await treeIds()} (was ${before})`);
+  step('UX-3. Cards: the selected card edits inline (same value as Properties), summaries, CSS zoom 110% in Chromium, collapse and expand all');
 
   // W6-8: Single-command start: only --open <file> (no --project, no --web). The server serves the Studio bundled
   // next to it, makes the file's folder the project, and the Studio opens the file.
