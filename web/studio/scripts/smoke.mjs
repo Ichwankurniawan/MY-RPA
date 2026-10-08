@@ -370,12 +370,22 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const zone = (id, name) => row(id).getByRole('button', { name, exact: true });
   // `at` is where on the target to drop, as a fraction of its height (a card's lower half means "after it").
   const dragTo = async (from, to, at = 0.5) => {
+    // Let live validation finish first: an error appearing in a card while dragging would move the target.
+    if ((await page.getByTestId('status-validation').count()) > 0) {
+      await page.getByTestId('status-validation').filter({ hasNotText: 'Checking' }).waitFor();
+    }
+    await from.scrollIntoViewIfNeeded();
+    // UX-3: a selected card shows its editors, so a drop target inside it can be below the visible area.
+    await to.scrollIntoViewIfNeeded();
     const a = await from.boundingBox();
     const b = await to.boundingBox();
     await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
     await page.mouse.down();
     await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + 10, { steps: 3 });
     await page.mouse.move(b.x + b.width / 2, b.y + b.height * at, { steps: 8 });
+    // Follow the target if a card changed while dragging (as in manual.mjs).
+    const settled = await to.boundingBox();
+    await page.mouse.move(settled.x + settled.width / 2, settled.y + settled.height * at, { steps: 2 });
     await page.mouse.up();
   };
   await row('log-1').click();
