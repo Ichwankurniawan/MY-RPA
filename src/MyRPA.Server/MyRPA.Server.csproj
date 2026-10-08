@@ -8,6 +8,9 @@
     <RootNamespace>MyRPA.Server</RootNamespace>
     <AssemblyName>MyRPA.Server</AssemblyName>
     <Description>MyRPA control-plane server (local mode).</Description>
+    <!-- The Web SDK runs `dotnet run` in the project folder; relative project, plugin and open paths must resolve from
+         where the command was typed, as for the CLI. -->
+    <RunWorkingDirectory>$(MSBuildStartupDirectory)</RunWorkingDirectory>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\MyRPA.Core\MyRPA.Core.csproj" />

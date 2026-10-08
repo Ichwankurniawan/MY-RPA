@@ -53,7 +53,9 @@ public sealed class PlaywrightBrowserSession : IBrowserSession
 
         if (response is { Status: >= 400 } failed)
         {
-            throw new ActivityFailedException(BrowserErrorTypes.NavigationFailed, $"Navigating to {url} returned HTTP {failed.Status} {failed.StatusText}.");
+            // HTTP/2 responses have no status text: "HTTP 404", never "HTTP 404 ".
+            var status = string.IsNullOrWhiteSpace(failed.StatusText) ? $"{failed.Status}" : $"{failed.Status} {failed.StatusText}";
+            throw new ActivityFailedException(BrowserErrorTypes.NavigationFailed, $"Navigating to {url} returned HTTP {status}.");
         }
     }
 
