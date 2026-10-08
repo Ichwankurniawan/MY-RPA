@@ -1,6 +1,7 @@
 using MyRPA.Core.Diagnostics;
 using MyRPA.Workflow;
 using MyRPA.Workflow.Execution;
+using MyRPA.Workflow.Expressions;
 
 namespace MyRPA.Runtime.Execution;
 
@@ -60,6 +61,33 @@ internal sealed class ActivityContext(
 
         var scope = locals is null || locals.Count == 0 ? variables : variables.CreateChild(locals);
         return runner.ExecuteNodeAsync(frame, node, scope, CancellationToken);
+    }
+
+    public async ValueTask<NodeDefinition?> ExecuteStepAsync(NodeDefinition node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (!Node.Children.Contains(node))
+        {
+            throw new InvalidOperationException($"Node '{node.Id}' is not a step (child) of node '{Node.Id}'.");
+        }
+
+        await runner.ExecuteNodeAsync(frame, node, variables, CancellationToken).ConfigureAwait(false);
+        for (var i = 0; i < node.Transitions.Count; i++)
+        {
+            var transition = node.Transitions[i];
+            var taken = transition.When is null || (transition.When.Evaluate(variables) is bool b
+                ? b
+                : throw new WorkflowExpressionException(
+                    $"Transition {i} of step '{node.Id}' (to '{transition.To}') must evaluate to Boolean: \"{transition.When.Source}\"."));
+            if (taken)
+            {
+                // Validation guarantees the target is a sibling (MYRPA1053).
+                return Node.Children.FirstOrDefault(c => c.Id == transition.To)
+                    ?? throw new InvalidOperationException($"Transition target '{transition.To}' is not a step of node '{Node.Id}'.");
+            }
+        }
+
+        return null;
     }
 
     public ValueTask<WorkflowExecutionResult> InvokeWorkflowAsync(string reference, IReadOnlyDictionary<string, object?> arguments, TimeSpan? timeout)

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0",
+  "id": "diag-graph-schema",
+  "name": "diag-graph-schema",
+  "version": "1.0.0",
+  "root": {
+    "id": "flow",
+    "type": "Core.Flowchart",
+    "children": [
+      {
+        "id": "first",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'first'"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0
+        },
+        "transitions": [
+          {
+            "to": "second"
+          }
+        ]
+      },
+      {
+        "id": "second",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'second'"
+        }
+      }
+    ]
+  }
+}

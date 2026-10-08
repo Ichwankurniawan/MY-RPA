@@ -84,6 +84,18 @@ public sealed class WorkflowThrowException : WorkflowErrorException
     }
 }
 
+/// <summary>Raised by a graph container whose run breaks a graph rule, such as its step limit (ADR-0037).</summary>
+public sealed class WorkflowGraphException : WorkflowErrorException
+{
+    /// <summary>Creates the exception.</summary>
+    /// <param name="code">One of the graph error codes, such as <see cref="ExecutionErrorCodes.MaxStepsExceeded"/>.</param>
+    /// <param name="message">Message.</param>
+    public WorkflowGraphException(string code, string message)
+        : base(code, message)
+    {
+    }
+}
+
 /// <summary>Raised when an invoked workflow cannot be resolved, exceeds limits, or does not succeed.</summary>
 public sealed class WorkflowInvocationException : WorkflowErrorException
 {
@@ -125,6 +137,7 @@ public sealed class WorkflowActivityException : Exception
             ActivityFailedException failed => failed.ErrorType,
             WorkflowThrowException => "Throw",
             WorkflowInvocationException => "InvokeWorkflow",
+            WorkflowGraphException => "Graph",
             WorkflowExpressionException => "Expression",
             _ => innerException.GetType().Name,
         };

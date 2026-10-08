@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "1.1",
+  "id": "flowchart-retry",
+  "name": "Flowchart retry",
+  "version": "1.0.0",
+  "description": "A flowchart that retries a step until it succeeds (ADR-0037): try, decide, wait and try again, or finish.",
+  "arguments": [
+    {
+      "name": "maxAttempts",
+      "direction": "In",
+      "type": "Int",
+      "default": 3
+    },
+    {
+      "name": "attempts",
+      "direction": "Out",
+      "type": "Int"
+    },
+    {
+      "name": "outcome",
+      "direction": "Out",
+      "type": "String"
+    }
+  ],
+  "root": {
+    "id": "retry",
+    "type": "Core.Flowchart",
+    "properties": {
+      "maxSteps": 100
+    },
+    "children": [
+      {
+        "id": "start",
+        "type": "Core.Assign",
+        "displayName": "No attempts yet",
+        "properties": {
+          "to": "attempts",
+          "value": 0
+        },
+        "layout": {
+          "x": 240,
+          "y": 40
+        },
+        "transitions": [
+          {
+            "to": "attempt"
+          }
+        ]
+      },
+      {
+        "id": "attempt",
+        "type": "Core.Assign",
+        "displayName": "Attempt",
+        "properties": {
+          "to": "attempts",
+          "value": "attempts + 1"
+        },
+        "layout": {
+          "x": 240,
+          "y": 160
+        },
+        "transitions": [
+          {
+            "to": "check"
+          }
+        ]
+      },
+      {
+        "id": "check",
+        "type": "Core.Decision",
+        "displayName": "Succeeded?",
+        "layout": {
+          "x": 240,
+          "y": 280
+        },
+        "transitions": [
+          {
+            "to": "done",
+            "when": "attempts >= maxAttempts",
+            "label": "yes"
+          },
+          {
+            "to": "wait",
+            "label": "no"
+          }
+        ]
+      },
+      {
+        "id": "wait",
+        "type": "Core.Delay",
+        "displayName": "Wait before retrying",
+        "properties": {
+          "milliseconds": 10
+        },
+        "layout": {
+          "x": 480,
+          "y": 280
+        },
+        "transitions": [
+          {
+            "to": "attempt",
+            "label": "retry"
+          }
+        ]
+      },
+      {
+        "id": "done",
+        "type": "Core.Assign",
+        "displayName": "Report",
+        "properties": {
+          "to": "outcome",
+          "value": "'Succeeded after ' + attempts + ' attempts'"
+        },
+        "layout": {
+          "x": 240,
+          "y": 400
+        }
+      }
+    ]
+  }
+}

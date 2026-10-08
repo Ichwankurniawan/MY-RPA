@@ -66,6 +66,25 @@ internal sealed class RawNode(string path)
     public List<RawNode> Children { get; } = [];
 
     public List<KeyValuePair<string, RawNode>> Slots { get; } = [];
+
+    /// <summary>Present when the node has a <c>transitions</c> field (format 1.1).</summary>
+    public List<RawTransition>? Transitions { get; set; }
+
+    /// <summary>Present when the node has a <c>layout</c> field (format 1.1).</summary>
+    public RawLayout? Layout { get; set; }
 }
+
+internal sealed class RawTransition(string path)
+{
+    public string Path { get; } = path;
+
+    public string? To { get; set; }
+
+    public JsonElement? When { get; set; }
+
+    public string? Label { get; set; }
+}
+
+internal sealed record RawLayout(string Path, JsonElement? X, JsonElement? Y);
 
 internal sealed record RawProperty(string Name, JsonElement Value, string Path);

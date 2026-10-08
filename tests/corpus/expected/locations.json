@@ -174,6 +174,124 @@
     ]
   },
   {
+    "file": "diag-graph-schema.json",
+    "readable": true,
+    "source": "hand-written (format 1.1, ADR-0037)",
+    "diagnostics": [
+      {
+        "code": "MYRPA1058",
+        "severity": "Error",
+        "message": "Graph containers such as \u0027Core.Flowchart\u0027 are part of schema version 1.1; this file declares 1.0.",
+        "path": "$.root.type",
+        "nodeId": "flow",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root",
+          "nodeId": "flow",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1058",
+        "severity": "Error",
+        "message": "Transitions are part of schema version 1.1; this file declares 1.0.",
+        "path": "$.root.children[0].transitions",
+        "nodeId": "first",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[0]",
+          "nodeId": "first",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1058",
+        "severity": "Error",
+        "message": "Layout is part of schema version 1.1; this file declares 1.0.",
+        "path": "$.root.children[0].layout",
+        "nodeId": "first",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[0]",
+          "nodeId": "first",
+          "property": null
+        }
+      }
+    ]
+  },
+  {
+    "file": "diag-graph.json",
+    "readable": true,
+    "source": "hand-written (format 1.1, ADR-0037)",
+    "diagnostics": [
+      {
+        "code": "MYRPA1053",
+        "severity": "Error",
+        "message": "\u0027elsewhere\u0027 is not a step of the same graph container.",
+        "path": "$.root.children[0].children[0].transitions[0].to",
+        "nodeId": "start",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[0].children[0]",
+          "nodeId": "start",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1043",
+        "severity": "Error",
+        "message": "Unexpected \u0027end of expression\u0027 (in expression \u0022start \u003C\u0022 at position 7)",
+        "path": "$.root.children[0].children[0].transitions[1].when",
+        "nodeId": "start",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[0].children[0]",
+          "nodeId": "start",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1056",
+        "severity": "Warning",
+        "message": "Step \u0027island\u0027 cannot be reached from the start step \u0027start\u0027; it never runs.",
+        "path": "$.root.children[0].children[2]",
+        "nodeId": "island",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[0].children[2]",
+          "nodeId": "island",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1055",
+        "severity": "Error",
+        "message": "Graph container \u0027Core.Flowchart\u0027 needs at least one step (the first is the start step).",
+        "path": "$.root.children[1].children",
+        "nodeId": "empty-flow",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[1]",
+          "nodeId": "empty-flow",
+          "property": null
+        }
+      },
+      {
+        "code": "MYRPA1054",
+        "severity": "Error",
+        "message": "Only a step of a graph container (for example a Core.Flowchart child) can have transitions.",
+        "path": "$.root.children[2].transitions",
+        "nodeId": "in-a-list",
+        "wpf": {
+          "kind": "node",
+          "nodePath": "$.root.children[2]",
+          "nodeId": "in-a-list",
+          "property": null
+        }
+      }
+    ]
+  },
+  {
     "file": "diag-metadata.json",
     "readable": false,
     "reason": "$.version: expected a string."

@@ -15,6 +15,7 @@ namespace MyRPA.Workflow.Validation;
 internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<ValidationDiagnostic> diagnostics)
 {
     private readonly HashSet<string> _nodeIds = new(StringComparer.Ordinal);
+    private WorkflowSchemaVersion _schemaVersion = WorkflowSchemaVersion.Current;
 
     private enum SymbolKind
     {
@@ -28,6 +29,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
     public WorkflowDefinition? Validate(RawWorkflow raw, WorkflowSchemaVersion schemaVersion)
     {
         var errorsBefore = ErrorCount();
+        _schemaVersion = schemaVersion;
 
         WorkflowId? id = null;
         if (raw.Id is not null && !WorkflowId.TryCreate(raw.Id, out id))
@@ -41,7 +43,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
         var scope = new Scope(null);
         var arguments = ValidateArguments(raw.Arguments, scope);
         var variables = ValidateVariables(raw.Variables, scope);
-        var root = raw.Root is null ? null : ValidateNode(raw.Root, scope);
+        var root = raw.Root is null ? null : ValidateNode(raw.Root, scope, siblings: null);
 
         if (ErrorCount() > errorsBefore || id is null || root is null || string.IsNullOrWhiteSpace(raw.Name) || string.IsNullOrWhiteSpace(raw.Version))
         {
@@ -181,7 +183,10 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
         return false;
     }
 
-    private NodeDefinition? ValidateNode(RawNode raw, Scope scope)
+    /// <param name="raw">The node.</param>
+    /// <param name="scope">Names visible to the node.</param>
+    /// <param name="siblings">The step ids of the parent graph container, or <see langword="null"/> when the parent is not one.</param>
+    private NodeDefinition? ValidateNode(RawNode raw, Scope scope, IReadOnlySet<string>? siblings)
     {
         var errorsBefore = ErrorCount();
 
@@ -221,7 +226,25 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
             ValidateStructure(raw, descriptor, nodeId);
         }
 
-        var children = raw.Children.Select(child => ValidateNode(child, scope)).ToList();
+        var isGraph = descriptor?.ChildLayout == ActivityChildLayout.Graph;
+        if (isGraph)
+        {
+            RequireGraphSchema(raw.Path + ".type", $"Graph containers such as '{descriptor!.TypeName}' are", nodeId);
+            if (raw.Children.Count == 0)
+            {
+                Error(DiagnosticCodes.InvalidGraphSteps, raw.Path + ".children", $"Graph container '{descriptor.TypeName}' needs at least one step (the first is the start step).", nodeId);
+            }
+        }
+
+        var stepIds = isGraph ? raw.Children.Where(c => c.Id is not null).Select(c => c.Id!).ToHashSet(StringComparer.Ordinal) : null;
+        var children = raw.Children.Select(child => ValidateNode(child, scope, stepIds)).ToList();
+        if (isGraph)
+        {
+            WarnUnreachableSteps(raw.Children);
+        }
+
+        var transitions = ValidateTransitions(raw, scope, siblings, nodeId);
+        var layout = ValidateLayout(raw.Layout, nodeId);
         var slots = new List<KeyValuePair<string, NodeDefinition?>>();
         foreach (var (slotName, slotNode) in raw.Slots)
         {
@@ -236,7 +259,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
                 }
             }
 
-            slots.Add(new(slotName, ValidateNode(slotNode, slotScope)));
+            slots.Add(new(slotName, ValidateNode(slotNode, slotScope, siblings: null)));
         }
 
         if (ErrorCount() > errorsBefore || id is null || type is null)
@@ -244,7 +267,125 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
             return null;
         }
 
-        return new NodeDefinition(id, type, raw.DisplayName, children!, properties, slots!);
+        return new NodeDefinition(id, type, raw.DisplayName, children!, properties, slots!, transitions, layout);
+    }
+
+    private List<TransitionDefinition>? ValidateTransitions(RawNode raw, Scope scope, IReadOnlySet<string>? siblings, string? nodeId)
+    {
+        if (raw.Transitions is null)
+        {
+            return null;
+        }
+
+        var path = raw.Path + ".transitions";
+        RequireGraphSchema(path, "Transitions are", nodeId);
+        if (siblings is null)
+        {
+            Error(DiagnosticCodes.TransitionsNotAllowed, path, "Only a step of a graph container (for example a Core.Flowchart child) can have transitions.", nodeId);
+            return null;
+        }
+
+        var result = new List<TransitionDefinition>();
+        var ok = true;
+        foreach (var transition in raw.Transitions)
+        {
+            NodeId? target = null;
+            if (transition.To is not null && (!siblings.Contains(transition.To) || !NodeId.TryCreate(transition.To, out target)))
+            {
+                Error(DiagnosticCodes.InvalidTransitionTarget, transition.Path + ".to", $"'{transition.To}' is not a step of the same graph container.", nodeId);
+            }
+
+            WorkflowExpression? when = null;
+            if (transition.When is { } whenElement)
+            {
+                when = ParseExpression(whenElement, transition.Path + ".when", scope, nodeId);
+                ok &= when is not null;
+            }
+
+            if (target is null)
+            {
+                ok = false;
+                continue;
+            }
+
+            result.Add(new TransitionDefinition(target, when, transition.Label));
+        }
+
+        return ok ? result : null;
+    }
+
+    private NodeLayout? ValidateLayout(RawLayout? raw, string? nodeId)
+    {
+        if (raw is null)
+        {
+            return null;
+        }
+
+        RequireGraphSchema(raw.Path, "Layout is", nodeId);
+        var x = ReadCoordinate(raw.X, raw.Path + ".x", nodeId);
+        var y = ReadCoordinate(raw.Y, raw.Path + ".y", nodeId);
+        return x is { } validX && y is { } validY ? new NodeLayout(validX, validY) : null;
+    }
+
+    private double? ReadCoordinate(JsonElement? element, string path, string? nodeId)
+    {
+        if (element is not { } value)
+        {
+            return null;
+        }
+
+        if (value.TryGetDouble(out var number) && double.IsFinite(number))
+        {
+            return number;
+        }
+
+        Error(DiagnosticCodes.InvalidGraphNode, path, $"{value.GetRawText()} is not a usable position (a finite number).", nodeId);
+        return null;
+    }
+
+    private void WarnUnreachableSteps(List<RawNode> steps)
+    {
+        var byId = steps.Where(s => s.Id is not null).GroupBy(s => s.Id!, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var reached = new HashSet<RawNode>();
+        var pending = new Stack<RawNode>();
+        if (steps.Count > 0)
+        {
+            pending.Push(steps[0]);
+        }
+
+        while (pending.TryPop(out var step))
+        {
+            if (!reached.Add(step))
+            {
+                continue;
+            }
+
+            foreach (var transition in step.Transitions ?? [])
+            {
+                if (transition.To is not null && byId.TryGetValue(transition.To, out var next))
+                {
+                    pending.Push(next);
+                }
+            }
+        }
+
+        foreach (var step in steps.Where(s => !reached.Contains(s)))
+        {
+            diagnostics.Add(new ValidationDiagnostic(
+                DiagnosticCodes.UnreachableStep,
+                DiagnosticSeverity.Warning,
+                $"Step '{step.Id}' cannot be reached from the start step '{steps[0].Id}'; it never runs.",
+                step.Path,
+                step.Id));
+        }
+    }
+
+    private void RequireGraphSchema(string path, string subject, string? nodeId)
+    {
+        if (_schemaVersion < WorkflowSchemaVersion.Graphs)
+        {
+            Error(DiagnosticCodes.RequiresNewerSchema, path, $"{subject} part of schema version {WorkflowSchemaVersion.Graphs}; this file declares {_schemaVersion}.", nodeId);
+        }
     }
 
     private void ValidateProperties(

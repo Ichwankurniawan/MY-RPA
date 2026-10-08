@@ -40,6 +40,8 @@ export interface ActivityDescriptor {
   category: string;
   description?: string;
   allowsChildren: boolean;
+  /** Catalog 1.1 (ADR-0037): `Graph` for containers whose children are flowchart steps; absent in 1.0 snapshots. */
+  childLayout?: 'List' | 'Graph';
   properties: PropertyDescriptor[];
   slots: SlotDescriptor[];
 }

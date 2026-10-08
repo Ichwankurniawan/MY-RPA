@@ -85,4 +85,14 @@ public interface IActivityContext
     /// <param name="arguments">Input argument values (canonical).</param>
     /// <param name="timeout">Optional timeout for the nested execution.</param>
     ValueTask<WorkflowExecutionResult> InvokeWorkflowAsync(string reference, IReadOnlyDictionary<string, object?> arguments, TimeSpan? timeout);
+
+    /// <summary>
+    /// Runs <paramref name="node"/>, a step (direct child) of this graph container, in this node's scope, then evaluates
+    /// the step's transitions in order and returns the sibling of the first one whose <c>when</c> is true or absent, or
+    /// <see langword="null"/> when none is taken (SDK 1.1, ADR-0037). The only way to follow transitions, so graph
+    /// semantics stay in the engine. A <c>when</c> that is not Boolean fails this node.
+    /// </summary>
+    /// <param name="node">A node from <see cref="NodeDefinition.Children"/> of <see cref="Node"/>.</param>
+    /// <exception cref="InvalidOperationException"><paramref name="node"/> is not a child of <see cref="Node"/>.</exception>
+    ValueTask<NodeDefinition?> ExecuteStepAsync(NodeDefinition node);
 }

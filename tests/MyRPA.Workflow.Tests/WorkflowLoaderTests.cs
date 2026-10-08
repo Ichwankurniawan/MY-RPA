@@ -60,7 +60,7 @@ public sealed class WorkflowLoaderTests
         var workflow = result.Workflow;
         Assert.Equal("orders", workflow.Id.Value);
         Assert.Equal("2.1.0", workflow.Version);
-        Assert.Equal(WorkflowSchemaVersion.Current, workflow.SchemaVersion);
+        Assert.Equal(WorkflowSchemaVersion.Initial, workflow.SchemaVersion);
         Assert.Equal("Sums orders.", workflow.Description);
 
         Assert.Equal(4, workflow.Arguments.Count);
@@ -117,7 +117,7 @@ public sealed class WorkflowLoaderTests
 
     [Theory]
     [InlineData("2.0")]
-    [InlineData("1.1")]
+    [InlineData("1.2")]
     public void UnsupportedSchemaVersion_StopsValidation(string version)
     {
         var result = Load($$"""{ "schemaVersion": "{{version}}", "id": "bad id", "name": "", "version": "1", "root": {} }""");

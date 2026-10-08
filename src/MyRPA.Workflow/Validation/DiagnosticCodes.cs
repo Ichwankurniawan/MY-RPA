@@ -75,6 +75,24 @@ public static class DiagnosticCodes
     /// <summary>A required slot is empty.</summary>
     public const string MissingSlot = "MYRPA1052";
 
+    /// <summary>A transition's target is not a sibling step in the same graph container (ADR-0037).</summary>
+    public const string InvalidTransitionTarget = "MYRPA1053";
+
+    /// <summary>A node has transitions but its parent is not a graph container (ADR-0037).</summary>
+    public const string TransitionsNotAllowed = "MYRPA1054";
+
+    /// <summary>A graph container has no steps, or a step its container does not accept (ADR-0037).</summary>
+    public const string InvalidGraphSteps = "MYRPA1055";
+
+    /// <summary>A step cannot be reached from the start step (warning, ADR-0037).</summary>
+    public const string UnreachableStep = "MYRPA1056";
+
+    /// <summary>A layout position is not a finite number, or a final state has transitions (ADR-0037).</summary>
+    public const string InvalidGraphNode = "MYRPA1057";
+
+    /// <summary>The file uses transitions, layout or a graph container but declares a schema version before 1.1.</summary>
+    public const string RequiresNewerSchema = "MYRPA1058";
+
     /// <summary>An argument or variable name is invalid.</summary>
     public const string InvalidName = "MYRPA1060";
 

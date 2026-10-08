@@ -14,6 +14,7 @@ public sealed record ActivityDescriptor
     /// <param name="properties">Accepted properties.</param>
     /// <param name="allowsChildren">Whether the node may have an ordered <c>children</c> list (e.g. <c>Core.Sequence</c>).</param>
     /// <param name="slots">Accepted named single-child slots.</param>
+    /// <param name="childLayout">How the children list is run (ADR-0037); <see cref="ActivityChildLayout.Graph"/> requires <paramref name="allowsChildren"/>.</param>
     public ActivityDescriptor(
         ActivityTypeName typeName,
         string displayName,
@@ -21,7 +22,8 @@ public sealed record ActivityDescriptor
         string? description = null,
         IEnumerable<ActivityPropertyDefinition>? properties = null,
         bool allowsChildren = false,
-        IEnumerable<ActivitySlotDefinition>? slots = null)
+        IEnumerable<ActivitySlotDefinition>? slots = null,
+        ActivityChildLayout childLayout = ActivityChildLayout.List)
     {
         ArgumentNullException.ThrowIfNull(typeName);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
@@ -33,6 +35,17 @@ public sealed record ActivityDescriptor
         Properties = [.. properties ?? []];
         AllowsChildren = allowsChildren;
         Slots = [.. slots ?? []];
+        if (!Enum.IsDefined(childLayout))
+        {
+            throw new ArgumentOutOfRangeException(nameof(childLayout), childLayout, "Unknown child layout.");
+        }
+
+        if (childLayout == ActivityChildLayout.Graph && !allowsChildren)
+        {
+            throw new ArgumentException("A graph container must allow children.", nameof(childLayout));
+        }
+
+        ChildLayout = childLayout;
 
         if (Properties.GroupBy(p => p.Name, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1) is { } duplicateProperty)
         {
@@ -73,6 +86,9 @@ public sealed record ActivityDescriptor
 
     /// <summary>Accepted named single-child slots.</summary>
     public IReadOnlyList<ActivitySlotDefinition> Slots { get; }
+
+    /// <summary>How the children list is run: a list, or the steps of a graph (ADR-0037).</summary>
+    public ActivityChildLayout ChildLayout { get; }
 
     /// <summary>Finds a property definition by name.</summary>
     /// <param name="name">Property name.</param>

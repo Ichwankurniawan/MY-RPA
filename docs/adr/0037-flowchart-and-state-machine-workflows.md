@@ -109,6 +109,21 @@ transition from a non-final state).
 - Work estimate: engine + format + SDK + validation (one slice), Studio canvas and keyboard view (one or two slices),
   samples and docs.
 
+## Implementation notes (G-1, 2026-10-08)
+Refinements made while implementing the engine slice ([plan](../architecture/graph-workflows-plan.md)):
+- **MYRPA1058** (added): a file that uses `transitions`, `layout` or a graph container but declares a schema version
+  before 1.1 is an error, so a 1.0 file cannot silently depend on 1.1 features.
+- **MYRPA1057** covers a `layout` coordinate that is not a finite number; a missing or non-number coordinate is
+  MYRPA1003 / MYRPA1004 like any other field. Final states (G-3) reuse 1057.
+- `ExecuteStepAsync`'s parameter is named `node` (as in `ExecuteAsync`; `step` is a reserved word in Visual Basic,
+  CA1716). The engine refuses a node that is not a child; that only graph containers' steps have transitions is the
+  loader's guarantee (MYRPA1054), so the runner needs no catalog.
+- A `when` that is not Boolean fails the container with MYRPA2003; MYRPA2010 carries `errorType` `Graph`.
+- The writer keeps a file's schema version; `WorkflowDefinition` defaults to 1.1 only when a node has transitions or a
+  layout. `GET /api/info` lists `["1.0", "1.1"]`; the catalog snapshot is version 1.1.
+- Corpus: `tests/corpus/diag-graph*.json`. Their expected placements are hand-written (the WPF Studio is archived),
+  marked with `source`, and `CorpusDiagnosticsTests` checks them against the real CLI.
+
 ## Owner decisions (2026-10-08)
 1. Schedule: after the Studio UX slice (UX-1 to UX-3), before Phase 6.
 2. Format 1.1 (`transitions`, `layout`) and SDK 1.1 (`ChildLayout`, `ExecuteStepAsync`): approved.

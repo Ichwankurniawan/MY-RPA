@@ -39,7 +39,9 @@ public static class ActivitiesServiceCollectionExtensions
             .AddActivity<ForEachActivity>(ForEachActivity.Descriptor)
             .AddActivity<TryCatchActivity>(TryCatchActivity.Descriptor)
             .AddActivity<ThrowActivity>(ThrowActivity.Descriptor)
-            .AddActivity<InvokeWorkflowActivity>(InvokeWorkflowActivity.Descriptor);
+            .AddActivity<InvokeWorkflowActivity>(InvokeWorkflowActivity.Descriptor)
+            .AddActivity<FlowchartActivity>(FlowchartActivity.Descriptor)
+            .AddActivity<DecisionActivity>(DecisionActivity.Descriptor);
     }
 
     /// <summary>

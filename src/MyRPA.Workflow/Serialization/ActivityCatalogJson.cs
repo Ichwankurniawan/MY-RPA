@@ -13,14 +13,17 @@ namespace MyRPA.Workflow.Serialization;
 /// </summary>
 /// <remarks>
 /// Format (<see cref="FormatVersion"/>):
-/// <c>{ "catalogVersion": "1.0", "activities": [ { "type", "displayName", "category", "description", "allowsChildren",
+/// <c>{ "catalogVersion": "1.1", "activities": [ { "type", "displayName", "category", "description", "allowsChildren", "childLayout",
 /// "properties": [ { "name", "kind", "required", "description", "allowedValues", "scopeSlots" } ],
-/// "slots": [ { "name", "required", "prefix", "description" } ] } ] }</c>.
+/// "slots": [ { "name", "required", "prefix", "description" } ] } ] }</c>. Version 1.1 adds <c>childLayout</c>
+/// (<c>List</c> or <c>Graph</c>, ADR-0037); snapshots of version 1.0 are still read (no <c>childLayout</c>: <c>List</c>).
 /// </remarks>
 public static class ActivityCatalogJson
 {
     /// <summary>The snapshot format version written and read by this build.</summary>
-    public const string FormatVersion = "1.0";
+    public const string FormatVersion = "1.1";
+
+    private const string InitialFormatVersion = "1.0";
 
     private static readonly JsonWriterOptions _writerOptions = new() { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -58,9 +61,9 @@ public static class ActivityCatalogJson
             using var document = JsonDocument.Parse(json);
             var root = Object(document.RootElement, "$");
             var version = String(root, "catalogVersion", "$");
-            if (!string.Equals(version, FormatVersion, StringComparison.Ordinal))
+            if (version is not (FormatVersion or InitialFormatVersion))
             {
-                throw new FormatException($"$.catalogVersion: '{version}' is not supported; this build reads {FormatVersion}.");
+                throw new FormatException($"$.catalogVersion: '{version}' is not supported; this build reads {InitialFormatVersion} and {FormatVersion}.");
             }
 
             var descriptors = new List<ActivityDescriptor>();
@@ -94,6 +97,7 @@ public static class ActivityCatalogJson
         }
 
         writer.WriteBoolean("allowsChildren", descriptor.AllowsChildren);
+        writer.WriteString("childLayout", descriptor.ChildLayout.ToString());
         writer.WriteStartArray("properties");
         foreach (var property in descriptor.Properties)
         {
@@ -192,7 +196,19 @@ public static class ActivityCatalogJson
             OptionalString(element, "description", path),
             properties,
             Boolean(element, "allowsChildren", path),
-            slots);
+            slots,
+            ChildLayout(element, path));
+    }
+
+    private static ActivityChildLayout ChildLayout(JsonElement element, string path)
+    {
+        var text = OptionalString(element, "childLayout", path);
+        return text switch
+        {
+            null or nameof(ActivityChildLayout.List) => ActivityChildLayout.List,
+            nameof(ActivityChildLayout.Graph) => ActivityChildLayout.Graph,
+            _ => throw new FormatException($"{path}.childLayout: '{text}' is not a child layout (List or Graph)."),
+        };
     }
 
     private static JsonElement Object(JsonElement element, string path) =>

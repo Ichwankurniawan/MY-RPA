@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.1",
+  "id": "diag-graph",
+  "name": "diag-graph",
+  "version": "1.0.0",
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      {
+        "id": "flow",
+        "type": "Core.Flowchart",
+        "children": [
+          {
+            "id": "start",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'start'"
+            },
+            "layout": {
+              "x": 40,
+              "y": 40
+            },
+            "transitions": [
+              {
+                "to": "elsewhere",
+                "label": "not a step"
+              },
+              {
+                "to": "end",
+                "when": "start <"
+              }
+            ]
+          },
+          {
+            "id": "end",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'end'"
+            },
+            "layout": {
+              "x": 40,
+              "y": 160
+            }
+          },
+          {
+            "id": "island",
+            "type": "Core.Log",
+            "properties": {
+              "message": "'never runs'"
+            }
+          }
+        ]
+      },
+      {
+        "id": "empty-flow",
+        "type": "Core.Flowchart"
+      },
+      {
+        "id": "in-a-list",
+        "type": "Core.Log",
+        "properties": {
+          "message": "'x'"
+        },
+        "transitions": [
+          {
+            "to": "flow"
+          }
+        ]
+      }
+    ]
+  }
+}

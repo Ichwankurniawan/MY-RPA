@@ -52,7 +52,7 @@ public sealed class CliPluginTests
     {
         var result = await Cli.RunAsync("--plugin", SamplePlugin, "info");
 
-        Assert.Contains("Registered activity types: 14", result.Out, StringComparison.Ordinal);
+        Assert.Contains("Registered activity types: 16", result.Out, StringComparison.Ordinal);
         Assert.Contains("[plugin MyRPA.Samples.Demo]", result.Out, StringComparison.Ordinal);
         Assert.Contains("Plugins: 1", result.Out, StringComparison.Ordinal);
     }

@@ -3,7 +3,7 @@ namespace MyRPA.Workflow.Tests;
 public sealed class WorkflowSchemaVersionTests
 {
     [Fact]
-    public void Current_IsOnePointZero() => Assert.Equal("1.0", WorkflowSchemaVersion.Current.ToString());
+    public void Current_IsOnePointOne() => Assert.Equal("1.1", WorkflowSchemaVersion.Current.ToString());
 
     [Theory]
     [InlineData("1.0", 1, 0)]

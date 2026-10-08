@@ -539,7 +539,10 @@ const namespaceLabel = (namespace: string) => (namespace === 'Core' ? 'Built-in'
 
 function Toolbox() {
   const studio = useStudio();
-  const activities = useStudioState((s) => s.activities);
+  const all = useStudioState((s) => s.activities);
+  // Graph containers (Core.Flowchart, ADR-0037) need the flowchart canvas, which comes with G-2: until then they are
+  // not offered here (a 1.1 file that has one still opens, validates, runs and round-trips).
+  const activities = useMemo(() => all.filter((a) => a.childLayout !== 'Graph'), [all]);
   const catalog = useStudioState((s) => s.catalog);
   const favorites = useStudioState((s) => s.favorites);
   const recent = useStudioState((s) => s.recentActivities);

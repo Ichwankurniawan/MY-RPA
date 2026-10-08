@@ -72,6 +72,7 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
         ActivityDescriptor[] all =
         [
             new(new("Test.Sequence"), "Sequence", "Test", allowsChildren: true),
+            new(new("Test.Graph"), "Graph", "Test", allowsChildren: true, slots: [new("misuse")], childLayout: ActivityChildLayout.Graph),
             new(new("Test.Set"), "Set", "Test", properties:
             [
                 new("to", ActivityPropertyKind.AssignmentTarget, isRequired: true),
@@ -101,6 +102,7 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
     public IActivity Create(ActivityTypeName typeName, IServiceProvider services) => typeName.Value switch
     {
         "Test.Sequence" => new Sequence(),
+        "Test.Graph" => new Graph(),
         "Test.Set" => new Set(),
         "Test.Fail" => new Fail(),
         "Test.Wait" => new Wait(),
@@ -117,6 +119,26 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
             foreach (var child in context.Node.Children)
             {
                 await context.ExecuteAsync(child);
+            }
+
+            return ActivityResult.Completed;
+        }
+    }
+
+    /// <summary>Follows transitions from the first step; with a <c>misuse</c> slot, asks the engine to run that slot as a step.</summary>
+    private sealed class Graph : IActivity
+    {
+        public async ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+        {
+            if (context.Node.Slots.TryGetValue("misuse", out var notAStep))
+            {
+                await context.ExecuteStepAsync(notAStep);
+            }
+
+            var step = context.Node.Children[0];
+            while (step is not null)
+            {
+                step = await context.ExecuteStepAsync(step);
             }
 
             return ActivityResult.Completed;

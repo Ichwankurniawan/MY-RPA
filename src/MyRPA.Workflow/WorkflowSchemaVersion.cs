@@ -21,7 +21,13 @@ public sealed record WorkflowSchemaVersion : IComparable<WorkflowSchemaVersion>
     }
 
     /// <summary>The schema version produced by this build of MyRPA.</summary>
-    public static WorkflowSchemaVersion Current { get; } = new(1, 0);
+    public static WorkflowSchemaVersion Current { get; } = new(1, 1);
+
+    /// <summary>Version 1.0: tree workflows (lists and slots).</summary>
+    public static WorkflowSchemaVersion Initial { get; } = new(1, 0);
+
+    /// <summary>Version 1.1: adds node <c>transitions</c>, node <c>layout</c> and graph containers (ADR-0037).</summary>
+    public static WorkflowSchemaVersion Graphs { get; } = new(1, 1);
 
     /// <summary>Major version.</summary>
     public int Major { get; }

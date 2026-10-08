@@ -16,6 +16,11 @@ public sealed class TestCatalog : IActivityCatalog
         ActivityDescriptor[] all =
         [
             new(new("Core.Sequence"), "Sequence", "Test", allowsChildren: true),
+            new(new("Core.Flowchart"), "Flowchart", "Test",
+                properties: [new("maxSteps", ActivityPropertyKind.Expression)],
+                allowsChildren: true,
+                childLayout: ActivityChildLayout.Graph),
+            new(new("Core.Decision"), "Decision", "Test"),
             new(new("Core.Assign"), "Assign", "Test", properties:
             [
                 new("to", ActivityPropertyKind.AssignmentTarget, isRequired: true),

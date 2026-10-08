@@ -1,6 +1,7 @@
 # Automation SDK
 
-Status: Phase 3. SDK version **1.0**. The decisions behind this document are recorded in
+Status: Phase 3; SDK version **1.1** (ADR-0037 added graph containers).
+SDK version 1.0 was frozen in Phase 3. The decisions behind this document are recorded in
 [ADR-0013](../adr/0013-automation-sdk-and-activity-contract.md). Plugin packaging and loading are described in
 [plugin-system.md](plugin-system.md).
 
@@ -147,7 +148,10 @@ catchable failure; the run's timeout is not.
 - typed property access;
 - `SetValue` for declared targets;
 - `ExecuteAsync` for the node's own children and slots;
-- `InvokeWorkflowAsync`.
+- `InvokeWorkflowAsync`;
+- `ExecuteStepAsync` (SDK 1.1) for a step of a graph container: it runs the step, then returns the sibling chosen by the
+  step's `transitions`, or null. A plugin builds its own graph container by declaring
+  `childLayout: ActivityChildLayout.Graph` and looping over `ExecuteStepAsync`, as `Core.Flowchart` does.
 
 It has no service locator. Logging and tracing work like this:
 - **Logging:** inject `ILogger<T>`. Every entry written during `ExecuteAsync` carries the `myrpa.execution.id`,
@@ -219,11 +223,13 @@ The full sample, including the plugin entry point, manifest and provider, is in
 `samples/plugins/MyRPA.Samples.DemoPlugin/`.
 
 ## Versioning
-- `AutomationSdk.Version` (currently 1.0) is the contract version:
+- `AutomationSdk.Version` (currently 1.1) is the contract version:
   - a **minor** version only adds members (for example a new `ActivityResult` outcome, or a new context member with a
     default behaviour);
   - a **major** version may remove or change members.
 - A host accepts plugins built for the same major version and an equal or lower minor version.
-- The workflow schema version (1.0) and the manifest version (1.0) are versioned independently of the SDK.
+- SDK 1.1 (ADR-0037) added `IActivityContext.ExecuteStepAsync` and `ActivityDescriptor.ChildLayout`. Plugins that
+  declare `sdkVersion: "1.0"` still load; a plugin that uses graph containers declares `1.1`.
+- The workflow schema version (1.1) and the manifest version (1.0) are versioned independently of the SDK.
 - Technical debt: the SDK assemblies still carry the product assembly version (0.1.0). Before a public SDK, their
   assembly versions must follow the SDK version, so that runtime binding and the manifest check agree.

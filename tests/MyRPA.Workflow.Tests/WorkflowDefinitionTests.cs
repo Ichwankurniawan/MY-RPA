@@ -12,11 +12,11 @@ public sealed class WorkflowDefinitionTests
         new(new NodeId(id), new ActivityTypeName("Core.Sequence"), children: children);
 
     [Fact]
-    public void Constructor_DefaultsSchemaVersionToCurrent()
+    public void Constructor_WithoutGraphData_DefaultsSchemaVersionToInitial()
     {
         var workflow = new WorkflowDefinition(new WorkflowId("hello"), "Hello", "1.0.0", Node("root"));
 
-        Assert.Equal(WorkflowSchemaVersion.Current, workflow.SchemaVersion);
+        Assert.Equal(WorkflowSchemaVersion.Initial, workflow.SchemaVersion);
         Assert.Equal("1.0.0", workflow.Version);
         Assert.Empty(workflow.Arguments);
         Assert.Empty(workflow.Variables);

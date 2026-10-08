@@ -115,4 +115,7 @@ public static class ExecutionErrorCodes
 
     /// <summary>An invoked workflow could not be resolved or is invalid.</summary>
     public const string WorkflowNotResolved = "MYRPA2009";
+
+    /// <summary>A graph container ran more steps than its <c>maxSteps</c> limit (ADR-0037).</summary>
+    public const string MaxStepsExceeded = "MYRPA2010";
 }

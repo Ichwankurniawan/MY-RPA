@@ -18,7 +18,10 @@ public sealed class WorkflowDefinition
     /// <param name="name">Human-readable name.</param>
     /// <param name="version">Content version chosen by the author, e.g. "1.0.0".</param>
     /// <param name="root">The root node.</param>
-    /// <param name="schemaVersion">File-format version; defaults to <see cref="WorkflowSchemaVersion.Current"/>.</param>
+    /// <param name="schemaVersion">
+    /// File-format version; defaults to <see cref="WorkflowSchemaVersion.Graphs"/> when a node has transitions or a layout,
+    /// otherwise <see cref="WorkflowSchemaVersion.Initial"/>.
+    /// </param>
     /// <param name="arguments">Declared arguments.</param>
     /// <param name="variables">Declared variables.</param>
     /// <param name="description">Optional description.</param>
@@ -60,7 +63,14 @@ public sealed class WorkflowDefinition
         Name = name;
         Version = version;
         Root = root;
-        SchemaVersion = schemaVersion ?? WorkflowSchemaVersion.Current;
+        // Files without graph data stay 1.0 (format §8); transitions and layout need 1.1 (ADR-0037).
+        var usesGraphData = root.DescendantsAndSelf().Any(n => n.Transitions.Count > 0 || n.Layout is not null);
+        if (usesGraphData && schemaVersion is not null && schemaVersion < WorkflowSchemaVersion.Graphs)
+        {
+            throw new ArgumentException($"Transitions and layout need schema version {WorkflowSchemaVersion.Graphs} or later.", nameof(schemaVersion));
+        }
+
+        SchemaVersion = schemaVersion ?? (usesGraphData ? WorkflowSchemaVersion.Graphs : WorkflowSchemaVersion.Initial);
         Description = description;
     }
 

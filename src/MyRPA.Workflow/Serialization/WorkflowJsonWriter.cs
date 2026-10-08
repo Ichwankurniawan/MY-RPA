@@ -146,6 +146,45 @@ public static class WorkflowJsonWriter
             writer.WriteEndObject();
         }
 
+        if (node.Layout is { } layout)
+        {
+            writer.WriteStartObject("layout");
+            writer.WriteNumber("x", layout.X);
+            writer.WriteNumber("y", layout.Y);
+            writer.WriteEndObject();
+        }
+
+        if (node.Transitions.Count > 0)
+        {
+            writer.WriteStartArray("transitions");
+            foreach (var transition in node.Transitions)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("to", transition.To.Value);
+                if (transition.When is { } when)
+                {
+                    writer.WritePropertyName("when");
+                    if (when.IsJsonLiteral)
+                    {
+                        writer.WriteRawValue(when.Source);
+                    }
+                    else
+                    {
+                        writer.WriteStringValue(when.Source);
+                    }
+                }
+
+                if (transition.Label is not null)
+                {
+                    writer.WriteString("label", transition.Label);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
     }
 

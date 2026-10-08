@@ -6,7 +6,8 @@ Guidance for AI agents and contributors working in this repository.
 
 - The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 5 complete (W0–W10, 2026-10-08;
   the WPF Studio is archived, ADR-0036). Authorized follow-up (owner, 2026-10-08): the Studio UX slice UX-1 → UX-3
-  (`docs/architecture/studio-ux-plan.md`), then graph workflows (ADR-0037: flowchart, then state machine).** Phase 6
+  (`docs/architecture/studio-ux-plan.md`), then graph workflows (ADR-0037: flowchart, then state machine; `docs/architecture/graph-workflows-plan.md`,
+  G-1 engine done).** Phase 6
   (Selectors & Recorder) comes after those and must not start without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only

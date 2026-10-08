@@ -88,6 +88,7 @@ flowchart TD
     G -->|WorkflowActivityException from a descendant| J["Complete(Failed) → rethrow unchanged"]
     G -->|any other exception| K["wrap once: WorkflowActivityException(nodeId, type, inner)<br/>log (Debug) → Complete(Failed) → throw"]
     F -. "context.ExecuteAsync(child, locals)" .-> A
+    F -. "context.ExecuteStepAsync(step) (graph containers)" .-> A
     F -. "context.InvokeWorkflowAsync(ref, args, timeout)" .-> L["resolve (scoped IWorkflowResolver) → depth check →<br/>child ExecutionFrame (new ExecutionId, same correlation, parent id)<br/>→ same pipeline as §3 (shares the DI scope)"]
 ```
 
@@ -96,6 +97,13 @@ read properties (expressions are evaluated against the current `VariableScope`),
 assignment-target properties (type-checked; other names are rejected), run its own children/slots (optionally with
 read-only locals), invoke another workflow, and observe the token, deadline and clock. Activities cannot execute
 arbitrary nodes, touch engine state, or reach a service locator.
+
+**Graph containers (ADR-0037, SDK 1.1).** A graph container (`Core.Flowchart`) runs its steps with
+`IActivityContext.ExecuteStepAsync(step)`: the engine runs the step like any child (same scope, same events), then
+evaluates the step's `transitions` in order and returns the sibling to run next, or null. Transition conditions are
+evaluated only there, so graph semantics live in the engine, not in each activity. A condition that is not Boolean
+fails the container (MYRPA2003); a failing step is attributed to the step, as in a sequence. The loader guarantees that
+only steps of graph containers have transitions and that every target is a sibling.
 
 **Activity lifetime.** Each node invocation gets a new activity instance, and the engine disposes it right after the
 invocation. A disposal failure after success fails the node; after a failure or cancellation it is logged and the

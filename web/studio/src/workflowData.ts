@@ -169,12 +169,15 @@ export function nodeJsonPath(path: readonly Step[]): string {
   return '$.root' + path.map((step) => ('children' in step ? `.children[${step.children}]` : `.slots.${step.slot}`)).join('');
 }
 
+// A node's own fields, including format 1.1's transitions and layout (ADR-0037).
 const nodeRemainder = (rest: string) =>
   rest === '' ||
-  ['.id', '.type', '.displayName', '.properties', '.children', '.slots'].includes(rest) ||
+  ['.id', '.type', '.displayName', '.properties', '.children', '.slots', '.transitions', '.layout'].includes(rest) ||
   rest.startsWith('.properties.') ||
   rest.startsWith('.children[') ||
-  rest.startsWith('.slots.');
+  rest.startsWith('.slots.') ||
+  rest.startsWith('.transitions[') ||
+  rest.startsWith('.layout.');
 
 const located = new WeakMap<JsonObject, WeakMap<Diagnostic, DiagnosticTarget>>();
 const pathMaps = new WeakMap<JsonObject, ReadonlyMap<string, NodeEntry>>();

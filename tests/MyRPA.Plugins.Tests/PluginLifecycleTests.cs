@@ -32,7 +32,27 @@ public sealed class PluginLifecycleTests
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         var journal = Assert.IsAssignableFrom<IReadOnlyList<object?>>(result.Outputs["result"]);
-        Assert.Equal(["plugin:initialize:Tests.Fixture:custom:1.0", "plugin:register", "provider:created"], journal);
+        Assert.Equal(["plugin:initialize:Tests.Fixture:custom:1.1", "plugin:register", "provider:created"], journal);
+    }
+
+    [Fact]
+    public async Task PluginGraphContainer_FollowsTransitionsThroughTheEngine()
+    {
+        using var staged = new StagedPlugin(Manifests.Fixture(sdkVersion: "1.1"));
+        await using var host = await PluginTestHost.StartAsync(staged.Source());
+        var workflow = PluginTestHost.Workflow(
+            """
+            { "id": "g", "type": "Fixture.Graph", "children": [
+              { "id": "a", "type": "Core.Assign", "properties": { "to": "result", "value": "'a'" }, "transitions": [ { "to": "c", "when": "result == 'a'" }, { "to": "b" } ] },
+              { "id": "b", "type": "Core.Assign", "properties": { "to": "result", "value": "'b'" } },
+              { "id": "c", "type": "Core.Assign", "properties": { "to": "result", "value": "result + 'c'" } } ] }
+            """,
+            _resultArgument).Replace("\"schemaVersion\": \"1.0\"", "\"schemaVersion\": \"1.1\"", StringComparison.Ordinal);
+
+        var result = await host.RunAsync(workflow);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal("ac", result.Outputs["result"]);
     }
 
     [Fact]

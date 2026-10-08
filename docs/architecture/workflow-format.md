@@ -1,8 +1,11 @@
-# Workflow Format v1.0
+# Workflow Format v1.1
 
-Status: current (Phase 2). Decisions: [ADR-0011](../adr/0011-workflow-json-format-and-validation-pipeline.md) (format and
-validation), [ADR-0009](../adr/0009-constrained-expression-language.md) (expressions),
-[ADR-0012](../adr/0012-invoke-workflow-resolution-and-limits.md) (InvokeWorkflow).
+Status: current. Version 1.0 (Phase 2) describes tree workflows; version 1.1 adds graph workflows (flowcharts): node
+`transitions`, node `layout` and graph containers (§3.1). Decisions:
+[ADR-0011](../adr/0011-workflow-json-format-and-validation-pipeline.md) (format and validation),
+[ADR-0009](../adr/0009-constrained-expression-language.md) (expressions),
+[ADR-0012](../adr/0012-invoke-workflow-resolution-and-limits.md) (InvokeWorkflow),
+[ADR-0037](../adr/0037-flowchart-and-state-machine-workflows.md) (graph workflows, format 1.1).
 Examples: [`samples/`](../../samples).
 
 ## 1. Document
@@ -27,7 +30,7 @@ Examples: [`samples/`](../../samples).
 
 | Field | Required | Meaning |
 |---|---|---|
-| `schemaVersion` | yes | File-format version `"major.minor"`. This build reads `1.0`. Checked first; anything else stops validation. |
+| `schemaVersion` | yes | File-format version `"major.minor"`. This build reads `1.0` and `1.1`. Checked first; anything else stops validation. A file that uses `transitions`, `layout` or a graph container declares `1.1` (MYRPA1058 otherwise); other files stay `1.0`. |
 | `id` | yes | Workflow id: 1–128 chars from `[A-Za-z0-9-_.:]`. |
 | `name` | yes | Display name (not blank). |
 | `version` | yes | The author's content version (free text, e.g. SemVer). Unrelated to `schemaVersion`. |
@@ -76,8 +79,38 @@ Every type admits `null`. The only implicit conversion is Int → Decimal.
 | ExpressionMap | object | Name → expression. |
 | AssignmentTargetMap | object | Name → assignment target. |
 
-- `children` — ordered list; only for activities that allow it (`Core.Sequence`).
+- `children` — ordered list; only for activities that allow it (`Core.Sequence`, and the graph containers of §3.1).
 - `slots` — named single children; which names are allowed is defined by the activity (prefix slots such as `case:<value>`).
+- `transitions` (1.1) — only on a step of a graph container; see §3.1.
+- `layout` (1.1) — `{ "x": number, "y": number }`, the node's position on a designer canvas. Finite numbers; the
+  engine ignores it.
+
+### 3.1 Graph containers (1.1)
+
+An activity whose descriptor declares `childLayout: Graph` (`Core.Flowchart`) runs its `children` as the **steps** of
+a graph. The first child is the **start step**. Each step may list `transitions`; after the step completes, the engine
+takes the first transition whose `when` is true or absent and runs that sibling next. When no transition is taken, the
+container completes.
+
+```json
+{ "id": "retry", "type": "Core.Flowchart", "properties": { "maxSteps": 100 },
+  "children": [
+    { "id": "attempt", "type": "Core.Assign", "properties": { "to": "attempts", "value": "attempts + 1" },
+      "layout": { "x": 240, "y": 160 }, "transitions": [ { "to": "check" } ] },
+    { "id": "check", "type": "Core.Decision",
+      "transitions": [ { "to": "done", "when": "attempts >= 3", "label": "yes" }, { "to": "attempt", "label": "no" } ] },
+    { "id": "done", "type": "Core.Log", "properties": { "message": "'finished'" } }
+  ] }
+```
+
+| Transition field | Required | Meaning |
+|---|---|---|
+| `to` | yes | Id of a sibling step in the same graph container (MYRPA1053). |
+| `when` | no | Expression (like an Expression property) that must be Boolean; absent means always. Evaluated in the container's scope after the step. |
+| `label` | no | Text shown on the arrow; designer only. |
+
+Steps share the container's scope (no locals). Every run of a step emits its own `node.started` / `node.completed`
+events, so a step in a loop appears once per run. Example: [`samples/flowchart.json`](../../samples/flowchart.json).
 
 ## 4. Built-in activities
 
@@ -95,6 +128,8 @@ Every type admits `null`. The only implicit conversion is Int → Decimal.
 | `Core.TryCatch` | `exceptionVariable` (local, visible in `catch`) | `try` (req), `catch`, `finally` | The error is a Dictionary: `message`, `code`, `nodeId`, `activityType`, `errorType`. Cancellation/timeouts are never caught; `finally` is skipped once cancelled. |
 | `Core.Throw` | `message` (expr, req) | — | Fails with code `MYRPA2002`. |
 | `Core.InvokeWorkflow` | `workflow` (text, req), `arguments` (map), `outputs` (target map), `timeoutMilliseconds` (expr) | — | Runs another workflow file (relative path, confined to the entry workflow's directory). |
+| `Core.Flowchart` (1.1) | `maxSteps` (expr → Int ≥ 0; default 10,000) | `children` as graph steps (§3.1) | Runs the start step, then follows transitions; checks cancellation between steps. Running more than `maxSteps` steps fails the node with `MYRPA2010`. |
+| `Core.Decision` (1.1) | — | — | Does nothing; a flowchart branch point whose transitions carry the conditions. |
 
 `myrpa info` prints the registered activity types.
 
@@ -134,6 +169,10 @@ injected clock. There is no access to .NET members or types. Limits: 4096 charac
 | MYRPA1043 / 1044 | Expression syntax, function or arity error / unknown name |
 | MYRPA1045 / 1046 / 1047 | Invalid assignment target (unknown or read-only) / value not allowed / local hides a name |
 | MYRPA1050 / 1051 / 1052 | Children not allowed / unknown slot / missing required slot |
+| MYRPA1053 / 1054 / 1055 | Transition target is not a sibling step / transitions on a node whose parent is not a graph container / graph container without steps |
+| MYRPA1056 | Step cannot be reached from the start step (warning) |
+| MYRPA1057 | Layout position is not a finite number (later also: final state with transitions, G-3) |
+| MYRPA1058 | `transitions`, `layout` or a graph container in a file that declares a schema version before 1.1 |
 | MYRPA1060 / 1061 / 1062 / 1063 / 1064 / 1065 | Invalid name / duplicate name / invalid direction / invalid type / invalid default / Out argument with default or required |
 
 ## 7. Execution error codes
@@ -149,10 +188,14 @@ injected clock. There is no access to .NET members or types. Limits: 4096 charac
 | MYRPA2007 | Invoked workflow did not succeed |
 | MYRPA2008 | Maximum invocation depth exceeded |
 | MYRPA2009 | Invoked workflow could not be resolved or is invalid |
+| MYRPA2010 | A graph container ran more than `maxSteps` steps (`errorType` `Graph`) |
 
 ## 8. Compatibility policy
 
 - Readers accept the current major version with a minor ≤ their own; newer files are rejected with MYRPA1011.
 - Minor versions only add optional fields or activities. Major versions require a migration step (inserted right after
   the schema-version check in `WorkflowLoader`).
-- `WorkflowJsonWriter` writes the same format (load → write round-trips).
+- `WorkflowJsonWriter` writes the same format (load → write round-trips) and keeps the file's schema version: a
+  workflow without graph data stays `1.0`.
+- Version 1.1 (ADR-0037) added `transitions`, `layout`, graph containers, `Core.Flowchart` and `Core.Decision`. A 1.0
+  reader rejects 1.1 files with MYRPA1011.

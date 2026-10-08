@@ -30,7 +30,7 @@ public static class Manifests
 {
     public const string FixtureType = "MyRPA.Tests.FixturePlugin.FixturePlugin";
 
-    public static readonly string[] FixtureActivities = ["Fixture.Dependency", "Fixture.RunState", "Fixture.Journal"];
+    public static readonly string[] FixtureActivities = ["Fixture.Dependency", "Fixture.RunState", "Fixture.Journal", "Fixture.Graph"];
 
     public static string Fixture(
         string id = "Tests.Fixture",

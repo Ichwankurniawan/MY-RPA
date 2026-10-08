@@ -45,9 +45,9 @@ public sealed class CliHostTests
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.StartsWith("MyRPA ", result.Out, StringComparison.Ordinal);
-        Assert.Contains("Workflow schema version: 1.0", result.Out, StringComparison.Ordinal);
+        Assert.Contains("Workflow schema version: 1.1", result.Out, StringComparison.Ordinal);
         Assert.Contains($"Activity source: {DiagnosticNames.RuntimeActivitySource}", result.Out, StringComparison.Ordinal);
-        Assert.Contains("Registered activity types: 12", result.Out, StringComparison.Ordinal);
+        Assert.Contains("Registered activity types: 14", result.Out, StringComparison.Ordinal);
         Assert.Contains("Core.InvokeWorkflow", result.Out, StringComparison.Ordinal);
         Assert.Matches(@"Execution ID: [0-9a-f]{32}", result.Out);
     }

@@ -192,7 +192,7 @@ internal static class ServerApplication
             name = "MyRPA.Server",
             version = typeof(ServerApplication).Assembly.GetName().Version?.ToString(),
             mode = "local",
-            workflowSchemaVersions = new[] { MyRPA.Workflow.WorkflowSchemaVersion.Current.ToString() },
+            workflowSchemaVersions = new[] { MyRPA.Workflow.WorkflowSchemaVersion.Initial.ToString(), MyRPA.Workflow.WorkflowSchemaVersion.Graphs.ToString() },
             projects = options.Projects.Select(p => p.Name),
             // The workflow named on the command line (--open), which the Studio opens after connecting (W6).
             open = options.Open is { } open ? new { project = open.Project, path = open.Path } : null,

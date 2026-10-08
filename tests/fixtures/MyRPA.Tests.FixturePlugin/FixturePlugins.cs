@@ -44,7 +44,8 @@ public sealed class FixturePlugin : IPlugin, IAsyncDisposable
             .AddService<FixtureRunState, FixtureRunState>(PluginServiceLifetime.Run)
             .AddActivity<DependencyActivity>(DependencyActivity.Descriptor)
             .AddActivity<RunStateActivity>(RunStateActivity.Descriptor)
-            .AddActivity<JournalActivity>(JournalActivity.Descriptor);
+            .AddActivity<JournalActivity>(JournalActivity.Descriptor)
+            .AddActivity<GraphActivity>(GraphActivity.Descriptor);
         Journal.Add("plugin:register");
     }
 
@@ -138,6 +139,25 @@ public sealed class JournalActivity(FixtureJournal journal, IFixtureProvider pro
 #pragma warning restore CA1848, CA1873
         context.SetValue(context.GetName("to"), WorkflowValues.List(journal.Events));
         return ActivityResult.CompletedTask;
+    }
+}
+
+/// <summary>A plugin graph container (SDK 1.1): runs steps through the engine's <c>ExecuteStepAsync</c>.</summary>
+public sealed class GraphActivity : IActivity
+{
+    public static ActivityDescriptor Descriptor { get; } = new(
+        new ActivityTypeName("Fixture.Graph"), "Graph", "Fixture", allowsChildren: true, childLayout: ActivityChildLayout.Graph);
+
+    public async ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var step = context.Node.Children[0];
+        while (step is not null)
+        {
+            step = await context.ExecuteStepAsync(step).ConfigureAwait(false);
+        }
+
+        return ActivityResult.Completed;
     }
 }
 

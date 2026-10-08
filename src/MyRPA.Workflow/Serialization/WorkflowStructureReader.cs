@@ -13,7 +13,9 @@ internal sealed class WorkflowStructureReader
     private static readonly string[] _workflowFields = ["schemaVersion", "id", "name", "version", "description", "arguments", "variables", "root"];
     private static readonly string[] _argumentFields = ["name", "direction", "type", "required", "default"];
     private static readonly string[] _variableFields = ["name", "type", "default"];
-    private static readonly string[] _nodeFields = ["id", "type", "displayName", "properties", "children", "slots"];
+    private static readonly string[] _nodeFields = ["id", "type", "displayName", "properties", "children", "slots", "transitions", "layout"];
+    private static readonly string[] _transitionFields = ["to", "when", "label"];
+    private static readonly string[] _layoutFields = ["x", "y"];
 
     private readonly List<ValidationDiagnostic> _diagnostics;
 
@@ -94,6 +96,7 @@ internal sealed class WorkflowStructureReader
         JsonValueKind.Object => "an object",
         JsonValueKind.Array => "an array",
         JsonValueKind.String => "a string",
+        JsonValueKind.Number => "a number",
         _ => kind.ToString(),
     };
 
@@ -135,6 +138,31 @@ internal sealed class WorkflowStructureReader
             }
         }
 
+        if (element.TryGetProperty("transitions", out _))
+        {
+            node.Transitions = [];
+            foreach (var (transition, transitionPath) in ReadArray(element, path, "transitions"))
+            {
+                if (Expect(transition, transitionPath, JsonValueKind.Object))
+                {
+                    WarnUnknownFields(transition, transitionPath, _transitionFields);
+                    node.Transitions.Add(new RawTransition(transitionPath)
+                    {
+                        To = ReadString(transition, transitionPath, "to", required: true),
+                        When = transition.TryGetProperty("when", out var when) ? when : null,
+                        Label = ReadString(transition, transitionPath, "label", required: false),
+                    });
+                }
+            }
+        }
+
+        if (element.TryGetProperty("layout", out var layout) && Expect(layout, path + ".layout", JsonValueKind.Object))
+        {
+            var layoutPath = path + ".layout";
+            WarnUnknownFields(layout, layoutPath, _layoutFields);
+            node.Layout = new RawLayout(layoutPath, ReadNumber(layout, layoutPath, "x"), ReadNumber(layout, layoutPath, "y"));
+        }
+
         return node;
     }
 
@@ -151,6 +179,17 @@ internal sealed class WorkflowStructureReader
         }
 
         return Expect(value, $"{path}.{field}", JsonValueKind.String) ? value.GetString() : null;
+    }
+
+    private JsonElement? ReadNumber(JsonElement element, string path, string field)
+    {
+        if (!element.TryGetProperty(field, out var value))
+        {
+            Error(DiagnosticCodes.MissingField, $"{path}.{field}", $"Required field '{field}' is missing.");
+            return null;
+        }
+
+        return Expect(value, $"{path}.{field}", JsonValueKind.Number) ? value : null;
     }
 
     private bool? ReadBoolean(JsonElement element, string path, string field)

@@ -63,8 +63,8 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workfl
 |---|---|
 | `GET /` | With a `token`: the start link (session cookie, redirect to `/`). Otherwise the Web Studio's `index.html` (`--web`), or a short text |
 | `GET /<file>` | With `--web`: the Studio's static assets. No session needed; hidden and unknown file types are not served |
-| `GET /api/info` | Server name, version, `mode: "local"`, supported workflow schema versions, project names, and `open` (`{ project, path }` from `--open`, else null) |
-| `GET /api/activities` | The activity catalog snapshot (ADR-0020 format), built-in and plugin activities |
+| `GET /api/info` | Server name, version, `mode: "local"`, supported workflow schema versions (`["1.0", "1.1"]`), project names, and `open` (`{ project, path }` from `--open`, else null) |
+| `GET /api/activities` | The activity catalog snapshot (ADR-0020 format, catalog version 1.1 with `childLayout`), built-in and plugin activities |
 | `GET /api/plugins` | Loaded plugins (id, name, version, SHA-256, activities) and their load diagnostics |
 | `GET /api/projects` | Registered projects |
 | `GET /api/projects/{project}/workflows` | Workflow files: path, size, modified |

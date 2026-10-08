@@ -4,6 +4,8 @@
 - Date: 2026-09-25
 - Phase: 5
 - Builds on: ADR-0010 (activity metadata), ADR-0011 (validation pipeline)
+- Amended by: [ADR-0037](0037-flowchart-and-state-machine-workflows.md) (catalog version 1.1 adds `childLayout`; 1.0
+  snapshots are still read, as `List`)
 
 ## Context
 Studio builds its toolbox, designer and property editors from `ActivityDescriptor` metadata. Other tools need the same

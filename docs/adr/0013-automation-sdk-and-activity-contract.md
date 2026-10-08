@@ -4,6 +4,8 @@
 - Date: 2026-09-23
 - Phase: 3
 - Amends: ADR-0003 (adds `MyRPA.Sdk` and `MyRPA.Plugins`), ADR-0010 (activity lifetime)
+- Amended by: [ADR-0037](0037-flowchart-and-state-machine-workflows.md) (SDK 1.1, additive: `IActivityContext.ExecuteStepAsync`,
+  `ActivityDescriptor.ChildLayout`)
 
 ## Context
 Phase 3 opens MyRPA to plugins. Once third-party code compiles against the activity contract, changing it breaks
