@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Files plugin tests (ADR-0042). The plugin is built first but never compiled against (ReferenceOutputAssembly=false):
+    tests load it through the real plugin host, like the CLI, with a temporary file root.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Plugins\MyRPA.Plugins.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Runtime\MyRPA.Runtime.csproj" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Files\MyRPA.Files.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>FilesPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Files\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>
