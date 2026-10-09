@@ -7,7 +7,9 @@ Guidance for AI agents and contributors working in this repository.
 - The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 7 — Enterprise Automation Activities,
   authorized by the owner on 2026-10-09 (the Phase 7 brief); plan `docs/architecture/enterprise-activities-plan.md`,
   ADR-0042; slices P7-1 → P7-6 done (2026-10-09; catalog reference
-  `docs/architecture/enterprise-activities.md`).** Phase 6 (Selectors & Recorder, ADR-0038/0039) is complete, as are Phase 5, the
+  `docs/architecture/enterprise-activities.md`), merged. Phase 7.1 (more enterprise integrations) authorized by the
+  owner on 2026-10-09 ("Go with your recommendations, and write ADR"); plan
+  `docs/architecture/enterprise-activities-7-1-plan.md`, ADR-0043; slices 1–4 first, then 5–9.** Phase 6 (Selectors & Recorder, ADR-0038/0039) is complete, as are Phase 5, the
   Studio UX slice and graph workflows (ADR-0037). **Debugger slice authorized by the owner on
   2026-10-08 ("merge and D-1"); plan `docs/architecture/debugger-plan.md`, ADR-0040; slices D-1 → D-3 done.** **Expression assist authorized by the owner on 2026-10-09 ("continue E-1"); plan
   `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 done.**
