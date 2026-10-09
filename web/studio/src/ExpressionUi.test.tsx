@@ -120,6 +120,39 @@ describe('Expression completion', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 
+  it('opens the list when the names arrive after the first keystrokes, but not just for getting focus', async () => {
+    const api = new FakeApi();
+    let answer: (names: ScopeName[]) => void = () => {};
+    api.namesInScope = () => new Promise<ScopeName[]>((resolve) => (answer = resolve));
+    const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { validateDelayMs: undefined });
+    render(<App studio={studio} />);
+    await act(settle);
+    await act(async () => {
+      await studio.open('hello-world.json');
+    });
+    await act(async () => fireEvent.click(document.querySelector('[role="treeitem"][data-node-id="log-greeting"] > .node')!));
+    const field = within(screen.getByRole('complementary', { name: 'Properties' })).getByRole('combobox', { name: /^message/ }) as HTMLInputElement;
+
+    field.focus();
+    await act(async () => fireEvent.focus(field));
+    await type(field, 'gre');
+    expect(screen.queryByRole('listbox', { name: 'Completions' })).toBeNull(); // no name known yet, no function matches
+    await act(async () => {
+      answer(names);
+      await settle();
+    });
+    expect(options()).toEqual(['greeting']);
+
+    // Focus alone never opens it, even when the names arrive later.
+    fireEvent.blur(field);
+    await act(async () => fireEvent.focus(field));
+    await act(async () => {
+      answer(names);
+      await settle();
+    });
+    expect(screen.queryByRole('listbox', { name: 'Completions' })).toBeNull();
+  });
+
   it('accepts an entry chosen with the mouse', async () => {
     const { field, message } = await renderStudio();
     await type(field, 'us');
