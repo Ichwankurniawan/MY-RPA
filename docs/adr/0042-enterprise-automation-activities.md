@@ -80,6 +80,15 @@ labels).
 - **Network and file I/O as built-ins in `src`**: rejected; side effects belong in plugins with declared capabilities,
   and `HttpClient` stays banned in `src`.
 
+## Implementation notes (2026-10-09)
+
+- The file policy is public SDK API (`MyRPA.Sdk.Files.FileRootPolicy`, `FileErrorTypes`), additive to SDK 1.2.
+- `Http.Request` takes `headers` as a Dictionary expression; `auth` also has `ApiKey`. A failing status
+  (`failOnErrorStatus`) fails before any output is assigned. Further error types: `InvalidUrl`, `HostNotAllowed`,
+  `TooManyRedirects`, `RedirectNotAllowed`, `InvalidJson`.
+- The Excel plugin adds `maxCells`; `DocumentFormat.OpenXml` 3.5.1 is owned by `MyRPA.Spreadsheet` only.
+- The CLI references `MyRPA.Browser.Contracts` so that it can host the browser plugin (a gap left by ADR-0039).
+
 ## Consequences
 - SDK 1.2 and catalog 1.2: additive; plugins built for 1.0/1.1 load unchanged.
 - One new diagnostic code for secret literals; new error types for the plugins.

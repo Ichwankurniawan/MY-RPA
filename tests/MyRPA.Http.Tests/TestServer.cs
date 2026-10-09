@@ -127,6 +127,10 @@ public sealed class TestServer : IDisposable
                     await Task.Delay(TimeSpan.FromSeconds(20), _stop.Token);
                     await WriteAsync(response, "slow", "text/plain");
                     break;
+                case "/broken-error":
+                    response.StatusCode = 500;
+                    await WriteAsync(response, "{not json", "application/json");
+                    break;
                 case "/bad-json":
                     await WriteAsync(response, "{not json", "application/json");
                     break;

@@ -30,7 +30,7 @@ internal addresses included. Set `allowedHosts` wherever workflows or their inpu
 | `username` / `password` (**secret**) | expression, String | Basic credentials |
 | `apiKeyHeader` | text | The API key's header (default `X-Api-Key`) |
 | `timeoutMs` | expression, Int | Default 30000; also capped by the run's deadline |
-| `failOnErrorStatus` | expression, Boolean | Default true: 400 or above fails with `HttpStatus` (the outputs are still set) |
+| `failOnErrorStatus` | expression, Boolean | Default true: 400 or above fails with `HttpStatus` and sets no output; false keeps the status and body for the workflow to inspect |
 | `parseJson` | expression, Boolean | Default true: an `application/json` or `+json` response becomes a workflow value |
 | `status`, `responseHeaders`, `responseBody` | assignment targets | Int; Dictionary with lower-case names; value, text or null |
 

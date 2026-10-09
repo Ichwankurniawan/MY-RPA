@@ -68,15 +68,17 @@ public sealed class HttpRequestActivity(HttpOptions options, HttpGateway gateway
         {
             using var response = await SendAsync(url, method, headers, body, bodyType, credential, linked.Token).ConfigureAwait(false);
             var status = (int)response.StatusCode;
+            if (status >= 400 && failOnErrorStatus)
+            {
+                // Before decoding or assigning: an error body (often another shape) must not mask the status failure.
+                throw new ActivityFailedException(HttpErrorTypes.HttpStatus, $"{method} {Safe(url)} returned {status.ToString(CultureInfo.InvariantCulture)}.");
+            }
+
             var bytes = method == "HEAD" ? [] : await ReadAsync(response.Content, url, linked.Token).ConfigureAwait(false);
             var value = Decode(response.Content, bytes, parseJson, url);
             Set(context, "status", (long)status);
             Set(context, "responseHeaders", ResponseHeaders(response));
             Set(context, "responseBody", value);
-            if (status >= 400 && failOnErrorStatus)
-            {
-                throw new ActivityFailedException(HttpErrorTypes.HttpStatus, $"{method} {Safe(url)} returned {status.ToString(CultureInfo.InvariantCulture)}.");
-            }
         }
         catch (OperationCanceledException ex) when (!context.CancellationToken.IsCancellationRequested)
         {

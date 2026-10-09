@@ -23,5 +23,30 @@ dotnet run --project src/MyRPA.Cli -- --plugin samples/plugins/MyRPA.Samples.Dem
 The build output directory is the plugin directory: `myrpa-plugin.json`, the DLL and its `.deps.json`, and nothing
 from the host. Use `myrpa --plugin <dir> plugins` to see the SHA-256 digest you would pin.
 
+## Enterprise sample: order report (Phase 7)
+
+[`enterprise-order-report.json`](enterprise-order-report.json) uses the product plugins: `Http.Request` (Bearer token
+from a secret property), `Json.WriteFile`, `Csv.Write`, `Core.Collection.Filter`, `Excel.WriteRange`/`ReadRange`, the
+browser activities and a final POST. Build the plugins, write a plugin configuration file such as:
+
+```json
+{ "pluginConfigVersion": "1.0",
+  "plugins": [
+    { "directory": "plugins/MyRPA.Files/bin/Debug/net10.0", "settings": { "fileRoot": "work" } },
+    { "directory": "plugins/MyRPA.Http/bin/Debug/net10.0", "settings": { "allowedHosts": "api.example.test" } },
+    { "directory": "plugins/MyRPA.Spreadsheet/bin/Debug/net10.0", "settings": { "fileRoot": "work" } },
+    { "directory": "plugins/MyRPA.Browser.Playwright/bin/Debug/net10.0", "settings": { "fileRoot": "work" } } ] }
+```
+
+then run it against your API and portal:
+
+```bash
+dotnet run --project src/MyRPA.Cli -- --plugin-config plugins.json run samples/plugins/enterprise-order-report.json --arg apiBase=https://api.example.test/api --arg portalUrl=https://portal.example.test/ --arg apiToken=...
+```
+
+The integration test `EnterpriseSampleTests` runs exactly this against a local API and portal. The API must answer
+`GET {apiBase}/orders` with a JSON list of orders (`status` "open" or not) and accept `POST {apiBase}/reports`; the
+portal needs an input `#count`, a button `#submit` and shows `#confirmation`.
+
 Plugins run with full trust inside MyRPA: `AssemblyLoadContext` isolates loading, it is not a security boundary.
 See [docs/architecture/plugin-system.md](../../docs/architecture/plugin-system.md).

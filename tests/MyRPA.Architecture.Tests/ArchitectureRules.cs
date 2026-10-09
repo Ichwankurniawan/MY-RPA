@@ -55,7 +55,7 @@ public static class ArchitectureRules
             IsCompositionRoot: true,
             AllowsAspNetCore: true),
         new("MyRPA.Cli", typeof(MyRPA.Cli.CliApplication).Assembly,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins"],
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Browser.Contracts"],
             AllowedPackages: ["Microsoft.Extensions.Hosting"],
             IsCompositionRoot: true),
     ];

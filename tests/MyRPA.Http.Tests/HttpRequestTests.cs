@@ -162,6 +162,16 @@ public sealed class HttpRequestTests(HttpHost host) : IClassFixture<HttpHost>
     }
 
     [Fact]
+    public async Task ErrorStatus_IsReportedBeforeTheBodyIsDecodedOrAssigned()
+    {
+        var result = await host.RunAsync(Request($$""" "url": "'{{Url("broken-error")}}'", "status": "status", "responseBody": "body" """), ["status", "body"]);
+
+        AssertFailed(result, ErrorTypes.HttpStatus);
+        Assert.Null(result.Outputs.GetValueOrDefault("status"));
+        Assert.Null(result.Outputs.GetValueOrDefault("body"));
+    }
+
+    [Fact]
     public async Task Redirect_SameOrigin_KeepsCredentials_OtherOrigin_DropsThem()
     {
         var secrets = new Dictionary<string, object?> { ["apiToken"] = Token };

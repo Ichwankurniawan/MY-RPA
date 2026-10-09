@@ -138,13 +138,18 @@ events, so a step in a loop appears once per run. Example: [`samples/flowchart.j
 | `Core.Decision` (1.1) | — | — | Does nothing; a flowchart branch point whose transitions carry the conditions. |
 | `Core.StateMachine` (1.1) | `maxSteps` (expr → Int ≥ 0; default 10,000) | `children`: `Core.State` steps (§3.1) | Runs the first state, then the state each one chooses, until a final state completes; more than `maxSteps` states fails with `MYRPA2010`. |
 | `Core.State` (1.1) | `final` (expr → Boolean; default false) | `entry`, `exit` | `entry`, then the transitions choose the next state (conditions only), then `exit`. Not final and no transition taken: `MYRPA2011`. |
+| `Core.Text.Split` / `Join` / `Match` / `Replace` | see [enterprise-activities.md](enterprise-activities.md) §2; `result` (target, req) | — | Text work; regular expressions with a 1 s timeout. |
+| `Core.Json.Parse` / `Serialize` | `text` or `value`; `result` | — | JSON text ⇄ workflow values (depth 64). |
+| `Core.Date.Parse` / `Format` / `Add` / `Difference` | `text`/`value`, `format`, `timeZone`, amounts or `unit`; `result` | — | Dates and times with IANA time zones. |
+| `Core.Collection.Sort` / `Filter` / `Find` / `Merge` | `items`, `key`, `operator`, `value`…; `result` | — | Lists and tables (Lists of Dictionaries). |
 
 `myrpa info` prints the registered activity types.
 
 Plugins add activity types in their own namespaces (for example `Demo.Echo`, `Demo.GetField` from the sample plugin);
 `Core.*` is reserved for the built-ins. A workflow that uses a plugin activity is valid only in a host that loaded that
 plugin (`myrpa --plugin <dir> validate ...`); otherwise it reports MYRPA1033. See
-[plugin-system.md](plugin-system.md).
+[plugin-system.md](plugin-system.md). The product plugins of Phase 7 (`File.*`, `Csv.*`, `Http.Request`, `Excel.*`…)
+are listed in [enterprise-activities.md](enterprise-activities.md).
 
 ## 5. Expressions
 

@@ -1,6 +1,7 @@
 # Phase 7 — Enterprise Automation Activities: plan
 
-Status: **approved** by the owner on 2026-10-09 (the Phase 7 brief and its scope answers). Decision record:
+Status: **implemented** (P7-1 to P7-6, 2026-10-09; catalog reference: [enterprise-activities.md](enterprise-activities.md)).
+Approved by the owner on 2026-10-09 (the Phase 7 brief and its scope answers). Decision record:
 [ADR-0042](../adr/0042-enterprise-automation-activities.md). Phase 8 must not start without the owner's authorization.
 
 ## 1. Inspection (2026-10-09)
@@ -97,7 +98,18 @@ Simple one-call operations stay as expression functions (they already exist: `le
 | P7-5 Excel | `MyRPA.Spreadsheet` plugin | Generated workbooks: read, write, create, ranges, types, large sheet streaming, limits |
 | P7-6 Definition of done | A sample business process: API → File → Excel → Browser → API against local servers; docs; Phase Completion Report | Integration test runs it through the CLI; smoke in the Studio; full build and tests |
 
-## 4. Rules
+## 4. Implementation notes (differences from the plan above)
+
+- `Http.Request` `headers` is an expression giving a Dictionary (for example a variable with a default): header names
+  such as `X-Api-Key` are not valid property-map keys. `auth` also offers `ApiKey` (`apiKeyHeader` + secret `token`).
+  With `failOnErrorStatus`, a failing status assigns no output; extra error types: `TooManyRedirects`,
+  `RedirectNotAllowed`, `HostNotAllowed`, `InvalidUrl`, `InvalidJson`.
+- The Excel plugin has a `maxCells` limit besides `maxRows`, and writes through an in-memory copy replaced in one step.
+- The file policy is the SDK helper `MyRPA.Sdk.Files.FileRootPolicy` (additive SDK 1.2 API), used by both file plugins.
+- P7-6 found that the CLI could not load the browser plugin since ADR-0039 (its host-provided
+  `MyRPA.Browser.Contracts` was missing from the CLI); the CLI now references it.
+
+## 5. Rules
 - SDK contract unchanged except the additive 1.2 metadata; no new activity interfaces.
 - Activities: cancellation honoured, deadlines respected, resources disposed, no static mutable state, no secrets in
   logs, errors or events.

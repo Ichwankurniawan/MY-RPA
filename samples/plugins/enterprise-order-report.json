@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0",
+  "id": "enterprise-order-report",
+  "name": "Order report",
+  "version": "1.0.0",
+  "description": "Phase 7 end-to-end sample (ADR-0042): reads open orders from a REST API, keeps them as JSON and CSV files, writes an Excel report, enters the count in a web portal and posts the portal's confirmation back to the API. Needs the MyRPA.Files, MyRPA.Http, MyRPA.Spreadsheet and MyRPA.Browser.Playwright plugins (see samples/plugins/README.md).",
+  "arguments": [
+    { "name": "apiBase", "direction": "In", "type": "String", "required": true },
+    { "name": "portalUrl", "direction": "In", "type": "String", "required": true },
+    { "name": "apiToken", "direction": "In", "type": "String", "required": true },
+    { "name": "openCount", "direction": "Out", "type": "Int" },
+    { "name": "confirmation", "direction": "Out", "type": "String" },
+    { "name": "postStatus", "direction": "Out", "type": "Int" }
+  ],
+  "variables": [
+    { "name": "orders", "type": "List" },
+    { "name": "open", "type": "List" },
+    { "name": "report", "type": "List" },
+    { "name": "summary", "type": "Object" },
+    { "name": "session", "type": "String" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "fetch-orders", "type": "Http.Request", "properties": { "url": "apiBase + '/orders'", "auth": "Bearer", "token": "apiToken", "responseBody": "orders" } },
+      { "id": "keep-json", "type": "Json.WriteFile", "properties": { "path": "'orders/orders.json'", "value": "orders", "overwrite": "true" } },
+      { "id": "keep-csv", "type": "Csv.Write", "properties": { "path": "'orders/orders.csv'", "rows": "orders", "overwrite": "true" } },
+      { "id": "open-only", "type": "Core.Collection.Filter", "properties": { "items": "orders", "key": "'status'", "operator": "Equals", "value": "'open'", "result": "open" } },
+      { "id": "write-report", "type": "Excel.WriteRange", "properties": { "path": "'orders/report.xlsx'", "sheet": "'Open orders'", "rows": "open" } },
+      { "id": "read-report", "type": "Excel.ReadRange", "properties": { "path": "'orders/report.xlsx'", "sheet": "'Open orders'", "result": "report" } },
+      { "id": "count", "type": "Core.Assign", "properties": { "to": "openCount", "value": "len(report)" } },
+      { "id": "open-portal", "type": "Browser.Open", "properties": { "url": "portalUrl", "to": "session" } },
+      { "id": "enter-count", "type": "Browser.TypeText", "properties": { "selector": "css=#count", "text": "toString(openCount)" } },
+      { "id": "submit", "type": "Browser.Click", "properties": { "selector": "css=#submit" } },
+      { "id": "read-confirmation", "type": "Browser.GetText", "properties": { "selector": "css=#confirmation", "to": "confirmation" } },
+      { "id": "close-portal", "type": "Browser.Close", "properties": { "session": "session" } },
+      { "id": "build-summary", "type": "Core.Json.Parse", "properties": { "text": "'{\"openOrders\": ' + toString(openCount) + ', \"confirmation\": \"' + confirmation + '\"}'", "result": "summary" } },
+      { "id": "post-summary", "type": "Http.Request", "properties": { "method": "POST", "url": "apiBase + '/reports'", "auth": "Bearer", "token": "apiToken", "body": "summary", "status": "postStatus" } }
+    ]
+  }
+}
