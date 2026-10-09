@@ -197,3 +197,18 @@ export interface ScopeName {
   /** Where it is declared. */
   path: string;
 }
+
+/** A place where a name is written (`POST /api/expressions/references`, ADR-0041): the characters of the name in a string. */
+export interface NameReference {
+  path: string;
+  start: number;
+  length: number;
+  /** Whether this is the declaration. */
+  declaration: boolean;
+}
+
+/** The declaration a name resolves to at a place, and every place it is written. */
+export interface NameReferences {
+  declaration: ScopeName | null;
+  references: NameReference[];
+}

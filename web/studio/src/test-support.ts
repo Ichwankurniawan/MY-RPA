@@ -2,7 +2,7 @@
 
 import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
-import type { ActivityDescriptor, DebugCommandName, DebugState, ExecutionEvent, ExpressionFunction, ScopeName, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugState, ExecutionEvent, ExpressionFunction, NameReferences, ScopeName, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
 
 export const helloWorld = `{
   "schemaVersion": "1.0",
@@ -123,6 +123,14 @@ export class FakeApi implements StudioApi {
   scopeNames: ScopeName[] = [];
   /** The paths names in scope were asked for. */
   scopeRequests: string[] = [];
+  /** What `POST /api/expressions/references` answers, by name (no declaration when missing). */
+  referenceAnswers = new Map<string, NameReferences>();
+  /** The (path, name) references were asked for. */
+  referenceRequests: { path: string; name: string }[] = [];
+  /** The documents validated, in order (rename checks the renamed workflow). */
+  validated: JsonObject[] = [];
+  /** Validation results to answer for documents that contain this text (else `validation`). */
+  validationFor?: { readonly contains: string; readonly result: ValidationResult };
   /** Debug commands sent (ADR-0040). */
   debugCommands: { runId: string; command: DebugCommandName }[] = [];
   /** Breakpoint updates sent to running debug runs. */
@@ -264,8 +272,15 @@ export class FakeApi implements StudioApi {
     return etag;
   }
 
-  async validate() {
+  async validate(document?: JsonObject) {
     this.validations++;
+    if (document !== undefined) {
+      this.validated.push(document);
+      if (this.validationFor !== undefined && JSON.stringify(document).includes(this.validationFor.contains)) {
+        return this.validationFor.result;
+      }
+    }
+
     return this.validation;
   }
 
@@ -291,6 +306,11 @@ export class FakeApi implements StudioApi {
 
   async expressionFunctions() {
     return this.functions;
+  }
+
+  async references(_document: JsonObject, path: string, name: string) {
+    this.referenceRequests.push({ path, name });
+    return this.referenceAnswers.get(name) ?? { declaration: null, references: [] };
   }
 
   async namesInScope(_document: JsonObject, path: string) {

@@ -288,6 +288,13 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .signature-hint { display: block; margin-top: 2px; color: var(--muted); }
 .signature-hint code { color: var(--text); }
 
+/* Rename and usages (ADR-0041). */
+.row-actions { white-space: nowrap; }
+.row-actions button + button { margin-left: 4px; }
+.local-actions { display: inline-flex; gap: 4px; margin-top: 4px; }
+.usages { list-style: none; margin: 0 0 8px; padding: 0; }
+.usages li { padding: 2px 0; }
+
 /* Properties. */
 .properties { grid-area: properties; border-left: 1px solid var(--border); }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; }

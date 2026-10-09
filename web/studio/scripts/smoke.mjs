@@ -713,6 +713,28 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.getByTestId('status-validation').filter({ hasText: 'No problems' }).waitFor();
   step("Expression assist E-2 (ADR-0041). Completion by keyboard: lower( → toString( → n (the variable before now(), from the server's names in scope), the signature shown inside the call; the result validates");
 
+  // ADR-0041, E-3: Usages and Rename of the variable n from the Variables tab, against the real server: every use
+  // changes (not the text 'n is ' inside a string), the workflow still validates and runs.
+  await page.getByRole('tab', { name: /^Variables/ }).click();
+  await page.getByRole('button', { name: 'Usages of n', exact: true }).click();
+  const usesOfN = page.getByRole('list', { name: 'Uses of n' });
+  await usesOfN.waitFor();
+  check((await usesOfN.getByRole('listitem').count()) === 5, `uses of n: ${(await usesOfN.getByRole('listitem').allTextContents()).join(' | ')}`);
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'Rename variable n', exact: true }).click();
+  const renameDialog = page.getByRole('dialog', { name: 'Rename n' });
+  await renameDialog.getByText('The declaration and 5 uses will change.').waitFor();
+  await renameDialog.getByLabel('New name').fill('total');
+  await renameDialog.getByRole('button', { name: 'Rename', exact: true }).click();
+  await renameDialog.waitFor({ state: 'detached' });
+  const saySummary = await page.locator('[role=treeitem][data-node-id="say"] > .node .summary').textContent();
+  check(saySummary.includes("'n is ' + total"), `say after the rename: ${saySummary}`);
+  await page.getByTestId('status-validation').filter({ hasText: 'No problems' }).waitFor();
+  await page.getByRole('toolbar', { name: 'Run' }).getByRole('button', { name: 'Run', exact: true }).click();
+  await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
+  check((await page.locator('.events .log').allTextContents()).some((t) => t.includes('n is 42')), 'the renamed workflow ran');
+  step("Expression assist E-3 (ADR-0041). Usages of n listed its 5 uses; Rename n → total changed the declaration and every use (not the text 'n is '); still valid; ran: Succeeded");
+
   // W6-8: Single-command start: only --open <file> (no --project, no --web). The server serves the Studio bundled
   // next to it, makes the file's folder the project, and the Studio opens the file.
   const singleLink = await startServer(['--open', join(project, 'hello-world.json')]);

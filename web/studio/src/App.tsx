@@ -899,6 +899,38 @@ function StudioDialogView({ dialog }: { dialog: StudioDialog }) {
       );
     case 'name':
       return <NameDialog dialog={dialog} />;
+    case 'rename-name':
+      return <RenameNameDialog dialog={dialog} />;
+    case 'usages':
+      return (
+        <Modal title={`Usages of ${dialog.name}`} onCancel={close}>
+          {dialog.error !== undefined ? (
+            <p className="field-error" role="status">
+              {dialog.error}
+            </p>
+          ) : dialog.usages === undefined ? (
+            <p role="status">Finding where {dialog.name} is used…</p>
+          ) : dialog.usages.length === 0 ? (
+            <p role="status">{dialog.name} is not used by any activity.</p>
+          ) : (
+            <ul className="usages" aria-label={`Uses of ${dialog.name}`}>
+              {dialog.usages.map((u, i) => (
+                <li key={i}>
+                  <button type="button" className="link" onClick={() => studio.goToUsage(u.key)}>
+                    {u.label}
+                  </button>{' '}
+                  <span className="hint">{u.where}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="dialog-buttons">
+            <button type="button" onClick={close}>
+              Close
+            </button>
+          </div>
+        </Modal>
+      );
     case 'delete':
       return (
         <Modal title={`Delete ${dialog.path}`} onCancel={close}>
@@ -953,6 +985,49 @@ function StudioDialogView({ dialog }: { dialog: StudioDialog }) {
         </Modal>
       );
   }
+}
+
+/** Rename a variable, argument or local and every use of it (ADR-0041): the uses come from the server. */
+function RenameNameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'rename-name' }> }) {
+  const studio = useStudio();
+  const id = useId();
+  const [name, setName] = useState(dialog.name);
+  const uses = dialog.references?.filter((r) => !r.declaration).length;
+  return (
+    <Modal title={`Rename ${dialog.name}`} onCancel={() => studio.closeDialog()}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void studio.applyRename(name);
+        }}
+      >
+        <div className="field">
+          <label className="field-label" htmlFor={id}>
+            New name
+          </label>
+          <input id={id} className="code" value={name} spellCheck={false} aria-invalid={dialog.error !== undefined} aria-describedby={`${id}-uses ${id}-error`} onChange={(e) => setName(e.target.value)} />
+          <small id={`${id}-uses`} role="status">
+            {dialog.references === undefined
+              ? dialog.error === undefined
+                ? 'Finding its uses…'
+                : ''
+              : `The declaration and ${uses} use${uses === 1 ? '' : 's'} will change.`}
+          </small>
+          <span id={`${id}-error`} className="field-error" role="status">
+            {dialog.error}
+          </span>
+        </div>
+        <div className="dialog-buttons">
+          <button type="submit" disabled={dialog.references === undefined || dialog.busy === true || name.trim() === ''}>
+            {dialog.busy ? 'Checking…' : 'Rename'}
+          </button>
+          <button type="button" onClick={() => studio.closeDialog()}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }> }) {

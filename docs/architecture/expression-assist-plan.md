@@ -1,6 +1,6 @@
 # Expression assist — completion, rename and usages (proposed)
 
-Status: **approved** by the owner on 2026-10-09 ("continue E-1"); E-1 and E-2 done, E-3 next. Decision record:
+Status: **complete** (E-1 to E-3, 2026-10-09; approved by the owner: "continue E-1"). Decision record:
 [ADR-0041](../adr/0041-expression-assist.md). Not a PRD phase: an authorized follow-up slice, like the debugger
 (ADR-0040). Phase 7 still needs its own authorization.
 
@@ -120,3 +120,23 @@ Writing expressions should not depend on remembering names:
 - **Also hardened:** the smoke drag helper now centres the dragged card and checks that both pointer points are really
   on their targets. The one-off W7-2 failure on Windows CI (#18) would now fail with a clear message instead of a wrong
   drop.
+
+## E-3 result (2026-10-09)
+
+- **Studio:**
+  - `rename.ts`: `pathSegments` (the diagnostics' paths through the document, keys with dots included),
+    `renameReferences` (exact characters only; client keys kept; refused when a place no longer holds the old name)
+    and `usagesOf`.
+  - Rename… and Usages on Variables and Arguments rows and on a loop's item variable, each with its own dialog.
+  - The server validates the renamed workflow before it is applied, so a name it reports a new problem for (invalid,
+    already declared, hidden by a local) is refused with the server's message. The browser keeps no copy of the name
+    rules.
+  - A rename is one undo step.
+- **Tests:**
+  - Vitest `rename.test.ts` (4) and `RenameUi.test.tsx` (5);
+  - smoke: Usages of `n` lists its 5 uses, Rename `n` → `total` against the real server (the text `'n is '` in a
+    string unchanged), it still validates and runs;
+  - a11y: the Rename dialog, 0 violations;
+  - perf: all targets met.
+- **Known limit:** a loop's item variable whose scope slot is still empty has no uses, and Rename reports that it is
+  not declared there. Rename it in its field instead.

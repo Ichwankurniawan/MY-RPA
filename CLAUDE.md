@@ -8,7 +8,7 @@ Guidance for AI agents and contributors working in this repository.
   (S-1 to S-4, 2026-10-08; plan `docs/architecture/selectors-recorder-plan.md`, decisions ADR-0038 and ADR-0039).**
   Phase 5, the Studio UX slice and graph workflows (ADR-0037) are complete. **Debugger slice authorized by the owner on
   2026-10-08 ("merge and D-1"); plan `docs/architecture/debugger-plan.md`, ADR-0040; slices D-1 → D-3 done.** **Expression assist authorized by the owner on 2026-10-09 ("continue E-1"); plan
-  `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 (E-1, E-2 done).**
+  `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 done.**
   Phase 7 (Enterprise Automation Activities) must not start without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
