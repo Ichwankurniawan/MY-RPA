@@ -40,7 +40,8 @@ describe('Files panel', () => {
   it('lists the project as folders and files; double-click and Enter open a file', async () => {
     await renderStudio();
 
-    expect(within(files()).getAllByRole('treeitem').map((i) => i.textContent)).toEqual(['flows/nested.json', 'nested.json', 'hello-world.json', 'other.json']);
+    expect([...files().querySelectorAll('.tree-name')].map((i) => i.textContent)).toEqual(['flows', 'nested.json', 'hello-world.json', 'other.json']);
+    expect(files().querySelector('[data-folder="flows"]')!.getAttribute('aria-expanded')).toBe('true');
     await act$(() => fireEvent.doubleClick(fileItem('other.json')));
     expect(title()).toBe('other.json');
     expect(fileItem('other.json').getAttribute('aria-current')).toBe('true');
@@ -68,6 +69,55 @@ describe('Files panel', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(api.files.has('flows/made.json')).toBe(true);
     expect(title()).toBe('flows/made.json');
+  });
+
+  it('closes and opens a folder by click and by keyboard', async () => {
+    await renderStudio();
+    const folder = () => files().querySelector<HTMLElement>('[data-folder="flows"]')!;
+
+    fireEvent.click(folder().querySelector('.tree-row')!);
+    expect(folder().getAttribute('aria-expanded')).toBe('false');
+    expect(fileItem('flows/nested.json')).toBeNull();
+
+    fireEvent.keyDown(folder(), { key: 'ArrowRight' });
+    expect(folder().getAttribute('aria-expanded')).toBe('true');
+    expect(fileItem('flows/nested.json')).not.toBeNull();
+    fireEvent.keyDown(folder(), { key: 'ArrowLeft' });
+    expect(folder().getAttribute('aria-expanded')).toBe('false');
+    fireEvent.keyDown(folder(), { key: 'Enter' });
+    expect(folder().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('creates a folder with New folder…, refuses a bad or taken name, and lists the empty folder', async () => {
+    const { api } = await renderStudio();
+
+    await act$(() => fireEvent.click(screen.getByRole('button', { name: 'New folder…' })));
+    const path = within(dialog()).getByLabelText('Path in the project');
+    expect((path as HTMLInputElement).value).toBe('new-folder');
+    fireEvent.change(path, { target: { value: '../outside' } });
+    await act$(() => fireEvent.click(within(dialog()).getByRole('button', { name: 'Create' })));
+    expect(within(dialog()).getByText(/Use a folder path inside the project/)).toBeTruthy();
+    fireEvent.change(path, { target: { value: 'flows' } });
+    await act$(() => fireEvent.click(within(dialog()).getByRole('button', { name: 'Create' })));
+    expect(within(dialog()).getByText("'flows' already exists.")).toBeTruthy();
+
+    fireEvent.change(path, { target: { value: 'invoices' } });
+    await act$(() => fireEvent.click(within(dialog()).getByRole('button', { name: 'Create' })));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(api.folders.has('invoices')).toBe(true);
+    expect(files().querySelector('[data-folder="invoices"]')).not.toBeNull();
+  });
+
+  it('starts New… and New folder… inside the selected folder', async () => {
+    await renderStudio();
+    fireEvent.click(files().querySelector('[data-folder="flows"] .tree-row')!);
+
+    await act$(() => fireEvent.click(screen.getByRole('button', { name: 'New…' })));
+    expect((within(dialog()).getByLabelText('Path in the project') as HTMLInputElement).value).toBe('flows/new-workflow.json');
+    await act$(() => fireEvent.click(within(dialog()).getByRole('button', { name: 'Cancel' })));
+    await act$(() => fireEvent.click(screen.getByRole('button', { name: 'New folder…' })));
+    expect((within(dialog()).getByLabelText('Path in the project') as HTMLInputElement).value).toBe('flows/new-folder');
   });
 
   it('renames with F2 and deletes with the Delete key after confirming', async () => {

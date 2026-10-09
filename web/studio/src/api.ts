@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, ExpressionFunction, GeneratedActivities, JsonObject, NameReferences, PluginReport, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, WorkflowFile } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, ExpressionFunction, GeneratedActivities, JsonObject, NameReferences, PluginReport, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, ProjectListing, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -35,7 +35,9 @@ export interface StudioApi {
   info(): Promise<ServerInfo>;
   activities(): Promise<ActivityDescriptor[]>;
   plugins(): Promise<PluginReport>;
-  workflows(project: string): Promise<WorkflowFile[]>;
+  workflows(project: string): Promise<ProjectListing>;
+  /** Creates a folder in the project. 409 when a file or folder of that name exists. */
+  createFolder(project: string, path: string): Promise<void>;
   readWorkflow(project: string, path: string): Promise<{ text: string; etag: string }>;
   /** Saves over the version with `etag` (If-Match); returns the new ETag. 412 when the file changed meanwhile. */
   saveWorkflow(project: string, path: string, text: string, etag: string): Promise<string>;
@@ -122,7 +124,13 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
     info: () => get<ServerInfo>('/api/info'),
     activities: async () => (await get<{ activities: ActivityDescriptor[] }>('/api/activities')).activities,
     plugins: () => get<PluginReport>('/api/plugins'),
-    workflows: async (project) => (await get<{ workflows: WorkflowFile[] }>(`/api/projects/${encodeURIComponent(project)}/workflows`)).workflows,
+    workflows: async (project) => {
+      const listing = await get<{ workflows: WorkflowFile[]; folders?: string[] }>(`/api/projects/${encodeURIComponent(project)}/workflows`);
+      return { workflows: listing.workflows, folders: listing.folders ?? [] };
+    },
+    async createFolder(project, path) {
+      await send('POST', `/api/projects/${encodeURIComponent(project)}/folders`, JSON.stringify({ path }));
+    },
     async readWorkflow(project, path) {
       const response = await fetcher(filePath(project, path), { headers: { Accept: 'application/json' } });
       if (!response.ok) {

@@ -537,11 +537,7 @@ h2 { text-transform: none; font-size: 14px; font-weight: 650; letter-spacing: 0;
 .tabs [role='tab'][aria-selected='true'] { color: var(--text); border-bottom-color: var(--accent); }
 .tabs [role='tab'][aria-selected='true'] .icon { color: var(--accent); }
 
-/* Activity list: filter chips, icon + title entries. */
-.chips, .chips[role='group'] { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; border: none; }
-.chip { padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); font-size: 12px; font-weight: 550; }
-.chip:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
-.chip[aria-pressed='true'] { color: var(--accent-strong); background: var(--accent-soft); border-color: var(--accent); }
+/* Activity list: icon + title entries. */
 .toolbox button.insert { align-items: center; gap: 8px; padding: 5px 8px; flex-wrap: nowrap; }
 .toolbox button.insert .icon { color: var(--info); }
 .toolbox button.insert:hover:not(:disabled):not([aria-disabled='true']) { background: var(--accent-soft); border-color: transparent; }
@@ -588,3 +584,18 @@ h2 { text-transform: none; font-size: 14px; font-weight: 650; letter-spacing: 0;
 .home-run-status { color: var(--muted); font-size: 12px; }
 .home-figure { margin: 0 0 10px; color: var(--muted); }
 .home-figure strong { color: var(--text); font-size: 18px; }
+
+/* Files tree: chevrons, folder and file icons, nested guides (ADR-0044). */
+.files [role='tree'] { margin-top: 4px; }
+.files [role='group'] { padding-left: 12px; margin-left: 13px; border-left: 1px solid var(--border); }
+.files .file, .files .folder { padding: 0; border-radius: 0; background: none; outline: none; }
+.files .tree-row { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: var(--radius); cursor: pointer; min-width: 0; }
+.files .file > .tree-row { padding-left: 26px; }
+.files .tree-row:hover { background: var(--panel-2); }
+.files .tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files .tree-row > .icon-chevron-down, .files .tree-row > .icon-chevron-right { color: var(--muted); }
+.files .tree-row > .icon-folder, .files .tree-row > .icon-folder-open { color: var(--accent); }
+.files .tree-row > .icon-file { color: var(--info); }
+.files .selected > .tree-row { background: var(--selected); }
+.files .file.open > .tree-row { font-weight: 600; }
+.files .file:focus-visible > .tree-row, .files .folder:focus-visible > .tree-row { outline: 2px solid var(--accent); outline-offset: -2px; }

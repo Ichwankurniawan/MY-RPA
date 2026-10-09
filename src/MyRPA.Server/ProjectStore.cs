@@ -34,8 +34,8 @@ internal sealed class ProjectStore(ServerOptions options) : IDisposable
 
     public IReadOnlyList<ProjectRoot> Projects => options.Projects;
 
-    /// <summary>Resolves a project-relative workflow path to a confined full path.</summary>
-    public bool TryResolve(string project, string? relativePath, out string fullPath, out string error)
+    /// <summary>Resolves a project-relative workflow path (or, with <paramref name="folder"/>, a folder path) to a confined full path.</summary>
+    public bool TryResolve(string project, string? relativePath, out string fullPath, out string error, bool folder = false)
     {
         fullPath = string.Empty;
         var root = options.Projects.FirstOrDefault(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
@@ -59,7 +59,7 @@ internal sealed class ProjectStore(ServerOptions options) : IDisposable
             return false;
         }
 
-        if (!relativePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        if (!folder && !relativePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
         {
             error = "Only .json workflow files are served.";
             return false;
@@ -122,6 +122,51 @@ internal sealed class ProjectStore(ServerOptions options) : IDisposable
         }
 
         return [.. files.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// The project's folders ('/'-separated, relative), empty ones included, so a new folder can be listed before it
+    /// holds a workflow. Hidden, skipped and linked folders are left out, as in <see cref="List"/>.
+    /// </summary>
+    public static IReadOnlyList<string> ListFolders(ProjectRoot project)
+    {
+        var folders = new List<string>();
+        var pending = new Stack<string>([project.Root]);
+        while (pending.TryPop(out var folder))
+        {
+            foreach (var directory in Directory.EnumerateDirectories(folder))
+            {
+                var name = Path.GetFileName(directory);
+                if (!name.StartsWith('.') && !_skippedFolders.Contains(name, StringComparer.OrdinalIgnoreCase)
+                    && (File.GetAttributes(directory) & FileAttributes.ReparsePoint) == 0)
+                {
+                    pending.Push(directory);
+                    folders.Add(Path.GetRelativePath(project.Root, directory).Replace('\\', '/'));
+                }
+            }
+        }
+
+        return [.. folders.Order(StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>Creates a folder (and its parents); never over an existing file or folder.</summary>
+    public async Task<FileWriteOutcome> CreateFolderAsync(string fullPath, CancellationToken cancellationToken)
+    {
+        await _writes.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (File.Exists(fullPath) || Directory.Exists(fullPath))
+            {
+                return FileWriteOutcome.TargetExists;
+            }
+
+            Directory.CreateDirectory(fullPath);
+            return FileWriteOutcome.Created;
+        }
+        finally
+        {
+            _writes.Release();
+        }
     }
 
     /// <summary>Reads a file with its ETag; null when it does not exist or is too large.</summary>

@@ -166,6 +166,8 @@ export interface StudioState {
   readonly projects: readonly string[];
   readonly project?: string;
   readonly files: readonly WorkflowFile[];
+  /** The project's folders, empty ones too (for the Files tree and New folder). */
+  readonly folders: readonly string[];
   readonly file?: OpenFile;
   readonly document?: JsonObject;
   /** The document as last opened or saved; the document is dirty when it is a different object. */
@@ -332,7 +334,7 @@ export const workflowKey = '@workflow';
  */
 export type StudioDialog =
   | { readonly kind: 'unsaved'; readonly path: string; readonly next: string }
-  | { readonly kind: 'name'; readonly purpose: 'new' | 'rename' | 'save-as'; readonly from?: string; readonly initial: string; readonly error?: string }
+  | { readonly kind: 'name'; readonly purpose: NamePurpose; readonly from?: string; readonly initial: string; readonly error?: string }
   | { readonly kind: 'delete'; readonly path: string; readonly dirty: boolean }
   | { readonly kind: 'conflict'; readonly path: string }
   | { readonly kind: 'recover'; readonly path: string; readonly savedAt: string; readonly stale: boolean }
@@ -366,6 +368,16 @@ export function newWorkflowText(path: string): string {
 }
 
 /** Why `path` is not a usable workflow path (undefined when it is); the server checks the rest. */
+/** What the name dialog asks a path for. */
+export type NamePurpose = 'new' | 'rename' | 'save-as' | 'folder';
+
+/** Why a folder path cannot be created (the server checks again). */
+export function folderRefusal(path: string): string | undefined {
+  return path === '' || path.startsWith('/') || path.endsWith('/') || path.includes('\\') || path.split('/').some((s) => s === '' || s === '.' || s === '..' || s.startsWith('.'))
+    ? "Use a folder path inside the project, with '/' between folders, and no '.', '..' or hidden names."
+    : undefined;
+}
+
 export function pathRefusal(path: string): string | undefined {
   if (!/\.json$/i.test(path)) {
     return 'The file name must end in .json.';
@@ -792,6 +804,7 @@ export class Studio {
       catalog: new Map(),
       projects: [],
       files: [],
+      folders: [],
       undo: [],
       redo: [],
       errorNodeKeys: new Set(),
@@ -925,8 +938,8 @@ export class Studio {
 
   async selectProject(project: string): Promise<void> {
     try {
-      const files = await this.api.workflows(project);
-      this.store.set({ project, files });
+      const { workflows: files, folders } = await this.api.workflows(project);
+      this.store.set({ project, files, folders });
     } catch (error) {
       this.say(`Cannot list the project's workflows: ${(error as Error).message}`);
     }
@@ -1790,19 +1803,27 @@ export class Studio {
     }
   }
 
-  /** New, Rename and Save as ask for a path first. */
-  startName(purpose: 'new' | 'rename' | 'save-as', from?: string): void {
-    const taken = new Set(this.state.files.map((f) => f.path.toLowerCase()));
-    const unique = (base: string) => {
+  /**
+   * New, New folder, Rename and Save as ask for a path first. For New and New folder, `from` is the folder to create in
+   * (the selected one in the Files panel); for Rename, the file.
+   */
+  startName(purpose: NamePurpose, from?: string): void {
+    const taken = new Set([...this.state.files.map((f) => f.path), ...this.state.folders].map((p) => p.toLowerCase()));
+    const unique = (base: string, extension = '.json') => {
       for (let i = 1; ; i++) {
-        const candidate = i === 1 ? `${base}.json` : `${base}-${i}.json`;
+        const candidate = i === 1 ? `${base}${extension}` : `${base}-${i}${extension}`;
         if (!taken.has(candidate.toLowerCase())) {
           return candidate;
         }
       }
     };
+    const inFolder = (name: string) => (from ? `${from}/${name}` : name);
     const current = from ?? this.state.file?.path;
-    const initial = purpose === 'new' ? unique('new-workflow') : purpose === 'save-as' && current ? unique(current.replace(/\.json$/i, '') + '-copy') : (current ?? '');
+    const initial =
+      purpose === 'new' ? unique(inFolder('new-workflow'))
+      : purpose === 'folder' ? unique(inFolder('new-folder'), '')
+      : purpose === 'save-as' && current ? unique(current.replace(/\.json$/i, '') + '-copy')
+      : (current ?? '');
     this.store.set({ dialog: { kind: 'name', purpose, from: purpose === 'rename' ? current : undefined, initial } });
   }
 
@@ -1815,6 +1836,11 @@ export class Studio {
     }
 
     const target = path.trim();
+    if (dialog.purpose === 'folder') {
+      await this.createFolder(project, target.replace(/\/+$/, ''));
+      return;
+    }
+
     const refusal = pathRefusal(target);
     if (refusal !== undefined) {
       this.store.set({ dialog: { ...dialog, error: refusal } });
@@ -1839,6 +1865,30 @@ export class Studio {
         error instanceof ApiError && error.status === 409 ? `'${target}' already exists.`
         : error instanceof ApiError && error.status === 412 ? (dialog.purpose === 'rename' ? `'${dialog.from}' changed on disk since it was read; reopen it first.` : `'${target}' already exists.`)
         : (error as Error).message;
+      this.store.set({ dialog: { ...dialog, error: reason } });
+    }
+  }
+
+  /** New folder: creates it on the server; a refusal keeps the dialog with the reason. */
+  private async createFolder(project: string, path: string): Promise<void> {
+    const dialog = this.state.dialog;
+    if (dialog?.kind !== 'name') {
+      return;
+    }
+
+    const refusal = folderRefusal(path);
+    if (refusal !== undefined) {
+      this.store.set({ dialog: { ...dialog, error: refusal } });
+      return;
+    }
+
+    try {
+      await this.api.createFolder(project, path);
+      this.closeDialog();
+      await this.refreshFiles();
+      this.say(`Created folder ${path}.`);
+    } catch (error) {
+      const reason = error instanceof ApiError && error.status === 409 ? `'${path}' already exists.` : (error as Error).message;
       this.store.set({ dialog: { ...dialog, error: reason } });
     }
   }

@@ -239,7 +239,20 @@ internal static class ServerApplication
         api.MapGet("/projects/{project}/workflows", (string project, ProjectStore store) =>
         {
             var root = store.Projects.FirstOrDefault(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
-            return root is null ? NotFound($"Unknown project '{project}'.") : Results.Json(new { workflows = ProjectStore.List(root) });
+            return root is null ? NotFound($"Unknown project '{project}'.") : Results.Json(new { workflows = ProjectStore.List(root), folders = ProjectStore.ListFolders(root) });
+        });
+
+        // Folders for organising workflows: created inside the project only (same path rules as files, no links).
+        api.MapPost("/projects/{project}/folders", async (string project, FolderRequest request, ProjectStore store, HttpContext context) =>
+        {
+            if (!store.TryResolve(project, request.Path, out var full, out var error, folder: true))
+            {
+                return BadRequest($"'path': {error}");
+            }
+
+            return await store.CreateFolderAsync(full, context.RequestAborted).ConfigureAwait(false) == FileWriteOutcome.Created
+                ? Results.Json(new { path = request.Path }, statusCode: StatusCodes.Status201Created)
+                : Problem(StatusCodes.Status409Conflict, $"'{request.Path}' already exists.");
         });
 
         api.MapGet("/projects/{project}/workflows/{**path}", async (string project, string path, ProjectStore store, HttpContext context) =>
@@ -880,6 +893,8 @@ internal static class ServerApplication
 
 /// <summary>Body of <c>POST /api/projects/{project}/move</c>: project-relative paths.</summary>
 internal sealed record MoveRequest(string? From, string? To);
+
+internal sealed record FolderRequest(string? Path);
 
 /// <summary>Body of <c>POST /api/validate</c>.</summary>
 internal sealed record ValidateRequest(JsonElement? Document);

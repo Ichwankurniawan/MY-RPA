@@ -6,7 +6,7 @@ import { Studio } from './studio';
 import { catalog, FakeApi, FakeEventSource, helloWorld, immediately, settle } from './test-support';
 import type { ActivityDescriptor } from './types';
 
-// ADR-0044: the Laconi brand, the navigation rail, the Home page (real data only) and the activity group chips.
+// ADR-0044: the Laconi brand, the navigation rail, the Home page (real data only) and catalog-driven icons.
 
 const http: ActivityDescriptor = {
   type: 'Http.Request',
@@ -76,19 +76,6 @@ describe('Laconi shell', () => {
 
     expect(screen.getByTestId('document-title').textContent).toBe('flows/second.json');
     expect(screen.getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
-  });
-
-  it('filters the activity list with one chip per namespace from the catalog', async () => {
-    await renderStudio(withPlugin());
-    const chips = within(screen.getByRole('group', { name: 'Activity groups' }));
-
-    expect(chips.getAllByRole('button').map((b) => b.textContent)).toEqual(['All', 'Built-in', 'Http']);
-    fireEvent.click(chips.getByRole('button', { name: 'Http' }));
-    expect(screen.getByRole('button', { name: 'Insert HTTP Request (Http.Request)' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Insert Log (Core.Log)' })).toBeNull();
-
-    fireEvent.click(chips.getByRole('button', { name: 'All' }));
-    expect(screen.getByRole('button', { name: 'Insert Log (Core.Log)' })).toBeTruthy();
   });
 
   it('gives a plugin activity the icon of its side effect, with no Studio change', async () => {

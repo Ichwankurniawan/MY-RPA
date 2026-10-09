@@ -778,7 +778,6 @@ function Toolbox() {
   const blocked = useStudioState((s) => editRefusal(s) !== undefined);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [group, setGroup] = useState<string>();
   // The catalog (built-in and plugin activities, ADR-0020) by type namespace (UX-2), then by category; the search also
   // matches descriptions.
   const namespaces = useMemo(() => {
@@ -792,14 +791,9 @@ function Toolbox() {
     }
 
     return [...byNamespace]
-      .filter(([namespace]) => group === undefined || namespace === group)
       .sort(([a], [b]) => (a === 'Core' ? -1 : b === 'Core' ? 1 : a.localeCompare(b)))
       .map(([namespace, categories]) => ({ namespace, categories: [...categories].sort(([a], [b]) => a.localeCompare(b)) }));
-  }, [activities, query, group]);
-  const allNamespaces = useMemo(
-    () => [...new Set(activities.map((a) => namespaceOf(a.type)))].sort((a, b) => (a === 'Core' ? -1 : b === 'Core' ? 1 : a.localeCompare(b))),
-    [activities],
-  );
+  }, [activities, query]);
   const searching = query.trim() !== '';
   const toggle = (group: string) => setCollapsed((current) => new Set(current.has(group) ? [...current].filter((c) => c !== group) : [...current, group]));
   const insertProps = (a: ActivityDescriptor) => ({
@@ -841,13 +835,6 @@ function Toolbox() {
       <p className="hint" id="toolbox-hint">
         {refusal ?? 'Inserts after the selected activity, or at the end of a selected Sequence.'}
       </p>
-      <div className="chips" role="group" aria-label="Activity groups">
-        {[undefined, ...allNamespaces].map((ns) => (
-          <button key={ns ?? 'all'} type="button" className="chip" aria-pressed={group === ns} onClick={() => setGroup(ns)}>
-            {ns === undefined ? 'All' : namespaceLabel(ns)}
-          </button>
-        ))}
-      </div>
       {shortcuts('Favorites', 'star', favorites)}
       {shortcuts('Recent', 'recent', recent)}
       {namespaces.length === 0 && <p className="hint">{searching ? `No activity matches "${query.trim()}".` : 'The server has no activities.'}</p>}
@@ -931,12 +918,12 @@ interface FolderNode {
   readonly files: WorkflowFile[];
 }
 
-/** The project's files as folders (sorted by name) with their files. */
-function fileTree(files: readonly WorkflowFile[]): FolderNode {
+/** The project's folders (empty ones too) and files as a tree; folders and files sorted by name. */
+function fileTree(files: readonly WorkflowFile[], folders: readonly string[]): FolderNode {
   const root: FolderNode = { name: '', path: '', folders: [], files: [] };
-  for (const file of files) {
+  const folderAt = (path: string): FolderNode => {
     let folder = root;
-    for (const segment of file.path.split('/').slice(0, -1)) {
+    for (const segment of path.split('/').filter((s) => s !== '')) {
       let next = folder.folders.find((f) => f.name === segment);
       if (!next) {
         next = { name: segment, path: folder.path ? `${folder.path}/${segment}` : segment, folders: [], files: [] };
@@ -947,37 +934,70 @@ function fileTree(files: readonly WorkflowFile[]): FolderNode {
       folder = next;
     }
 
-    folder.files.push(file);
+    return folder;
+  };
+  folders.forEach(folderAt);
+  for (const file of files) {
+    folderAt(file.path.split('/').slice(0, -1).join('/')).files.push(file);
   }
 
   return root;
 }
 
-/** The files in display order (each folder's subfolders first, then its files). */
-function displayOrder(folder: FolderNode): string[] {
-  return [...folder.folders.flatMap(displayOrder), ...folder.files.map((f) => f.path)];
+/** Tree items are files (their path) and folders (their path and a '/'). */
+const folderItem = (path: string) => `${path}/`;
+const isFolderItem = (item: string) => item.endsWith('/');
+
+/** The visible items in display order: a closed folder hides what it holds. */
+function visibleItems(folder: FolderNode, closed: ReadonlySet<string>): string[] {
+  return [
+    ...folder.folders.flatMap((sub) => [folderItem(sub.path), ...(closed.has(sub.path) ? [] : visibleItems(sub, closed))]),
+    ...folder.files.map((f) => f.path),
+  ];
 }
 
-/** The project's workflow files as a tree. Click selects, double-click or Enter opens, F2 renames, Delete deletes. */
+/**
+ * The project's folders and workflow files as a tree. A click on a folder opens or closes it; double-click or Enter
+ * opens a file; F2 renames and Delete deletes a file; Left and Right close and open folders. New and New folder create
+ * in the selected folder (or the selected file's folder).
+ */
 function FilesPanel() {
   const studio = useStudio();
   const files = useStudioState((s) => s.files);
+  const folders = useStudioState((s) => s.folders);
   const project = useStudioState((s) => s.project);
   const openPath = useStudioState((s) => s.file?.path);
   const [selected, setSelected] = useState<string>();
+  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const list = useRef<HTMLUListElement>(null);
-  const tree = useMemo(() => fileTree(files), [files]);
-  const order = useMemo(() => displayOrder(tree), [tree]);
-  const target = selected !== undefined && order.includes(selected) ? selected : openPath;
+  const tree = useMemo(() => fileTree(files, folders), [files, folders]);
+  const order = useMemo(() => visibleItems(tree, closed), [tree, closed]);
+  const current = selected !== undefined && order.includes(selected) ? selected : openPath;
+  const target = current !== undefined && !isFolderItem(current) ? current : undefined;
+  const folderOfTarget = target?.includes('/') ? target.slice(0, target.lastIndexOf('/')) : undefined;
+  const inFolder = current !== undefined && isFolderItem(current) ? current.slice(0, -1) : folderOfTarget;
 
-  const select = (path: string) => {
-    setSelected(path);
+  const select = (item: string) => {
+    setSelected(item);
     // Compared, not interpolated into a selector: paths may contain quotes or brackets.
-    [...(list.current?.querySelectorAll<HTMLElement>('[data-path]') ?? [])].find((item) => item.dataset.path === path)?.focus();
+    [...(list.current?.querySelectorAll<HTMLElement>('[data-path], [data-folder]') ?? [])]
+      .find((element) => element.dataset.path === item || (element.dataset.folder !== undefined && folderItem(element.dataset.folder) === item))
+      ?.focus();
   };
+  const setOpen = (path: string, open: boolean) =>
+    setClosed((current) => {
+      const next = new Set(current);
+      if (open) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+
+      return next;
+    });
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
-    const at = target === undefined ? -1 : order.indexOf(target);
+    const at = current === undefined ? -1 : order.indexOf(current);
     const next =
       event.key === 'ArrowDown' ? order[Math.min(at + 1, order.length - 1)]
       : event.key === 'ArrowUp' ? order[Math.max(at - 1, 0)]
@@ -987,6 +1007,19 @@ function FilesPanel() {
     if (next !== undefined) {
       event.preventDefault();
       select(next);
+      return;
+    }
+
+    if (current !== undefined && isFolderItem(current)) {
+      const path = current.slice(0, -1);
+      const open = !closed.has(path);
+      if ((event.key === 'ArrowRight' && !open) || (event.key === 'ArrowLeft' && open) || event.key === 'Enter') {
+        event.preventDefault();
+        setOpen(path, !open);
+      } else if (event.key === 'ArrowLeft' && path.includes('/')) {
+        event.preventDefault();
+        select(folderItem(path.slice(0, path.lastIndexOf('/'))));
+      }
     } else if (target !== undefined && event.key === 'Enter') {
       event.preventDefault();
       void studio.requestOpen(target);
@@ -996,17 +1029,44 @@ function FilesPanel() {
     } else if (target !== undefined && event.key === 'Delete') {
       event.preventDefault();
       studio.startDelete(target);
+    } else if (event.key === 'ArrowLeft' && folderOfTarget !== undefined) {
+      event.preventDefault();
+      select(folderItem(folderOfTarget));
     }
   };
 
+  const tabStop = (item: string) => (item === current || (current === undefined && item === order[0]) ? 0 : -1);
   const renderFolder = (folder: FolderNode, depth: number) => (
     <>
-      {folder.folders.map((sub) => (
-        <li key={`folder:${sub.path}`} role="treeitem" aria-level={depth} aria-expanded={true} aria-selected={false} className="folder">
-          <span className="folder-name">{sub.name}/</span>
-          <ul role="group">{renderFolder(sub, depth + 1)}</ul>
-        </li>
-      ))}
+      {folder.folders.map((sub) => {
+        const item = folderItem(sub.path);
+        const open = !closed.has(sub.path);
+        return (
+          <li
+            key={item}
+            role="treeitem"
+            aria-level={depth}
+            aria-expanded={open}
+            aria-selected={item === current}
+            tabIndex={tabStop(item)}
+            data-folder={sub.path}
+            className={`folder${item === current ? ' selected' : ''}`}
+          >
+            <span
+              className="tree-row"
+              onClick={() => {
+                select(item);
+                setOpen(sub.path, !open);
+              }}
+            >
+              <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
+              <Icon name={open ? 'folder-open' : 'folder'} size={16} />
+              <span className="tree-name">{sub.name}</span>
+            </span>
+            {open && <ul role="group">{renderFolder(sub, depth + 1)}</ul>}
+          </li>
+        );
+      })}
       {folder.files.map((file) => {
         const name = file.path.split('/').at(-1);
         return (
@@ -1014,15 +1074,18 @@ function FilesPanel() {
             key={file.path}
             role="treeitem"
             aria-level={depth}
-            aria-selected={file.path === target}
+            aria-selected={file.path === current}
             aria-current={file.path === openPath ? 'true' : undefined}
-            tabIndex={file.path === target || (target === undefined && file.path === order[0]) ? 0 : -1}
+            tabIndex={tabStop(file.path)}
             data-path={file.path}
-            className={`file${file.path === target ? ' selected' : ''}${file.path === openPath ? ' open' : ''}`}
+            className={`file${file.path === current ? ' selected' : ''}${file.path === openPath ? ' open' : ''}`}
             onClick={() => select(file.path)}
             onDoubleClick={() => void studio.requestOpen(file.path)}
           >
-            {name}
+            <span className="tree-row">
+              <Icon name="file" size={15} />
+              <span className="tree-name">{name}</span>
+            </span>
           </li>
         );
       })}
@@ -1034,8 +1097,11 @@ function FilesPanel() {
       <div className="files-header">
         <h2 id="files-heading">Files</h2>
         <div className="editbar" role="toolbar" aria-label="Files">
-          <button type="button" onClick={() => studio.startName('new')} disabled={project === undefined} title="Create a new workflow in the project">
+          <button type="button" onClick={() => studio.startName('new', inFolder)} disabled={project === undefined} title={inFolder ? `Create a new workflow in ${inFolder}` : 'Create a new workflow in the project'}>
             New…
+          </button>
+          <button type="button" onClick={() => studio.startName('folder', inFolder)} disabled={project === undefined} title={inFolder ? `Create a folder in ${inFolder}` : 'Create a folder in the project'}>
+            New folder…
           </button>
           <button type="button" onClick={() => target && studio.startName('rename', target)} disabled={target === undefined} title={target ? `Rename or move ${target} (F2)` : 'Select a file'}>
             Rename…
@@ -1045,7 +1111,7 @@ function FilesPanel() {
           </button>
         </div>
       </div>
-      <p className="hint">Double-click or Enter opens a file.</p>
+      <p className="hint">Double-click or Enter opens a file; click a folder to open or close it.</p>
       <ul role="tree" aria-label="Workflow files" ref={list} onKeyDown={onKeyDown}>
         {renderFolder(tree, 1)}
       </ul>
@@ -1250,8 +1316,8 @@ function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }
   const studio = useStudio();
   const id = useId();
   const [path, setPath] = useState(dialog.initial);
-  const title = dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
-  const action = dialog.purpose === 'new' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
+  const title = dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'folder' ? 'New folder' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
+  const action = dialog.purpose === 'new' || dialog.purpose === 'folder' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
   return (
     <Modal title={title} onCancel={() => studio.closeDialog()}>
       <form

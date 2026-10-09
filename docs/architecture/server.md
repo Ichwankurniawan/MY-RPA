@@ -67,7 +67,8 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workfl
 | `GET /api/activities` | The activity catalog snapshot (ADR-0020 format, catalog version 1.2: `childLayout`, and per ADR-0042 `valueType`, `default`, `secret` and `sideEffects`), built-in and plugin activities |
 | `GET /api/plugins` | Loaded plugins (id, name, version, SHA-256, activities) and their load diagnostics |
 | `GET /api/projects` | Registered projects |
-| `GET /api/projects/{project}/workflows` | Workflow files: path, size, modified |
+| `GET /api/projects/{project}/workflows` | `{ workflows, folders }`: workflow files (path, size, modified) and every folder, empty ones too |
+| `POST /api/projects/{project}/folders` | `{ path }`: creates a folder (and its parents) inside the project with the file path rules (no `..`, hidden names, backslashes or links) → 201 `{ path }`; 409 when a file or folder of that name exists, 400 for a refused path |
 | `GET /api/projects/{project}/workflows/{path}` | The file's JSON; `ETag` header |
 | `PUT /api/projects/{project}/workflows/{path}` | Create (`If-None-Match: *`) or update (`If-Match: <etag>`). The body must be a JSON object. Returns 201 or 204 with the new `ETag`; 412 on a conflict; 428 without a precondition. Invalid workflows can be saved; validation is separate. |
 | `DELETE /api/projects/{project}/workflows/{path}` | Delete; `If-Match` required |

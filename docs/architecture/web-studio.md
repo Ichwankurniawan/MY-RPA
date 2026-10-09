@@ -114,7 +114,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   side effects are the tooltip and the accessible description. A plugin namespace with one category lists its
   activities without a second header. Panel sizes are capped by the window, and below 980 px wide or 640 px high the
   command bar shows icons only (labels stay the accessible names), so a small window keeps the designer usable.
-- **Files** (W6, ADR-0031): the Files panel shows the project's `.json` files as folders and files (click selects).
+- **Files** (W6, ADR-0031): the Files panel shows the project's folders (empty ones too) and `.json` files as a tree with folder and file icons. A click on a folder opens or closes it, and Left/Right do the same; a click on a file selects it. **New folder…** creates a folder, and New… and New folder… start in the selected folder.
   - **New…** asks for a path (a free name is suggested) and creates a valid workflow with an empty root Sequence.
   - **Rename…** (F2) renames or moves the file in the project (server `move`, atomic, never overwrites); an open
     document follows it, unsaved edits included.
