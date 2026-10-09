@@ -1,32 +1,40 @@
-/* MyRPA Web Studio (UX-1 theme). Colours are tokens with a light and a dark theme: the system's by default, or the one
-   chosen in View › Theme (data-theme on <html>). No inline styles (CSP). The accent is MyRPA teal. */
+/* Laconi Studio (ADR-0044, on the UX-1 tokens). Colours are tokens with a light and a dark theme: the system's by
+   default, or the one chosen in View › Theme (data-theme on <html>). No inline styles (CSP). Dark is the brand's
+   reference theme: deep navy surfaces, lime for the primary action, selection and focus, cyan for information. */
 :root {
-  --bg: #f3f5f7;
+  --bg: #f4f6f9;
   --panel: #ffffff;
-  --panel-2: #f7f9fa;
-  --chrome: #eaf0f2;
-  --border: #d4dbe0;
-  --border-strong: #b3bec6;
-  --text: #17222b;
-  --muted: #55616c;
-  --accent: #0b6e79;
-  --accent-strong: #08545d;
+  --panel-2: #f1f5f9;
+  --chrome: #ffffff;
+  --border: #dde3ea;
+  --border-strong: #b8c2cc;
+  --text: #0f172a;
+  --muted: #475569;
+  --accent: #4d7c0f;
+  --accent-strong: #3f6212;
   --accent-text: #ffffff;
-  --accent-soft: #dcf0f1;
-  --selected: #d4eced;
-  --error: #b42318;
-  --error-bg: #fde3df;
-  --ok: #116329;
-  --ok-bg: #dcf3e2;
-  --info-bg: #e1f1f3;
-  --warn: #8a5300;
-  --warn-bg: #fff1d6;
-  --container: #eef4f5;
+  --accent-soft: #ecfccb;
+  --selected: #e3f5c6;
+  --primary: #a3e635;
+  --primary-hover: #93d42a;
+  --primary-text: #0f172a;
+  --info: #0e7490;
+  --error: #b91c1c;
+  --error-bg: #fde4e4;
+  --ok: #15803d;
+  --ok-bg: #dcfce7;
+  --info-bg: #e0f6fb;
+  --warn: #92400e;
+  --warn-bg: #fef3c7;
+  --container: #f1f5f4;
+  --canvas: #f7f9fb;
+  --canvas-dot: #dfe5ec;
   --radius: 6px;
   --radius-lg: 10px;
-  --shadow: 0 1px 1px rgb(16 34 43 / 0.06);
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 8px 24px rgb(15 23 42 / 0.12);
   color-scheme: light;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--bg);
@@ -34,55 +42,69 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #12171b;
-    --panel: #1a2026;
-    --panel-2: #20272e;
-    --chrome: #161c21;
-    --border: #2f3942;
-    --border-strong: #46525d;
-    --text: #e4eaee;
-    --muted: #98a5b0;
-    --accent: #4fc4cf;
-    --accent-strong: #7fd7de;
-    --accent-text: #0a1a1d;
-    --accent-soft: #173539;
-    --selected: #1b3c41;
-    --error: #ff8a7a;
-    --error-bg: #4a1f1a;
-    --ok: #6fd28c;
-    --ok-bg: #1d3a26;
-    --info-bg: #17343a;
-    --warn: #f0c060;
-    --warn-bg: #3d3018;
-    --container: #172128;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+    --bg: #0f172a;
+    --panel: #111f2b;
+    --panel-2: #162736;
+    --chrome: #07131d;
+    --border: #263746;
+    --border-strong: #35495b;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #a3e635;
+    --accent-strong: #bef264;
+    --accent-text: #0f172a;
+    --accent-soft: #1b2b1f;
+    --selected: #1e3322;
+    --primary: #a3e635;
+    --primary-hover: #bef264;
+    --primary-text: #0f172a;
+    --info: #22d3ee;
+    --error: #f87171;
+    --error-bg: #3a1d26;
+    --ok: #4ade80;
+    --ok-bg: #12301f;
+    --info-bg: #0d2c38;
+    --warn: #fbbf24;
+    --warn-bg: #382c12;
+    --container: #0c1a25;
+    --canvas: #0b1620;
+    --canvas-dot: #1b2b3a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.45);
     color-scheme: dark;
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #12171b;
-  --panel: #1a2026;
-  --panel-2: #20272e;
-  --chrome: #161c21;
-  --border: #2f3942;
-  --border-strong: #46525d;
-  --text: #e4eaee;
-  --muted: #98a5b0;
-  --accent: #4fc4cf;
-  --accent-strong: #7fd7de;
-  --accent-text: #0a1a1d;
-  --accent-soft: #173539;
-  --selected: #1b3c41;
-  --error: #ff8a7a;
-  --error-bg: #4a1f1a;
-  --ok: #6fd28c;
-  --ok-bg: #1d3a26;
-  --info-bg: #17343a;
-  --warn: #f0c060;
-  --warn-bg: #3d3018;
-  --container: #172128;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  --bg: #0f172a;
+  --panel: #111f2b;
+  --panel-2: #162736;
+  --chrome: #07131d;
+  --border: #263746;
+  --border-strong: #35495b;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --accent: #a3e635;
+  --accent-strong: #bef264;
+  --accent-text: #0f172a;
+  --accent-soft: #1b2b1f;
+  --selected: #1e3322;
+  --primary: #a3e635;
+  --primary-hover: #bef264;
+  --primary-text: #0f172a;
+  --info: #22d3ee;
+  --error: #f87171;
+  --error-bg: #3a1d26;
+  --ok: #4ade80;
+  --ok-bg: #12301f;
+  --info-bg: #0d2c38;
+  --warn: #fbbf24;
+  --warn-bg: #382c12;
+  --container: #0c1a25;
+  --canvas: #0b1620;
+  --canvas-dot: #1b2b3a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.45);
   color-scheme: dark;
 }
 
@@ -445,3 +467,124 @@ button.command[aria-pressed='false'] .icon { color: var(--muted); }
 .recorded-step .field { min-width: 200px; flex: 1; }
 .recorded-value { align-self: center; color: var(--muted); }
 .recorder-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Laconi Studio (ADR-0044): the brand shell and refined panels. Overrides only; the colours are the tokens above.
+   --------------------------------------------------------------------------------------------------------------- */
+
+/* Layout: a navigation rail before the side panel; the Home page fills the main area. */
+.studio {
+  --rail: 84px;
+  grid-template-columns: var(--rail) min(260px, 30vw) minmax(0, 1fr) min(340px, 32vw);
+  grid-template-areas: 'commandbar commandbar commandbar commandbar' 'rail toolbox designer properties' 'rail output output output' 'status status status status';
+  background: var(--bg);
+}
+.studio.page-home { grid-template-areas: 'commandbar commandbar commandbar commandbar' 'rail home home home' 'rail home home home' 'status status status status'; }
+
+/* Header: the mark, the wordmark and the product name. */
+.commandbar { background: var(--chrome); border-bottom: 1px solid var(--border); }
+.titlebar { background: var(--chrome); border-bottom: 1px solid var(--border); padding: 8px 16px; gap: 16px; }
+.brand { gap: 10px; margin-right: 12px; }
+.brand h1 { display: inline-flex; align-items: baseline; gap: 8px; margin: 0; }
+.brand .wordmark { font-size: 22px; font-weight: 750; letter-spacing: -0.03em; line-height: 1; color: var(--text); }
+.brand .product { font-size: 15px; font-weight: 500; color: var(--muted); }
+.document-title { color: var(--text); font-weight: 600; }
+.titlebar label { color: var(--muted); font-size: 13px; }
+
+/* Navigation rail. */
+.rail { grid-area: rail; display: flex; flex-direction: column; gap: 6px; padding: 12px 8px; background: var(--chrome); border-right: 1px solid var(--border); min-height: 0; }
+.rail-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 9px 0 7px; border: 1px solid transparent; border-radius: var(--radius-lg); background: none; color: var(--muted); font-size: 11px; font-weight: 550; }
+.rail-item:hover:not(:disabled) { color: var(--text); background: var(--panel-2); border-color: transparent; }
+.rail-item[aria-current='page'] { color: var(--accent-strong); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+
+/* Toolbar: one row of commands, icon beside the label; editing and view commands are icons with tooltips. */
+.commands { gap: 2px; padding: 6px 10px; align-items: center; }
+.command-group { grid-template-rows: auto; padding: 0 8px; gap: 2px; border-right: 1px solid var(--border); }
+.command-group .group-label { display: none; }
+button.command, label.command { position: relative; flex-direction: row; gap: 6px; min-width: 0; padding: 6px 10px; font-size: 13px; font-weight: 500; border-radius: var(--radius); }
+button.command .icon { color: var(--muted); }
+button.command:hover:not(:disabled) .icon { color: var(--text); }
+.command-group[aria-label='Edit'] button.command, .command-group[aria-label='View'] button.command { padding: 6px 7px; }
+.command-group[aria-label='Edit'] button.command > span, .command-group[aria-label='View'] button.command > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+button.command.command-run:not(:disabled) { background: var(--primary); color: var(--primary-text); font-weight: 650; }
+button.command.command-run:not(:disabled) .icon { color: var(--primary-text); }
+button.command.command-run:hover:not(:disabled) { background: var(--primary-hover); }
+button.command.command-validate:not(:disabled) .icon, button.command.command-debug:not(:disabled) .icon { color: var(--accent); }
+button.command.command-stop:not(:disabled) .icon, button.command.command-record:not(:disabled) .icon { color: var(--error); }
+button.command[aria-pressed='true'] .icon { color: var(--accent); }
+label.command .icon { color: var(--muted); }
+.command-group .toolbar-status { color: var(--muted); }
+
+/* Controls. */
+button { border-color: var(--border); background: var(--panel-2); border-radius: var(--radius); }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button.primary { background: var(--primary); color: var(--primary-text); border-color: transparent; font-weight: 650; }
+button.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: transparent; }
+input, select, textarea { background: var(--bg); border-color: var(--border); border-radius: var(--radius); }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+:focus-visible { outline-color: var(--accent); }
+h2 { text-transform: none; font-size: 14px; font-weight: 650; letter-spacing: 0; color: var(--text); }
+.hint { color: var(--muted); }
+
+/* Panels. */
+.toolbox, .properties, .output, .sidebar { background: var(--panel); }
+.properties { border-left: 1px solid var(--border); }
+.output { border-top: 1px solid var(--border); }
+.sidebar-tabs { padding: 6px 10px 0; }
+/* The tab already names the panel: its heading stays for screen readers only. */
+.sidebar-panel h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tabs [role='tab'] { padding: 6px 12px; font-weight: 550; }
+.tabs [role='tab'][aria-selected='true'] { color: var(--text); border-bottom-color: var(--accent); }
+.tabs [role='tab'][aria-selected='true'] .icon { color: var(--accent); }
+
+/* Activity list: filter chips, icon + title entries. */
+.chips, .chips[role='group'] { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; border: none; }
+.chip { padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); font-size: 12px; font-weight: 550; }
+.chip:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.chip[aria-pressed='true'] { color: var(--accent-strong); background: var(--accent-soft); border-color: var(--accent); }
+.toolbox button.insert { align-items: center; gap: 8px; padding: 5px 8px; flex-wrap: nowrap; }
+.toolbox button.insert .icon { color: var(--info); }
+.toolbox button.insert:hover:not(:disabled):not([aria-disabled='true']) { background: var(--accent-soft); border-color: transparent; }
+.toolbox button.insert:hover:not(:disabled):not([aria-disabled='true']) .icon { color: var(--accent); }
+.toolbox .namespace-toggle { color: var(--text); }
+.toolbox .category-toggle { color: var(--muted); }
+
+/* Designer canvas and cards. */
+.designer { background-color: var(--canvas); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 20px 20px; }
+.designer-bar { background: var(--canvas); }
+.node { border-radius: var(--radius-lg); background: var(--panel); border-color: var(--border); box-shadow: var(--shadow); }
+.node:hover { border-color: var(--border-strong); }
+.node.selected { background: var(--panel); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+.card-header > .icon { color: var(--info); }
+.node.selected .card-header > .icon { color: var(--accent); }
+.designer .container-item { background: var(--container); border-color: var(--border); }
+.designer .container-item.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.node[data-run-status='Running'] { border-color: var(--info); }
+/* Contrast: running is information (cyan), not the brand lime, on its tinted badge. */
+.badge.status-running { color: var(--info); }
+
+/* Status bar. */
+.statusbar { background: var(--chrome); border-top: 1px solid var(--border); color: var(--muted); }
+
+/* Home page. */
+.home { grid-area: home; overflow: auto; padding: 32px 40px; background: var(--bg); }
+.home-hero { display: flex; align-items: center; gap: 20px; padding: 24px 28px; margin-bottom: 24px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(120deg, var(--accent-soft), var(--panel) 55%); }
+.home-hero h2 { font-size: 26px; font-weight: 750; letter-spacing: -0.02em; margin: 0 0 4px; }
+.home-hero .tagline { margin: 0 0 16px; color: var(--muted); font-size: 16px; }
+.home-hero .tagline strong { color: var(--accent); }
+.home-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-actions button { padding: 8px 14px; }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.home-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); min-width: 0; }
+.home-card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 650; }
+.home-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.home-list li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.home-list li small { color: var(--muted); }
+.home-list .icon { color: var(--info); }
+.link-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 5px 8px; border-radius: var(--radius); }
+.link-row:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+.link-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-run { justify-content: space-between; padding: 4px 8px; }
+.home-run-status { color: var(--muted); font-size: 12px; }
+.home-figure { margin: 0 0 10px; color: var(--muted); }
+.home-figure strong { color: var(--text); font-size: 18px; }

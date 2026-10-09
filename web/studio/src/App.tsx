@@ -29,6 +29,7 @@ import {
   type StudioDialog,
   type StudioState,
   type PaneName,
+  type StudioPage,
   type SidebarTab,
   paneLimits,
   workflowKey,
@@ -56,7 +57,7 @@ function Shell() {
   const path = useStudioState((s) => s.file?.path);
 
   useEffect(() => {
-    document.title = `${path ? `${dirty ? '• ' : ''}${path} — ` : ''}MyRPA Studio`;
+    document.title = `${path ? `${dirty ? '• ' : ''}${path} — ` : ''}Laconi Studio`;
   }, [path, dirty]);
 
   useEffect(() => {
@@ -159,6 +160,7 @@ function Shell() {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => (root.current ? installDragAndDrop(root.current, studio) : undefined), [studio]);
   const panes = useStudioState((s) => s.panes);
+  const page = useStudioState((s) => s.page);
 
   // Panel sizes (UX-2) go to the grid through the CSSOM (CSP-safe); until a panel is resized, the stylesheet decides.
   useEffect(() => {
@@ -171,27 +173,34 @@ function Shell() {
     const custom = panes.hidden.length > 0 || panes.toolbox !== undefined || panes.properties !== undefined || panes.bottom !== undefined;
     // A remembered size is capped by the window (min()), so shrinking the window never squeezes the designer away.
     const capped = (name: PaneName, fallback: string, share: string) => (hidden(name) ? '0px' : panes[name] !== undefined ? `min(${panes[name]}px, ${share})` : fallback);
-    element.style.gridTemplateColumns = custom ? `${capped('toolbox', 'min(260px, 30vw)', '35vw')} minmax(0, 1fr) ${capped('properties', 'min(340px, 32vw)', '40vw')}` : '';
+    element.style.gridTemplateColumns = custom ? `var(--rail) ${capped('toolbox', 'min(260px, 30vw)', '35vw')} minmax(0, 1fr) ${capped('properties', 'min(340px, 32vw)', '40vw')}` : '';
     element.style.gridTemplateRows = custom ? `auto minmax(0, 1fr) ${capped('bottom', 'minmax(140px, 28vh)', '55vh')} auto` : '';
   }, [panes]);
 
   return (
-    <div className="studio" ref={root}>
+    <div className={page === 'home' ? 'studio page-home' : 'studio'} ref={root}>
       <Toolbar />
       {connection === 'ready' ? (
         <>
-          <section className="sidebar" aria-label="Side panel" hidden={panes.hidden.includes('toolbox')}>
-            <SidebarTabs />
-          </section>
-          <WorkflowTree />
-          {!panes.hidden.includes('properties') && <PropertiesPanel />}
-          {!panes.hidden.includes('bottom') && <OutputPanel />}
-          {/* A landmark for the splitters (display: contents keeps them grid items on the panel edges). */}
-          <section className="splitters" aria-label="Panel sizes">
-            {!panes.hidden.includes('toolbox') && <Splitter pane="toolbox" label="Resize the activities panel" />}
-            {!panes.hidden.includes('properties') && <Splitter pane="properties" label="Resize the properties panel" />}
-            {!panes.hidden.includes('bottom') && <Splitter pane="bottom" label="Resize the bottom panel" />}
-          </section>
+          <NavRail />
+          {page === 'home' ? (
+            <HomePage />
+          ) : (
+            <>
+              <section className="sidebar" aria-label="Side panel" hidden={panes.hidden.includes('toolbox')}>
+                <SidebarTabs />
+              </section>
+              <WorkflowTree />
+              {!panes.hidden.includes('properties') && <PropertiesPanel />}
+              {!panes.hidden.includes('bottom') && <OutputPanel />}
+              {/* A landmark for the splitters (display: contents keeps them grid items on the panel edges). */}
+              <section className="splitters" aria-label="Panel sizes">
+                {!panes.hidden.includes('toolbox') && <Splitter pane="toolbox" label="Resize the activities panel" />}
+                {!panes.hidden.includes('properties') && <Splitter pane="properties" label="Resize the properties panel" />}
+                {!panes.hidden.includes('bottom') && <Splitter pane="bottom" label="Resize the bottom panel" />}
+              </section>
+            </>
+          )}
           <RunDialogHost />
           <StudioDialogHost />
         </>
@@ -303,6 +312,128 @@ export function statusLabel(run: RunView): string {
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
 
+const pages: readonly { readonly id: StudioPage; readonly label: string; readonly icon: IconName }[] = [
+  { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'workflows', label: 'Workflows', icon: 'flowchart' },
+];
+
+/**
+ * The navigation rail (ADR-0044): the pages that work today. Runners, schedules and other modules get a place here
+ * when they exist; nothing is shown for them before.
+ */
+function NavRail() {
+  const studio = useStudio();
+  const page = useStudioState((s) => s.page);
+  return (
+    <nav className="rail" aria-label="Main">
+      {pages.map((p) => (
+        <button key={p.id} type="button" className="rail-item" aria-current={page === p.id ? 'page' : undefined} title={p.label} onClick={() => studio.showPage(p.id)}>
+          <Icon name={p.icon} size={20} />
+          <span>{p.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** The Home page (ADR-0044): what this Studio can do now, from real data only (no invented statistics). */
+function HomePage() {
+  const studio = useStudio();
+  const project = useStudioState((s) => s.project);
+  const files = useStudioState((s) => s.files);
+  const activities = useStudioState((s) => s.activities);
+  const plugins = useStudioState((s) => s.plugins?.plugins);
+  const runs = useStudioState((s) => s.runs);
+  const openFile = (path: string) => {
+    studio.showPage('workflows');
+    void studio.requestOpen(path);
+  };
+  const builtIn = activities.filter((a) => a.type.startsWith('Core.')).length;
+  return (
+    <main className="home" aria-labelledby="home-heading">
+      <section className="home-hero">
+        <Icon name="logo" size={56} />
+        <div>
+          <h2 id="home-heading">Laconi Studio</h2>
+          <p className="tagline">
+            Design it. Run it. <strong>Lakoni.</strong>
+          </p>
+          <div className="home-actions">
+            <button
+              type="button"
+              className="primary with-icon"
+              disabled={project === undefined}
+              onClick={() => {
+                studio.showPage('workflows');
+                studio.startName('new');
+              }}
+            >
+              <Icon name="file-new" size={16} /> New workflow
+            </button>
+            <button type="button" className="with-icon" onClick={() => studio.showPage('workflows')}>
+              <Icon name="flowchart" size={16} /> Open the designer
+            </button>
+          </div>
+        </div>
+      </section>
+      <div className="home-grid">
+        <section className="home-card" aria-labelledby="home-workflows">
+          <h3 id="home-workflows">Workflows{project ? ` in ${project}` : ''}</h3>
+          {files.length === 0 ? (
+            <p className="hint">No workflows in this project yet.</p>
+          ) : (
+            <ul className="home-list">
+              {files.map((f) => (
+                <li key={f.path}>
+                  <button type="button" className="link-row" onClick={() => openFile(f.path)} aria-label={`Open ${f.path}`}>
+                    <Icon name="file" size={16} />
+                    <span>{f.path}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="home-card" aria-labelledby="home-runs">
+          <h3 id="home-runs">Runs in this session</h3>
+          {runs.length === 0 ? (
+            <p className="hint">No runs yet. Open a workflow and press Run (F5).</p>
+          ) : (
+            <ul className="home-list">
+              {runs.map((r) => (
+                <li key={r.key} className="home-run">
+                  <span>{r.path}</span>
+                  <span className="home-run-status">{statusLabel(r)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="home-card" aria-labelledby="home-activities">
+          <h3 id="home-activities">Activities</h3>
+          <p className="home-figure">
+            <strong>{activities.length}</strong> activities: {builtIn} built-in, {activities.length - builtIn} from plugins.
+          </p>
+          {plugins && plugins.length > 0 ? (
+            <ul className="home-list">
+              {plugins.map((p) => (
+                <li key={p.id}>
+                  <Icon name="plugin" size={16} /> {p.name}{' '}
+                  <small>
+                    {p.version} · {p.activities.length} activities
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="hint">No plugins loaded. Start the server with --plugin or --plugin-config to add activities.</p>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
+
 function ConnectionPanel() {
   const connection = useStudioState((s) => s.connection);
   return (
@@ -394,7 +525,7 @@ export function validationSummary(state: StudioState): { state: string; text: st
 /** One command: our icon and its label; the label is the accessible name, the title says why it is disabled. */
 function Command({ icon, label, onClick, disabled, title }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean; title?: string }) {
   return (
-    <button type="button" className="command" onClick={onClick} disabled={disabled} title={title}>
+    <button type="button" className={`command command-${icon}`} onClick={onClick} disabled={disabled} title={title ?? label}>
       <Icon name={icon} />
       <span>{label}</span>
     </button>
@@ -479,9 +610,17 @@ function Toolbar() {
   return (
     <header className="commandbar">
       <div className="titlebar">
+        {/* ADR-0044: the Laconi mark with the wordmark; the heading's accessible name is the product name. */}
         <span className="brand">
-          <Icon name="logo" size={22} />
-          <h1>MyRPA Studio</h1>
+          <Icon name="logo" size={26} />
+          <h1 aria-label="Laconi Studio">
+            <span className="wordmark" aria-hidden="true">
+              laconi
+            </span>
+            <span className="product" aria-hidden="true">
+              Studio
+            </span>
+          </h1>
         </span>
         <span className="document-title" data-testid="document-title">
           {file ? `${file.path}${dirty ? ' •' : ''}${file.readOnlyReason ? ' (read-only)' : ''}` : 'No workflow open'}
@@ -639,6 +778,7 @@ function Toolbox() {
   const blocked = useStudioState((s) => editRefusal(s) !== undefined);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [group, setGroup] = useState<string>();
   // The catalog (built-in and plugin activities, ADR-0020) by type namespace (UX-2), then by category; the search also
   // matches descriptions.
   const namespaces = useMemo(() => {
@@ -652,9 +792,14 @@ function Toolbox() {
     }
 
     return [...byNamespace]
+      .filter(([namespace]) => group === undefined || namespace === group)
       .sort(([a], [b]) => (a === 'Core' ? -1 : b === 'Core' ? 1 : a.localeCompare(b)))
       .map(([namespace, categories]) => ({ namespace, categories: [...categories].sort(([a], [b]) => a.localeCompare(b)) }));
-  }, [activities, query]);
+  }, [activities, query, group]);
+  const allNamespaces = useMemo(
+    () => [...new Set(activities.map((a) => namespaceOf(a.type)))].sort((a, b) => (a === 'Core' ? -1 : b === 'Core' ? 1 : a.localeCompare(b))),
+    [activities],
+  );
   const searching = query.trim() !== '';
   const toggle = (group: string) => setCollapsed((current) => new Set(current.has(group) ? [...current].filter((c) => c !== group) : [...current, group]));
   const insertProps = (a: ActivityDescriptor) => ({
@@ -696,6 +841,13 @@ function Toolbox() {
       <p className="hint" id="toolbox-hint">
         {refusal ?? 'Inserts after the selected activity, or at the end of a selected Sequence.'}
       </p>
+      <div className="chips" role="group" aria-label="Activity groups">
+        {[undefined, ...allNamespaces].map((ns) => (
+          <button key={ns ?? 'all'} type="button" className="chip" aria-pressed={group === ns} onClick={() => setGroup(ns)}>
+            {ns === undefined ? 'All' : namespaceLabel(ns)}
+          </button>
+        ))}
+      </div>
       {shortcuts('Favorites', 'star', favorites)}
       {shortcuts('Recent', 'recent', recent)}
       {namespaces.length === 0 && <p className="hint">{searching ? `No activity matches "${query.trim()}".` : 'The server has no activities.'}</p>}
@@ -733,6 +885,7 @@ function Toolbox() {
                                     aria-describedby={a.description || sideEffectsText(a) ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
                                     {...insertProps(a)}
                                   >
+                                    <Icon name={activityIcon(a.type, a)} size={15} />
                                     <span>{a.displayName}</span>
                                   </button>
                                   <button
@@ -1431,7 +1584,27 @@ const typeIcons: Record<string, IconName> = {
   'Core.State': 'state',
 };
 
-const activityIcon = (type: string | undefined): IconName => (type === undefined ? 'activity' : (typeIcons[type] ?? (type.startsWith('Browser.') ? 'browser' : 'activity')));
+const namespaceIcons: readonly (readonly [string, IconName])[] = [
+  ['Core.Text.', 'log'],
+  ['Core.Json.', 'data'],
+  ['Core.Date.', 'recent'],
+  ['Core.Collection.', 'sequence'],
+  ['Browser.', 'browser'],
+];
+
+/** An activity's icon (ADR-0044): built-ins by type or namespace; any other activity by its declared side effects. */
+const activityIcon = (type: string | undefined, activity?: ActivityDescriptor): IconName => {
+  if (type === undefined) {
+    return 'activity';
+  }
+
+  const effects = activity?.sideEffects ?? [];
+  return (
+    typeIcons[type] ??
+    namespaceIcons.find(([prefix]) => type.startsWith(prefix))?.[1] ??
+    (effects.includes('Browser') ? 'browser' : effects.includes('Network') ? 'globe' : effects.includes('FileSystem') ? 'file' : 'activity')
+  );
+};
 
 const summaries = new WeakMap<JsonObject, string>();
 
@@ -1534,7 +1707,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
             </button>
           )}
           {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
-          <Icon name={activityIcon(type)} size={16} />
+          <Icon name={activityIcon(type, activity)} size={16} />
           <span className="title">
             {slot !== undefined && <span className="slot">{slot}:</span>}{slot !== undefined && ' '}
             <span className="label">{label}</span> <span className="type">{type}</span> {id !== undefined && <span className="id">#{id}</span>}
@@ -1937,7 +2110,7 @@ const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { no
       <div className={`node step-card${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
         <div className="card-header">
           {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
-          <Icon name={activityIcon(type)} size={16} />
+          <Icon name={activityIcon(type, activity)} size={16} />
           <span className="title">
             <span className="label">{label}</span> {id !== undefined && <span className="id">#{id}</span>}
             {start && ' '}

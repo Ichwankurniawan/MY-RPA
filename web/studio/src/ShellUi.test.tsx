@@ -54,9 +54,9 @@ describe('Icons', () => {
   });
 
   it('is an image with a name when given a label', () => {
-    render(<Icon name="logo" label="MyRPA" />);
+    render(<Icon name="logo" label="Laconi" />);
 
-    expect(screen.getByRole('img', { name: 'MyRPA' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Laconi' })).toBeTruthy();
   });
 });
 

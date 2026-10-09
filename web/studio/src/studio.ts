@@ -207,6 +207,8 @@ export interface StudioState {
   readonly outputTab: OutputTab;
   /** Panel sizes (px, only once resized) and hidden panels (UX-2; remembered per browser). */
   readonly panes: Panes;
+  /** The page shown in the main area (ADR-0044): the Studio itself, or the Home page. */
+  readonly page: StudioPage;
   /** The left panel's tab: the activity catalog or the project's files (remembered per browser). */
   readonly sidebarTab: SidebarTab;
   /** Containers whose children are hidden in the designer (UX-3; never an ancestor of the selection). */
@@ -264,6 +266,9 @@ const isPanes = (value: unknown): value is Panes => {
 
 /** The tabs of the bottom panel. */
 export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution' | 'recording';
+
+/** The pages of the navigation rail (ADR-0044); only pages that work are listed. */
+export type StudioPage = 'workflows' | 'home';
 
 /** The tabs of the left panel. */
 export type SidebarTab = 'activities' | 'files';
@@ -777,6 +782,7 @@ export class Studio {
       recentActivities: (this.preferences.read(preferenceKeys.recent, isTypeList) ?? []).slice(0, maxRecent),
       outputTab: 'problems',
       panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
+      page: 'workflows',
       sidebarTab: this.preferences.read(preferenceKeys.sidebarTab, isSidebarTab) ?? 'activities',
       collapsed: new Set(),
       graphLists: new Set(),
@@ -1359,6 +1365,11 @@ export class Studio {
   showSidebar(tab: SidebarTab): void {
     this.store.set({ sidebarTab: tab });
     this.preferences.write(preferenceKeys.sidebarTab, tab);
+  }
+
+  /** Shows a page of the navigation rail. */
+  showPage(page: StudioPage): void {
+    this.store.set({ page });
   }
 
   /** Shows a tab of the bottom panel. */

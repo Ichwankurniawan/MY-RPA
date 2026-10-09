@@ -5,14 +5,24 @@
 import type { ReactNode } from 'react';
 
 const paths = {
-  // The MyRPA mark: a rounded tile holding three connected steps (a tiny workflow).
+  // The Laconi mark (ADR-0044): a lime L whose foot rises to the tip of a play triangle; a darker green facet fills the
+  // triangle. Brand colours, not currentColor, so the mark reads the same on dark and light backgrounds.
   logo: (
     <>
-      <rect x="2.5" y="2.5" width="19" height="19" rx="5.5" />
-      <path d="M8 8.5h8M8 8.5l4 7.5M16 8.5l-4 7.5" />
-      <circle cx="8" cy="8.5" r="1.9" fill="currentColor" />
-      <circle cx="16" cy="8.5" r="1.9" fill="currentColor" />
-      <circle cx="12" cy="16" r="1.9" fill="currentColor" />
+      <path d="M6.6 4.6L19.2 12L6.6 18.4Z" fill="#65a30d" stroke="#65a30d" strokeWidth={4} />
+      <path d="M6.6 4.6V18.4L19.2 12" stroke="#a3e635" strokeWidth={4.4} />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5s1.2-6.1 3.6-8.5z" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="M4 10.5L12 4l8 6.5" />
+      <path d="M6 9v10.5h4.5V14h3v5.5H18V9" />
     </>
   ),
   'file-new': (

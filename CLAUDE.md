@@ -134,6 +134,9 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 - Edits are pure functions on the v1.0 JSON with refusal reasons (`document.ts`, `placement.ts`, `workflowData.ts`); the
   store is the small `useSyncExternalStore` store; diagnostics are located like WPF did (corpus parity, ADR-0035).
 - Keep the CSP (`default-src 'self'`: no inline styles or scripts), the session, Origin and anti-forgery checks.
+- The Studio is branded **Laconi Studio** (ADR-0044): colours only through the tokens in `style.css` (dark reference
+  theme), the `logo` icon is the Laconi mark, and the rail lists only pages that work. Code names (`MyRPA.*`, `myrpa`,
+  `MyRPA.Server`) are unchanged unless the owner decides otherwise.
 
 ## Code style
 

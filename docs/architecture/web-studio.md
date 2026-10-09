@@ -93,6 +93,22 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
+- **Brand and shell (ADR-0044):**
+  - **Brand:** the product is shown as **Laconi Studio**, with the Laconi mark (`logo` icon, favicon) and the tagline
+    "Design it. Run it. Lakoni.". The server program and code keep their `MyRPA` names.
+  - **Theme:** the tokens in `style.css` carry the brand palette (dark reference theme, light variant). `--primary`
+    marks the main action (Run).
+  - **Navigation rail:** shows only working pages: **Workflows** (the designer, the start page) and **Home**.
+  - **Home page:** shows only real data:
+    - the project's workflows (open one in the designer);
+    - New workflow;
+    - the runs of this session;
+    - the activity count and the loaded plugins.
+  - **Toolbar:** one row. The main commands show labels; editing and view commands are icons whose names stay the
+    accessible names and tooltips.
+  - **Activity list:** group chips (one per catalog namespace) and an icon per activity. Built-ins get theirs by
+    type; other activities by their declared side effects (browser, network, files), so new plugins need no Studio
+    change.
 - **Left panel:** two tabs, **Activities** (the catalog) and **Files** (the project), one shown at a time and
   remembered per browser (`myrpa.ui.sidebarTab`). An activity entry shows its title only; its type, description and
   side effects are the tooltip and the accessible description. A plugin namespace with one category lists its
