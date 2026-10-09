@@ -35,7 +35,23 @@ public sealed class WorkflowLoader(IActivityCatalog catalog)
 
     /// <summary>Loads and validates workflow JSON text.</summary>
     /// <param name="json">Workflow JSON.</param>
-    public WorkflowLoadResult Load(string json)
+    public WorkflowLoadResult Load(string json) => Load(json, nameRecorder: null);
+
+    /// <summary>
+    /// The names of workflow JSON as validation sees them (ADR-0041): declarations, the names in scope at each node and
+    /// every use of each name, for completion, rename and usages. Works on documents with errors as far as they can be
+    /// read; a document that is not JSON or not of a supported schema version has no names.
+    /// </summary>
+    /// <param name="json">Workflow JSON.</param>
+    /// <returns>The name index.</returns>
+    public WorkflowNameIndex IndexNames(string json)
+    {
+        var recorder = new WorkflowNameRecorder();
+        Load(json, recorder);
+        return recorder.Build();
+    }
+
+    private WorkflowLoadResult Load(string json, WorkflowNameRecorder? nameRecorder)
     {
         ArgumentNullException.ThrowIfNull(json);
         var diagnostics = new List<ValidationDiagnostic>();
@@ -69,7 +85,7 @@ public sealed class WorkflowLoader(IActivityCatalog catalog)
             }
 
             var raw = new WorkflowStructureReader(diagnostics).Read(document.RootElement)!;
-            var workflow = new WorkflowSemanticValidator(_catalog, diagnostics).Validate(raw, version);
+            var workflow = new WorkflowSemanticValidator(_catalog, diagnostics, nameRecorder).Validate(raw, version);
             return new WorkflowLoadResult(workflow, diagnostics);
         }
     }

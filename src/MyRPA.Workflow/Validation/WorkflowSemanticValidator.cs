@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using MyRPA.Core.Activities;
 using MyRPA.Core.Identifiers;
@@ -10,9 +11,11 @@ namespace MyRPA.Workflow.Validation;
 /// <summary>
 /// Stage 4 of the pipeline (ADR-0011): checks identity, arguments, variables, node ids, activity types, properties,
 /// expressions, name references, assignment targets, children and slots against the activity catalog. Collects all
-/// diagnostics; builds a <see cref="WorkflowDefinition"/> only when there are no errors.
+/// diagnostics; builds a <see cref="WorkflowDefinition"/> only when there are no errors. With a
+/// <see cref="WorkflowNameRecorder"/> it also records the names in scope at each node and every use of a name
+/// (ADR-0041); the diagnostics are the same either way.
 /// </summary>
-internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<ValidationDiagnostic> diagnostics)
+internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<ValidationDiagnostic> diagnostics, WorkflowNameRecorder? nameRecorder = null)
 {
     // Format 1.1 rules for the built-in state machine (format §3.1, ADR-0037).
     private const string StateMachineType = "Core.StateMachine";
@@ -47,6 +50,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
         var scope = new Scope(null);
         var arguments = ValidateArguments(raw.Arguments, scope);
         var variables = ValidateVariables(raw.Variables, scope);
+        nameRecorder?.Scope(WorkflowNameIndex.WorkflowLevel, scope.Visible());
         var root = raw.Root is null ? null : ValidateNode(raw.Root, scope, siblings: null);
 
         if (ErrorCount() > errorsBefore || id is null || root is null || string.IsNullOrWhiteSpace(raw.Name) || string.IsNullOrWhiteSpace(raw.Version))
@@ -95,12 +99,17 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
 
             if (name is not null && hasDirection)
             {
-                scope.Declare(name, direction switch
+                var symbol = new WorkflowSymbol(name, WorkflowSymbolKind.Argument, hasType ? type : WorkflowDataType.Object, raw.Path, direction);
+                var kind = direction switch
                 {
                     ArgumentDirection.In => SymbolKind.InArgument,
                     ArgumentDirection.Out => SymbolKind.OutArgument,
                     _ => SymbolKind.InOutArgument,
-                });
+                };
+                if (scope.Declare(name, kind, symbol))
+                {
+                    nameRecorder?.Declared(symbol, raw.Path + ".name");
+                }
             }
 
             result.Add(ok ? new ArgumentDefinition(name!, direction, type, raw.Required, defaultValue) : null);
@@ -126,7 +135,11 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
 
             if (name is not null)
             {
-                scope.Declare(name, SymbolKind.Variable);
+                var symbol = new WorkflowSymbol(name, WorkflowSymbolKind.Variable, hasType ? type : WorkflowDataType.Object, raw.Path);
+                if (scope.Declare(name, SymbolKind.Variable, symbol))
+                {
+                    nameRecorder?.Declared(symbol, raw.Path + ".name");
+                }
             }
 
             result.Add(ok ? new VariableDefinition(name!, type, defaultValue) : null);
@@ -193,6 +206,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
     private NodeDefinition? ValidateNode(RawNode raw, Scope scope, IReadOnlySet<string>? siblings)
     {
         var errorsBefore = ErrorCount();
+        nameRecorder?.Scope(raw.Path, scope.Visible());
 
         NodeId? id = null;
         if (raw.Id is not null)
@@ -223,7 +237,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
         }
 
         var properties = new List<KeyValuePair<string, PropertyValue>>();
-        var locals = new List<(string Name, IReadOnlyList<string> Slots)>();
+        var locals = new List<(string Name, IReadOnlyList<string> Slots, WorkflowSymbol Symbol)>();
         if (descriptor is not null)
         {
             ValidateProperties(raw, descriptor, scope, nodeId, properties, locals);
@@ -272,7 +286,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
                 slotScope = new Scope(scope);
                 foreach (var local in slotLocals)
                 {
-                    slotScope.Declare(local.Name, SymbolKind.Local);
+                    slotScope.Declare(local.Name, SymbolKind.Local, local.Symbol);
                 }
             }
 
@@ -415,7 +429,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
         Scope scope,
         string? nodeId,
         List<KeyValuePair<string, PropertyValue>> properties,
-        List<(string Name, IReadOnlyList<string> Slots)> locals)
+        List<(string Name, IReadOnlyList<string> Slots, WorkflowSymbol Symbol)> locals)
     {
         foreach (var rawProperty in raw.Properties)
         {
@@ -436,7 +450,10 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
             properties.Add(new(rawProperty.Name, value));
             if (definition.Kind == ActivityPropertyKind.LocalName && value is NamePropertyValue local)
             {
-                locals.Add((local.Name, definition.ScopeSlots));
+                // One declaration, visible in each of the activity's scope slots.
+                var symbol = new WorkflowSymbol(local.Name, WorkflowSymbolKind.Local, WorkflowDataType.Object, rawProperty.Path);
+                nameRecorder?.Declared(symbol, rawProperty.Path);
+                locals.Add((local.Name, definition.ScopeSlots, symbol));
             }
         }
 
@@ -584,11 +601,13 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
 
     private bool CheckAssignmentTarget(string name, string path, Scope scope, string? nodeId)
     {
-        if (!scope.TryFind(name, out var kind))
+        if (!scope.TryFind(name, out var kind, out var symbol))
         {
             Error(DiagnosticCodes.InvalidAssignmentTarget, path, $"Unknown variable or argument '{name}'.", nodeId);
             return false;
         }
+
+        nameRecorder?.Used(symbol, path, 0, name.Length);
 
         if (!IsWritable(kind))
         {
@@ -608,6 +627,17 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
                 {
                     Error(DiagnosticCodes.InvalidExpression, path, syntaxError.Message, nodeId);
                     return null;
+                }
+
+                if (nameRecorder is not null)
+                {
+                    foreach (var occurrence in expression.NameReferences)
+                    {
+                        if (scope.TryFind(occurrence.Name, out _, out var used))
+                        {
+                            nameRecorder.Used(used, path, occurrence.Start, occurrence.Length);
+                        }
+                    }
                 }
 
                 if (expression.FindFunctionProblem() is { } functionProblem)
@@ -658,22 +688,54 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
 
     private sealed class Scope(Scope? parent)
     {
-        private readonly Dictionary<string, SymbolKind> _symbols = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (SymbolKind Kind, WorkflowSymbol Symbol)> _symbols = new(StringComparer.Ordinal);
 
-        public void Declare(string name, SymbolKind kind) => _symbols.TryAdd(name, kind);
+        /// <summary>Declares a name here; false when this scope already has it (a duplicate, reported by the caller).</summary>
+        public bool Declare(string name, SymbolKind kind, WorkflowSymbol symbol) => _symbols.TryAdd(name, (kind, symbol));
 
-        public bool TryFind(string name, out SymbolKind kind)
+        public bool TryFind(string name, out SymbolKind kind) => TryFind(name, out kind, out _);
+
+        public bool TryFind(string name, out SymbolKind kind, [NotNullWhen(true)] out WorkflowSymbol? symbol)
         {
             for (var scope = this; scope is not null; scope = scope.Parent)
             {
-                if (scope._symbols.TryGetValue(name, out kind))
+                if (scope._symbols.TryGetValue(name, out var entry))
                 {
+                    (kind, symbol) = entry;
                     return true;
                 }
             }
 
             kind = default;
+            symbol = null;
             return false;
+        }
+
+        /// <summary>The names visible here: the outermost scope's first, an inner name in place of an outer one.</summary>
+        public List<WorkflowSymbol> Visible()
+        {
+            var chain = new List<Scope>();
+            for (var scope = this; scope is not null; scope = scope.Parent)
+            {
+                chain.Insert(0, scope);
+            }
+
+            var visible = new List<WorkflowSymbol>();
+            foreach (var scope in chain)
+            {
+                foreach (var (name, entry) in scope._symbols)
+                {
+                    var hidden = visible.FindIndex(s => string.Equals(s.Name, name, StringComparison.Ordinal));
+                    if (hidden >= 0)
+                    {
+                        visible.RemoveAt(hidden);
+                    }
+
+                    visible.Add(entry.Symbol);
+                }
+            }
+
+            return visible;
         }
 
         private Scope? Parent { get; } = parent;

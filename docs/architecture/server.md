@@ -73,6 +73,9 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workfl
 | `DELETE /api/projects/{project}/workflows/{path}` | Delete; `If-Match` required |
 | `POST /api/projects/{project}/move` | `{ from, to }` with `If-Match` (the source's ETag): renames or moves a file within the project, atomically, content unchanged → 200 `{ path }` and the `ETag`. 409 if `to` exists (never overwrites), 412 on a stale ETag, 428 without `If-Match`, 404 if `from` is gone, 400 for paths the store refuses or `from` = `to` (W6) |
 | `POST /api/validate` | `{ document }` → `{ valid, diagnostics: [{ code, severity, message, path, nodeId }] }` from the engine's `WorkflowLoader`. `…properties.<name>` in a path names the property (ADR-0026). |
+| `GET /api/expressions/functions` | The expression functions (ADR-0041): `[{ name, minArguments, maxArguments, signature, description }]` |
+| `POST /api/expressions/scope` | `{ document, path }` → `{ names: [{ name, kind, type, direction, path }] }`: the arguments, variables and locals visible at `path` (a node or anything inside it), as the loader's validation sees them. Works on documents with errors as far as they can be read |
+| `POST /api/expressions/references` | `{ document, path, name }` → `{ declaration, references: [{ path, start, length, declaration }] }`: the declaration `name` resolves to at `path` and every place it is written, with the name's exact characters in each string. Scope-aware: a local of another loop is another declaration; member names and text in strings never match. 400 for a bad document, path or name |
 | `POST /api/runs` | `{ project, path, document?, arguments?, argumentText?, timeoutMs?, debug? }` → 202 `{ runId }`. See below. |
 | `GET /api/runs/{runId}` | `{ runId, state, lastSequence, result? }`. The result has status, ids, duration, outputs and error. |
 | `POST /api/runs/{runId}/cancel` | 202, 404 if the run is unknown, 409 if it already finished |
