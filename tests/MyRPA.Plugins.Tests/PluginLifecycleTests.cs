@@ -32,7 +32,7 @@ public sealed class PluginLifecycleTests
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         var journal = Assert.IsAssignableFrom<IReadOnlyList<object?>>(result.Outputs["result"]);
-        Assert.Equal(["plugin:initialize:Tests.Fixture:custom:1.1", "plugin:register", "provider:created"], journal);
+        Assert.Equal(["plugin:initialize:Tests.Fixture:custom:1.2", "plugin:register", "provider:created"], journal);
     }
 
     [Fact]

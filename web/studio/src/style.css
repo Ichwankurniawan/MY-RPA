@@ -295,6 +295,10 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .usages { list-style: none; margin: 0 0 8px; padding: 0; }
 .usages li { padding: 2px 0; }
 
+/* Catalog 1.2 (ADR-0042): secret properties and what an activity touches. */
+.badge.secret { background: var(--warn-bg); color: var(--warn); }
+.description .side-effects { font-style: italic; }
+
 /* Properties. */
 .properties { grid-area: properties; border-left: 1px solid var(--border); }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; }

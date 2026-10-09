@@ -218,7 +218,7 @@ public sealed class GraphWorkflowTests
         var json = ActivityCatalogJson.Write(new TestCatalog().Descriptors);
         var snapshot = ActivityCatalogJson.Read(json);
 
-        Assert.Contains("\"catalogVersion\": \"1.1\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"catalogVersion\": \"1.2\"", json, StringComparison.Ordinal);
         Assert.Contains("\"childLayout\": \"Graph\"", json, StringComparison.Ordinal);
         Assert.True(snapshot.TryGet(new("Core.Flowchart"), out var flowchart));
         Assert.Equal(ActivityChildLayout.Graph, flowchart.ChildLayout);

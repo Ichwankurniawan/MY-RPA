@@ -7,12 +7,13 @@ namespace MyRPA.Sdk.Tests;
 public sealed class SdkTypeTests
 {
     [Fact]
-    public void SdkVersion_IsOnePointOne() => Assert.Equal("1.1", AutomationSdk.Version.ToString());
+    public void SdkVersion_IsOnePointTwo() => Assert.Equal("1.2", AutomationSdk.Version.ToString());
 
     [Theory]
     [InlineData("1.0", true)]
     [InlineData("1.1", true)]
-    [InlineData("1.2", false)]
+    [InlineData("1.2", true)]
+    [InlineData("1.3", false)]
     [InlineData("0.9", false)]
     [InlineData("2.0", false)]
     public void SdkVersion_SupportsSameMajorAndLowerOrEqualMinor(string required, bool supported)

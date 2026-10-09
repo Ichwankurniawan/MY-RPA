@@ -465,7 +465,7 @@ function PropertyEditor({
         disabled={disabled}
         invalid={errors.length > 0}
         describedBy={describedBy}
-        placeholder="expression, e.g. 'Hello ' + name"
+        placeholder={descriptor.default !== undefined ? `default: ${JSON.stringify(descriptor.default)}` : descriptor.secret ? 'an argument or variable, e.g. apiToken' : "expression, e.g. 'Hello ' + name"}
         onChange={onChange}
       />
     );
@@ -501,11 +501,16 @@ function PropertyEditor({
     <div className={`field${errors.length > 0 ? ' invalid' : ''}`}>
       <label className="field-label" htmlFor={isMap ? undefined : id} id={`${id}-label`}>
         {descriptor.name}
-        {descriptor.required && <span aria-label="required"> *</span>} <small>{kindLabel}</small>
+        {descriptor.required && <span aria-label="required"> *</span>} <small>{kindLabel}{descriptor.valueType ? ` · ${descriptor.valueType}` : ''}</small>
         {literal && <small className="badge">literal</small>}
+        {descriptor.secret && ' '}
+        {descriptor.secret && <small className="badge secret">secret</small>}
       </label>
       {editor}
-      <small id={`${id}-hint`}>{descriptor.description}</small>
+      <small id={`${id}-hint`}>
+        {descriptor.description}
+        {descriptor.secret && `${descriptor.description ? ' ' : ''}A secret: give it from an argument or variable supplied when the workflow runs, never type the secret itself here.`}
+      </small>
       {errors.length > 0 && (
         <span id={`${id}-error`} className="field-error">
           {problemText(errors)}

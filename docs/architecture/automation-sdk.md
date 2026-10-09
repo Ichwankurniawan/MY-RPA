@@ -79,6 +79,22 @@ the descriptor, never from code.
 | `ExpressionMap` | Name → expression | `EvaluateMap` |
 | `AssignmentTargetMap` | Key → writable name | `GetNameMap` + `SetValue` |
 
+Catalog 1.2 (SDK 1.2, ADR-0042) adds optional, `init`-only metadata for tools (a Studio, a future assistant). The
+engine does not change behaviour because of it, except the secret rule:
+- `ActivityPropertyDefinition.ValueType`: `Any` (default), `String`, `Int`, `Decimal`, `Boolean`, `DateTime`, `List`,
+  `Dictionary`.
+- `ActivityPropertyDefinition.DefaultValue`: JSON text of the value the activity uses when the property is omitted.
+  The activity applies it; the metadata documents it.
+- `ActivityPropertyDefinition.IsSecret`: an expression property that holds a password or token. Validation refuses a
+  literal there (`MYRPA1066`): the value must come from an argument or variable at run time. An activity never logs it
+  and never puts it into an error.
+- `ActivityDescriptor.SideEffects`: `None`, or any of `FileSystem`, `Network`, `Browser`.
+
+```csharp
+new ActivityPropertyDefinition("token", ActivityPropertyKind.Expression) { ValueType = ActivityValueType.String, IsSecret = true }
+new ActivityDescriptor(type, "HTTP Request", "API", description, properties) { SideEffects = ActivitySideEffects.Network }
+```
+
 ### Lifetime and resource ownership
 
 ```mermaid
@@ -225,7 +241,7 @@ The full sample, including the plugin entry point, manifest and provider, is in
 `samples/plugins/MyRPA.Samples.DemoPlugin/`.
 
 ## Versioning
-- `AutomationSdk.Version` (currently 1.1) is the contract version:
+- `AutomationSdk.Version` (currently 1.2) is the contract version:
   - a **minor** version only adds members (for example a new `ActivityResult` outcome, or a new context member with a
     default behaviour);
   - a **major** version may remove or change members.
@@ -233,6 +249,8 @@ The full sample, including the plugin entry point, manifest and provider, is in
 - SDK 1.1 (ADR-0037) added `IActivityContext.ExecuteStepAsync`, `IActivityContext.ChooseTransition` and
   `ActivityDescriptor.ChildLayout`. Plugins that
   declare `sdkVersion: "1.0"` still load; a plugin that uses graph containers declares `1.1`.
+- SDK 1.2 (ADR-0042) added the catalog 1.2 metadata above as `init` members, so plugins built for 1.0 and 1.1 load
+  unchanged; a plugin that sets them declares `1.2`.
 - The workflow schema version (1.1) and the manifest version (1.0) are versioned independently of the SDK.
 - Technical debt: the SDK assemblies still carry the product assembly version (0.1.0). Before a public SDK, their
   assembly versions must follow the SDK version, so that runtime binding and the manifest check agree.

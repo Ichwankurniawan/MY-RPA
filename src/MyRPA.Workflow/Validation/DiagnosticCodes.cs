@@ -110,4 +110,7 @@ public static class DiagnosticCodes
 
     /// <summary>An Out argument declares a default or is marked required.</summary>
     public const string OutArgumentMisuse = "MYRPA1065";
+
+    /// <summary>A secret property (ADR-0042) has a literal value; it must come from an argument or variable.</summary>
+    public const string SecretLiteral = "MYRPA1066";
 }

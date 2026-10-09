@@ -182,6 +182,7 @@ injected clock. There is no access to .NET members or types. Limits: 4096 charac
 | MYRPA1057 | Layout position is not a finite number, or a final state (`final` literally true) with transitions |
 | MYRPA1058 | `transitions`, `layout` or a graph container in a file that declares a schema version before 1.1 |
 | MYRPA1060 / 1061 / 1062 / 1063 / 1064 / 1065 | Invalid name / duplicate name / invalid direction / invalid type / invalid default / Out argument with default or required |
+| MYRPA1066 | A secret property (catalog 1.2, ADR-0042) has a literal value: it must read an argument or variable, so no password or token is written in the file |
 
 ## 7. Execution error codes
 

@@ -24,6 +24,12 @@ export interface PropertyDescriptor {
   description?: string;
   allowedValues: string[];
   scopeSlots: string[];
+  /** Catalog 1.2 (ADR-0042): the kind of value expected (absent: any). */
+  valueType?: string;
+  /** Catalog 1.2: the value used when the property is omitted. */
+  default?: Json;
+  /** Catalog 1.2: a secret (password, token): it must come from an argument or variable, never a written value. */
+  secret?: boolean;
 }
 
 export interface SlotDescriptor {
@@ -42,6 +48,8 @@ export interface ActivityDescriptor {
   allowsChildren: boolean;
   /** Catalog 1.1 (ADR-0037): `Graph` for containers whose children are flowchart steps; absent in 1.0 snapshots. */
   childLayout?: 'List' | 'Graph';
+  /** Catalog 1.2 (ADR-0042): what the activity touches outside the workflow (FileSystem, Network, Browser). */
+  sideEffects?: string[];
   properties: PropertyDescriptor[];
   slots: SlotDescriptor[];
 }

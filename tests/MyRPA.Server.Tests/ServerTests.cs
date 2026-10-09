@@ -352,7 +352,7 @@ public sealed class ProjectAndCatalogTests
         Assert.Equal("local", info.GetProperty("mode").GetString());
         Assert.Equal(["1.0", "1.1"], info.GetProperty("workflowSchemaVersions").EnumerateArray().Select(v => v.GetString()));
         Assert.Equal(h.ProjectName, info.GetProperty("projects")[0].GetString());
-        Assert.Equal("1.1", catalog.GetProperty("catalogVersion").GetString());
+        Assert.Equal("1.2", catalog.GetProperty("catalogVersion").GetString());
         Assert.Contains(catalog.GetProperty("activities").EnumerateArray(), a => a.GetProperty("type").GetString() == "Core.Log");
     }
 

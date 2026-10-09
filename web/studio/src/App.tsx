@@ -669,7 +669,7 @@ function Toolbox() {
                                   <button
                                     className="insert"
                                     aria-label={`Insert ${a.displayName} (${a.type})`}
-                                    aria-describedby={a.description ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
+                                    aria-describedby={a.description || sideEffectsText(a) ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
                                     {...insertProps(a)}
                                   >
                                     <span>{a.displayName}</span> <small>({a.type})</small>
@@ -684,9 +684,11 @@ function Toolbox() {
                                   >
                                     <Icon name="star" size={14} />
                                   </button>
-                                  {a.description && (
+                                  {(a.description || sideEffectsText(a)) && (
                                     <small className="description" id={descriptionId(a.type)}>
                                       {a.description}
+                                      {a.description && sideEffectsText(a) && ' '}
+                                      {sideEffectsText(a) && <span className="side-effects">{sideEffectsText(a)}</span>}
                                     </small>
                                   )}
                                 </li>
@@ -1539,6 +1541,14 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
     </li>
   );
 });
+
+const sideEffectNames: Readonly<Record<string, string>> = { FileSystem: 'files', Network: 'network', Browser: 'browser' };
+
+/** What an activity touches outside the workflow, from catalog 1.2 (ADR-0042), e.g. "Uses: files, network". */
+export function sideEffectsText(activity: ActivityDescriptor): string {
+  const effects = (activity.sideEffects ?? []).map((e) => sideEffectNames[e] ?? e.toLowerCase());
+  return effects.length > 0 ? `Uses: ${effects.join(', ')}.` : '';
+}
 
 /** Whether the open file has a breakpoint on the node with `id` (ADR-0040). */
 function hasBreakpoint(state: StudioState, id: string | undefined): boolean {
