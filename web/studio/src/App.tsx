@@ -10,7 +10,10 @@ import { InlineProperties, PropertiesPanel } from './PropertyEditors';
 import { RecordingPanel } from './RecordingPanel';
 import {
   currentRun,
+  debugCommandLabels,
+  debugRefusalOf,
   deleteRefusalOf,
+  fileKeyOf,
   editRefusal,
   insertRefusal,
   isActive,
@@ -28,7 +31,7 @@ import {
   workflowKey,
   zoomLimits,
 } from './studio';
-import type { ActivityDescriptor, ExecutionEvent, Json, JsonObject, WorkflowFile } from './types';
+import type { ActivityDescriptor, DebugCommandName, ExecutionEvent, Json, JsonObject, WorkflowFile } from './types';
 
 
 export function App({ studio }: { studio: Studio }) {
@@ -70,8 +73,31 @@ function Shell() {
         event.preventDefault();
         if (event.shiftKey) {
           void studio.stop();
+        } else if (currentRun(studio.store.get())?.paused !== undefined) {
+          void studio.debugCommand('continue');
         } else if (studio.store.get().runDialog === undefined) {
           void studio.requestRun();
+        }
+      } else if (event.key === 'F6' && !command) {
+        event.preventDefault();
+        if (studio.store.get().runDialog === undefined) {
+          void studio.debug();
+        }
+      } else if (event.key === 'F9' && !command) {
+        event.preventDefault();
+        studio.toggleBreakpoint();
+      } else if (event.key === 'F10' && !command) {
+        event.preventDefault();
+        void studio.debugCommand('stepOver');
+      } else if (event.key === 'F11' && !command) {
+        event.preventDefault();
+        const run = currentRun(studio.store.get());
+        if (event.shiftKey) {
+          void studio.debugCommand('stepOut');
+        } else if (run?.debug === true && isActive(run)) {
+          void studio.debugCommand('stepInto');
+        } else if (studio.store.get().runDialog === undefined) {
+          void studio.debug('step');
         }
       }
     };
@@ -262,7 +288,7 @@ export function statusLabel(run: RunView): string {
     case 'Starting':
       return run.cancelRequested ? 'Cancelling…' : 'Waiting to start';
     case 'Running':
-      return run.cancelRequested ? 'Cancelling…' : 'Running';
+      return run.cancelRequested ? 'Cancelling…' : run.paused !== undefined ? 'Paused' : 'Running';
     case 'Failed':
       return run.error?.code === 'MYRPA2004' ? 'Failed — arguments rejected, no activity ran' : 'Failed';
     case 'TimedOut':
@@ -503,6 +529,7 @@ function Toolbar() {
           <div className="command-group" role="toolbar" aria-label="Run">
             <Command icon="validate" label="Validate" onClick={() => void studio.validate()} disabled={!hasDocument || busy !== undefined} title="Check the workflow on the server" />
             <Command icon="run" label="Run" onClick={() => void studio.requestRun()} disabled={runRefusal !== undefined} title={runRefusal ?? 'Validate, then run (F5)'} />
+            <Command icon="debug" label="Debug" onClick={() => void studio.debug()} disabled={runRefusal !== undefined} title={runRefusal ?? 'Run and pause at breakpoints (F6; F9 sets a breakpoint, F11 starts paused)'} />
             <Command icon="stop" label="Stop" onClick={() => void studio.stop()} disabled={stopRefusal !== undefined} title={stopRefusal ?? 'Stop the run (Shift+F5)'} />
             <Command icon="record" label="Record" onClick={() => studio.openRecorder()} title="Record what you do on a website as browser activities" />
             <span className="toolbar-status" data-testid="toolbar-run-status">
@@ -1077,6 +1104,7 @@ function WorkflowTree() {
       <h2 id="designer-heading">Workflow</h2>
       <WorkflowTitle document={document} />
       <PluginNotice />
+      <DebugBar />
       <div className="designer-bar">
         <Breadcrumbs />
         <div className="designer-actions" role="toolbar" aria-label="Designer">
@@ -1293,9 +1321,10 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
   // the store's identity check stays exact. Fields are separated by NUL (never in ids, statuses or slot names).
   const view = useStudioState(
     (s) =>
-      `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}\0${s.collapsed.has(key) ? 1 : 0}\0${s.graphLists.has(key) ? 1 : 0}`,
+      `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${s.insertTarget?.parentKey === key ? JSON.stringify(s.insertTarget.position) : ''}\0${s.collapsed.has(key) ? 1 : 0}\0${s.graphLists.has(key) ? 1 : 0}\0${hasBreakpoint(s, id) ? 1 : 0}`,
   );
-  const [selectedFlag, errorFlag, statusText, pickedText, collapsedFlag, listFlag] = view.split('\0');
+  const [selectedFlag, errorFlag, statusText, pickedText, collapsedFlag, listFlag, breakpointFlag] = view.split('\0');
+  const breakpoint = breakpointFlag === '1';
   const selected = selectedFlag === '1';
   const hasError = errorFlag === '1';
   const status = statusText === '' ? undefined : statusText;
@@ -1350,6 +1379,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
               <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={14} />
             </button>
           )}
+          {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
           <Icon name={activityIcon(type)} size={16} />
           <span className="title">
             {slot !== undefined && <span className="slot">{slot}:</span>}{slot !== undefined && ' '}
@@ -1418,6 +1448,87 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
     </li>
   );
 });
+
+/** Whether the open file has a breakpoint on the node with `id` (ADR-0040). */
+function hasBreakpoint(state: StudioState, id: string | undefined): boolean {
+  return id !== undefined && state.file !== undefined && (state.breakpoints[fileKeyOf(state.file)]?.includes(id) ?? false);
+}
+
+/**
+ * The breakpoint dot of a card (ADR-0040): shown on the selected card and on every card with a breakpoint. F9 toggles
+ * it from the keyboard, so the button stays out of the Tab order like the card's other controls.
+ */
+function BreakpointToggle({ nodeKey, label, set }: { nodeKey: string; label: string; set: boolean }) {
+  const studio = useStudio();
+  return (
+    <button
+      type="button"
+      className={`breakpoint-toggle${set ? ' set' : ''}`}
+      aria-pressed={set}
+      aria-label={`Breakpoint on ${label}`}
+      title={set ? 'Remove the breakpoint (F9)' : 'Pause here when debugging (F9)'}
+      tabIndex={-1}
+      onClick={(event) => {
+        event.stopPropagation();
+        studio.toggleBreakpoint(nodeKey);
+      }}
+    >
+      <span className="breakpoint-dot" aria-hidden="true" />
+    </button>
+  );
+}
+
+const debugCommands: readonly { readonly command: DebugCommandName; readonly icon: IconName; readonly keys?: string }[] = [
+  { command: 'continue', icon: 'run', keys: 'F5' },
+  { command: 'pause', icon: 'pause' },
+  { command: 'stepInto', icon: 'step-into', keys: 'F11' },
+  { command: 'stepOver', icon: 'step-over', keys: 'F10' },
+  { command: 'stepOut', icon: 'step-out', keys: 'Shift+F11' },
+];
+
+const pauseReasons: Readonly<Record<string, string>> = { breakpoint: 'breakpoint', step: 'step', pause: 'paused on request' };
+
+/** The debug bar (ADR-0040): while the current run is a debug run that has not finished. */
+function DebugBar() {
+  const studio = useStudio();
+  const run = useStudioState(currentRun);
+  if (run?.debug !== true || !isActive(run)) {
+    return null;
+  }
+
+  const stopRefusal = stopRefusalOf(run);
+  const at = run.paused;
+  return (
+    <div className="debug-bar" role="toolbar" aria-label="Debug">
+      <span className="debug-state" data-testid="debug-state" aria-live="polite">
+        {at === undefined
+          ? 'Debugging: running'
+          : `Paused before ${at.nodeId}${at.invoked ? ` (in ${at.workflowId})` : ''}: ${pauseReasons[at.reason] ?? at.reason}`}
+      </span>
+      {debugCommands.map(({ command, icon, keys }) => {
+        const refusal = debugRefusalOf(run, command);
+        const label = debugCommandLabels[command];
+        return (
+          <button
+            key={command}
+            type="button"
+            className="with-icon small"
+            disabled={refusal !== undefined}
+            title={refusal ?? (keys ? `${label} (${keys})` : label)}
+            onClick={() => void studio.debugCommand(command)}
+          >
+            <Icon name={icon} size={14} />
+            <span>{label}</span>
+          </button>
+        );
+      })}
+      <button type="button" className="with-icon small" disabled={stopRefusal !== undefined} title={stopRefusal ?? 'Stop the run (Shift+F5)'} onClick={() => void studio.stop()}>
+        <Icon name="stop" size={14} />
+        <span>Stop debugging</span>
+      </button>
+    </div>
+  );
+}
 
 /** A gesture on the canvas: moving a step, or drawing an arrow from one (G-2). */
 interface CanvasGesture {
@@ -1624,8 +1735,11 @@ const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { no
   const key = keyOf(node);
   const id = typeof node.id === 'string' ? node.id : undefined;
   const type = typeof node.type === 'string' ? node.type : undefined;
-  const view = useStudioState((s) => `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}`);
-  const [selectedFlag, errorFlag, statusText] = view.split('\0');
+  const view = useStudioState(
+    (s) => `${s.selectedKey === key ? 1 : 0}\0${s.errorNodeKeys.has(key) ? 1 : 0}\0${id === undefined ? '' : (s.nodeStatus.get(id) ?? '')}\0${hasBreakpoint(s, id) ? 1 : 0}`,
+  );
+  const [selectedFlag, errorFlag, statusText, breakpointFlag] = view.split('\0');
+  const breakpoint = breakpointFlag === '1';
   const selected = selectedFlag === '1';
   const hasError = errorFlag === '1';
   const status = statusText === '' ? undefined : statusText;
@@ -1660,6 +1774,7 @@ const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { no
     >
       <div className={`node step-card${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
         <div className="card-header">
+          {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
           <Icon name={activityIcon(type)} size={16} />
           <span className="title">
             <span className="label">{label}</span> {id !== undefined && <span className="id">#{id}</span>}
@@ -1999,6 +2114,42 @@ function ExecutionPanel() {
           )}
         </dl>
       )}
+      {run?.paused && (
+        <section className="paused" aria-labelledby="paused-heading" data-testid="run-paused">
+          <h3 id="paused-heading">
+            Paused before {run.paused.nodeId}
+            {run.paused.invoked && ` (in ${run.paused.workflowId})`}: {pauseReasons[run.paused.reason] ?? run.paused.reason}
+          </h3>
+          {run.paused.values === undefined ? (
+            <p className="hint">Reading the values…</p>
+          ) : run.paused.values.length === 0 ? (
+            <p className="hint">No arguments or variables are in scope.</p>
+          ) : (
+            <table className="debug-values" aria-label="Values in scope">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Kind</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {run.paused.values.map((v) => (
+                  <tr key={`${v.kind}:${v.name}`}>
+                    <th scope="row">{v.name}</th>
+                    <td>{v.kind}</td>
+                    <td>{v.type}</td>
+                    <td>
+                      <code>{JSON.stringify(v.value)}</code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
       {run?.notStarted && (
         <p className="field-error" data-testid="run-not-started">
           {run.notStarted.message}
@@ -2043,6 +2194,7 @@ const EventRow = memo(function EventRow({ event: e }: { event: ExecutionEvent })
       <span className="time">[{time(e.time)}]</span> <span className="seq">{e.sequence}</span> <span className="kind">{e.kind}</span>
       {e.nodeId && <span className="event-node"> {e.nodeId}</span>}
       {e.status && <span> {e.status}</span>}
+      {e.reason && <span> ({e.reason})</span>}
       {e.kind === 'log' && (
         <span className="log">
           {' '}
@@ -2116,7 +2268,9 @@ function RunDialog({ dialog }: { dialog: RunDialogState }) {
           }
         }}
       >
-        <h2 id={`${id}-title`}>Run {dialog.path}</h2>
+        <h2 id={`${id}-title`}>
+          {dialog.debug ? 'Debug' : 'Run'} {dialog.path}
+        </h2>
         <p className="hint">Values are read like the command line's --arg. Leave a field blank to use its default.</p>
         {dialog.arguments.map((a) => (
           <div className="field" key={a.name}>

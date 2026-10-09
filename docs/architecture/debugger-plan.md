@@ -1,6 +1,7 @@
 # Workflow debugger — plan (proposed)
 
-Status: **approved** by the owner on 2026-10-08 ("merge and D-1"); D-1 done, D-2 and D-3 next. Decision record:
+Status: **approved** by the owner on 2026-10-08 ("merge and D-1"); D-1, D-2 and D-3 done ("continue on D-2 and D-3
+now"). Decision record:
 [ADR-0040](../adr/0040-workflow-debugger.md). Not a PRD phase: an authorized follow-up slice, like the Studio UX slice and
 graph workflows. Phase 7 still needs its own authorization.
 
@@ -50,3 +51,32 @@ runs, changing a workflow while it runs.
   - Runtime `DebuggerTests` (6): every node with its depth (sequence, nesting, graph steps, invoked workflow); a debugger that never pauses leaves the events identical; pause before a node with its values; pause not counted by the timeout; the timeout resumes with its remaining time; cancel while paused.
   - SDK: `context.Deadline` moves by the paused time.
   - Hosting `DebugSessionTests` (9): breakpoint, with the events free of values; step into, over and out; flowchart steps; a breakpoint in an invoked workflow and step out back to the invoker; a ForEach item as a local; pause requested during a running activity; breakpoints changed while paused; cancel while paused; no session or events without debug.
+
+## D-2 result (2026-10-08)
+
+- **Server:**
+  - `POST /api/runs` takes `debug: { breakpoints, pauseAtStart }`;
+  - `GET /api/runs/{id}/debug` gives the paused state with values, plus the breakpoints;
+  - `POST /api/runs/{id}/debug` takes `continue`, `stepInto`, `stepOver`, `stepOut` or `pause`;
+  - `PUT /api/runs/{id}/breakpoints` replaces the breakpoints.
+- **Ownership:** `DebugRuns` keeps the session that started each debug run; any other session gets 404. Breakpoints
+  are node ids of the run's workflow (at most 10,000).
+- **Tests:** `DebugTests` (4): a breakpoint pause whose SSE event carries no values while the debug endpoint does;
+  start paused, step into, and breakpoints changed while running; pause during a running activity, then cancel; bad
+  input, other runs and other sessions refused.
+
+## D-3 result (2026-10-08)
+
+- **Studio:** everything described under *Debug* in `web-studio.md`: breakpoints, Debug and F6, the debug bar, F5, F10,
+  F11 and Shift+F11, the paused card and the values table.
+- **Change from the plan:** the paused values are shown in the Execution panel ("Paused before …" and a values table),
+  not in the Variables and Arguments tabs. Those tabs edit declarations; the values belong with the run, which is also
+  where locals and an invoked workflow's names fit.
+- **Tests:**
+  - Vitest `DebugUi.test.tsx` (10) and the command bar test;
+  - smoke: a breakpoint by F9, Debug paused before the activity with n = 42 read from the server, Step over (F10),
+    Continue, Succeeded;
+  - a11y: the paused debugger in both themes, with no serious or critical violations;
+  - perf: unchanged. The Undo and Redo p95 were above 50 ms on this workstation during these runs, for `main`'s own
+    build as well (measured side by side: Undo 51.6 and 57.7 ms on `main`, against 53.7 and 64.0 ms with D-3), so
+    the overrun is this machine's load, not D-3.

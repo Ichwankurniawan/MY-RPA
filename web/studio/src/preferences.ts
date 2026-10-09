@@ -11,6 +11,7 @@ export const preferenceKeys = {
   favorites: 'myrpa.ui.favorites',
   recent: 'myrpa.ui.recent',
   panes: 'myrpa.ui.panes',
+  breakpoints: 'myrpa.ui.breakpoints',
 } as const;
 
 /** Preferences in `storage` (the browser's localStorage by default); failures are ignored. */
@@ -53,3 +54,7 @@ export function memoryPreferences(): PreferenceStore & { readonly values: Map<st
 
 /** A list of activity type names. */
 export const isTypeList = (value: unknown): value is string[] => Array.isArray(value) && value.every((v) => typeof v === 'string');
+
+/** Breakpoints per file (`project/path` → node ids), ADR-0040. */
+export const isBreakpointMap = (value: unknown): value is Record<string, string[]> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every(isTypeList);

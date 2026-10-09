@@ -23,8 +23,8 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, WorkflowFile } from './types';
-import { isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
+import type { ActivityDescriptor, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, WorkflowFile } from './types';
+import { isBreakpointMap, isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 import {
   addTransition,
@@ -99,7 +99,27 @@ export interface RunView {
   readonly runningNodes: readonly string[];
   /** Events the server no longer had when they were requested (`stream.gap`). */
   readonly missingEvents: number;
+  /** A debug run (ADR-0040). */
+  readonly debug?: boolean;
+  /** Where the debug run is paused: from `debug.paused` until `debug.resumed` or the end of the run. */
+  readonly paused?: PausedView;
 }
+
+/** Where a debug run is paused. The values come from the server on request, never from the event stream (ADR-0040). */
+export interface PausedView {
+  readonly nodeId: string;
+  /** breakpoint, step or pause. */
+  readonly reason: string;
+  /** Paused in a workflow the run invoked: its node is not in this document. */
+  readonly invoked: boolean;
+  readonly workflowId?: string;
+  /** The `debug.paused` event's sequence, so values fetched for an earlier pause are never shown for a later one. */
+  readonly sequence: number;
+  readonly values?: readonly DebugValue[];
+}
+
+/** How a debug run starts: pausing at the file's breakpoints (Debug, F6), or before its first activity (Step into, F11). */
+export type DebugStart = 'breakpoints' | 'step';
 
 /** An input (In or InOut) argument declared by the workflow, for the run dialog. */
 export interface RunArgument {
@@ -116,12 +136,16 @@ export interface RunDialogState {
   /** The texts entered the last time this file was run in this session. */
   readonly values: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
+  /** Set when the dialog starts a debug run. */
+  readonly debug?: DebugStart;
 }
 
 export interface RunOptions {
   /** Input arguments as typed text; blank ones are left out so the engine applies the default. */
   readonly argumentText?: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
+  /** Runs it as a debug run (ADR-0040). */
+  readonly debug?: DebugStart;
 }
 
 /** One undo or redo step: a complete document version (structurally shared) and the selection that went with it. */
@@ -194,6 +218,8 @@ export interface StudioState {
   readonly recorder?: RecorderState;
   /** The designer's zoom (UX-3): 1 is 100 %. */
   readonly zoom: number;
+  /** Breakpoints per file (`project/path` → node ids; ADR-0040). Remembered per browser, never in the workflow file. */
+  readonly breakpoints: Readonly<Record<string, readonly string[]>>;
 }
 
 /** The designer's zoom range and step (UX-3). */
@@ -349,6 +375,62 @@ export function runRefusalOf(state: StudioState): string | undefined {
   return state.busy !== undefined ? `Wait until ${state.busy} has finished.` : undefined;
 }
 
+/** The key of a file in `StudioState.breakpoints`. */
+export const fileKeyOf = (file: { readonly project: string; readonly path: string }): string => `${file.project}/${file.path}`;
+
+/** The open file's breakpoints (node ids). */
+export function breakpointsOf(state: StudioState): readonly string[] {
+  return state.file === undefined ? [] : (state.breakpoints[fileKeyOf(state.file)] ?? []);
+}
+
+/** The names of the debug commands, as on their buttons. */
+export const debugCommandLabels: Readonly<Record<DebugCommandName, string>> = {
+  continue: 'Continue',
+  pause: 'Pause',
+  stepInto: 'Step into',
+  stepOver: 'Step over',
+  stepOut: 'Step out',
+};
+
+/** Why `command` cannot be sent to `run` now (undefined when it can). */
+export function debugRefusalOf(run: RunView | undefined, command: DebugCommandName): string | undefined {
+  if (run?.debug !== true) {
+    return 'Start a debug run first (Debug, F6).';
+  }
+
+  if (!isActive(run)) {
+    return `The debug run already finished (${run.status}).`;
+  }
+
+  if (run.runId === undefined || run.status !== 'Running') {
+    return 'The debug run has not started yet.';
+  }
+
+  if (run.cancelRequested) {
+    return 'Cancelling…';
+  }
+
+  if (command === 'pause') {
+    return run.paused !== undefined ? 'The run is already paused.' : undefined;
+  }
+
+  return run.paused === undefined ? 'The run is not paused.' : undefined;
+}
+
+/** Why a breakpoint cannot be toggled on the node with `key` (undefined when it can). */
+export function breakpointRefusalOf(state: StudioState, key: string | undefined): string | undefined {
+  if (state.document === undefined || state.file === undefined) {
+    return 'Open a workflow first.';
+  }
+
+  if (key === undefined || key === workflowKey) {
+    return 'Select an activity first.';
+  }
+
+  const id = indexDocument(state.document).byKey.get(key)?.node.id;
+  return typeof id === 'string' && id !== '' ? undefined : 'The activity needs an id to have a breakpoint.';
+}
+
 /** Why `run` cannot be stopped now (undefined when it can). */
 export function stopRefusalOf(run: RunView | undefined): string | undefined {
   if (run === undefined) {
@@ -396,12 +478,35 @@ export function applyEvents(run: RunView, batch: readonly ExecutionEvent[]): Run
     return run;
   }
 
-  let { status, startedAt, durationMs, error, missingEvents } = run;
+  let { status, startedAt, durationMs, error, missingEvents, paused } = run;
   let nodeStatus: Map<string, string> | undefined;
   const runningNodes = [...run.runningNodes];
+  // The paused node shows as Paused until it runs (or the run ends without running it).
+  const unpause = () => {
+    if (paused !== undefined && !paused.invoked && (nodeStatus ?? run.nodeStatus).get(paused.nodeId) === 'Paused') {
+      (nodeStatus ??= new Map(run.nodeStatus)).delete(paused.nodeId);
+    }
+
+    paused = undefined;
+  };
   for (const event of batch) {
     if (event.kind === 'stream.gap') {
       missingEvents += (event.missingToSequence ?? 0) - (event.missingFromSequence ?? 0) + 1;
+      continue;
+    }
+
+    if (event.kind === 'debug.paused') {
+      unpause();
+      paused = { nodeId: event.nodeId ?? '', reason: event.reason ?? 'pause', invoked: Boolean(event.parentExecutionId), workflowId: event.workflowId, sequence: event.sequence };
+      if (!event.parentExecutionId && event.nodeId) {
+        (nodeStatus ??= new Map(run.nodeStatus)).set(event.nodeId, 'Paused');
+      }
+
+      continue;
+    }
+
+    if (event.kind === 'debug.resumed') {
+      unpause();
       continue;
     }
 
@@ -426,6 +531,7 @@ export function applyEvents(run: RunView, batch: readonly ExecutionEvent[]): Run
         runningNodes.splice(at, 1);
       }
     } else if (event.kind === 'execution.completed') {
+      unpause();
       status = event.status ?? 'Succeeded';
       durationMs = event.durationMs;
       error = event.error;
@@ -435,7 +541,7 @@ export function applyEvents(run: RunView, batch: readonly ExecutionEvent[]): Run
 
   const all = run.events.concat(batch);
   const events = all.length > maxEvents ? all.slice(all.length - maxEvents) : all;
-  return { ...run, events, status, startedAt, durationMs, error, missingEvents, nodeStatus: nodeStatus ?? run.nodeStatus, runningNodes };
+  return { ...run, events, status, startedAt, durationMs, error, missingEvents, paused, nodeStatus: nodeStatus ?? run.nodeStatus, runningNodes };
 }
 
 /** A run after one of its events. */
@@ -588,6 +694,7 @@ export class Studio {
       nodeStatus: noStatus,
       treeShowsRun: false,
       stream: 'idle',
+      breakpoints: this.preferences.read(preferenceKeys.breakpoints, isBreakpointMap) ?? {},
     });
     this.events = new RunEventStream(
       api,
@@ -1730,8 +1837,11 @@ export class Studio {
     return runRefusalOf(this.state);
   }
 
-  /** Run (F5): asks for the workflow's input arguments first when it declares any, else runs right away. */
-  async requestRun(): Promise<void> {
+  /**
+   * Run (F5): asks for the workflow's input arguments first when it declares any, else runs right away. With `debug`,
+   * the run is a debug run (ADR-0040).
+   */
+  async requestRun(debug?: DebugStart): Promise<void> {
     const refusal = this.runRefusal();
     if (refusal !== undefined) {
       this.say(`Cannot run: ${refusal}`);
@@ -1741,12 +1851,12 @@ export class Studio {
     const { document, file } = this.state;
     const inputs = inputArguments(document!);
     if (inputs.length === 0) {
-      await this.run();
+      await this.run({ debug });
       return;
     }
 
     const draft = this.argumentDrafts.get(`${file!.project}/${file!.path}`) ?? {};
-    this.store.set({ runDialog: { path: file!.path, arguments: inputs, values: draft, timeoutMs: this.lastTimeoutMs } });
+    this.store.set({ runDialog: { path: file!.path, arguments: inputs, values: draft, timeoutMs: this.lastTimeoutMs, debug } });
   }
 
   closeRunDialog(): void {
@@ -1755,18 +1865,19 @@ export class Studio {
 
   /** Start from the run dialog: remembers the texts, sends the non-blank ones (blank keeps the default). */
   async startFromDialog(values: Readonly<Record<string, string>>, timeoutMs: number | undefined): Promise<void> {
-    const { file, document } = this.state;
+    const { file, document, runDialog } = this.state;
     if (file === undefined || document === undefined) {
       return;
     }
 
+    const debug = runDialog?.debug;
     this.argumentDrafts.set(`${file.project}/${file.path}`, { ...values });
     this.lastTimeoutMs = timeoutMs;
     // Only arguments the workflow declares now: a remembered text of a renamed or removed argument is never sent.
     const declared = new Set(inputArguments(document).map((a) => a.name));
     const argumentText = Object.fromEntries(Object.entries(values).filter(([name, text]) => declared.has(name) && text.trim() !== ''));
     this.store.set({ runDialog: undefined });
-    await this.run({ argumentText: Object.keys(argumentText).length > 0 ? argumentText : undefined, timeoutMs });
+    await this.run({ argumentText: Object.keys(argumentText).length > 0 ? argumentText : undefined, timeoutMs, debug });
   }
 
   /**
@@ -1795,6 +1906,7 @@ export class Studio {
       nodeStatus: noStatus,
       runningNodes: [],
       missingEvents: 0,
+      debug: options.debug !== undefined ? true : undefined,
     });
     this.store.set({ busy: 'starting', message: `Validating ${file.path}…`, outputTab: 'execution' });
 
@@ -1819,6 +1931,7 @@ export class Studio {
         document: isDirty(state) ? document : undefined,
         argumentText: options.argumentText,
         timeoutMs: options.timeoutMs,
+        debug: options.debug === undefined ? undefined : { breakpoints: breakpointsOf(state), pauseAtStart: options.debug === 'step' },
       });
     } catch (error) {
       if (error instanceof ApiError && error.diagnostics) {
@@ -1833,7 +1946,7 @@ export class Studio {
     }
 
     this.updateRun(key, { runId });
-    this.store.set({ busy: undefined, message: `Run ${runId} started.` });
+    this.store.set({ busy: undefined, message: `${options.debug ? 'Debug run' : 'Run'} ${runId} started.` });
     try {
       await this.events.follow(runId);
     } catch (error) {
@@ -1864,6 +1977,65 @@ export class Studio {
 
       this.updateRun(run.key, { cancelRequested: false });
       this.say(`Cannot stop run ${run.runId}: ${(error as Error).message}`);
+    }
+  }
+
+  /** Debug (F6): runs the open file pausing at its breakpoints; `step` pauses before its first activity (ADR-0040). */
+  debug(start: DebugStart = 'breakpoints'): Promise<void> {
+    return this.requestRun(start);
+  }
+
+  /** Continue, Pause, Step into, Step over or Step out of the current debug run. */
+  async debugCommand(command: DebugCommandName, key: string | undefined = this.state.currentRunKey): Promise<void> {
+    const run = this.state.runs.find((r) => r.key === key);
+    const refusal = debugRefusalOf(run, command);
+    const label = debugCommandLabels[command];
+    if (run === undefined || refusal !== undefined) {
+      this.say(`Cannot ${label.toLowerCase()}: ${refusal}`);
+      return;
+    }
+
+    try {
+      await this.api.debugCommand(run.runId!, command);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        return; // The run moved on (or finished) meanwhile; the stream says where it is.
+      }
+
+      this.say(`Cannot ${label.toLowerCase()}: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Sets or removes a breakpoint on an activity (F9) of the open file. Breakpoints are remembered per browser and file,
+   * never saved in the workflow; debug runs of this file that are still going on follow the change.
+   */
+  toggleBreakpoint(key: string | undefined = this.state.selectedKey): void {
+    const state = this.state;
+    const refusal = breakpointRefusalOf(state, key);
+    if (refusal !== undefined) {
+      this.say(`Cannot set a breakpoint: ${refusal}`);
+      return;
+    }
+
+    const file = state.file!;
+    const id = indexDocument(state.document!).byKey.get(key!)!.node.id as string;
+    const current = breakpointsOf(state);
+    const added = !current.includes(id);
+    const next = added ? [...current, id] : current.filter((b) => b !== id);
+    const breakpoints = { ...state.breakpoints };
+    if (next.length === 0) {
+      delete breakpoints[fileKeyOf(file)];
+    } else {
+      breakpoints[fileKeyOf(file)] = next;
+    }
+
+    this.store.set({ breakpoints, message: added ? `Breakpoint set on ${id}.` : `Breakpoint removed from ${id}.` });
+    this.preferences.write(preferenceKeys.breakpoints, breakpoints);
+    for (const run of state.runs) {
+      if (run.debug && run.runId !== undefined && isActive(run) && run.project === file.project && run.path === file.path) {
+        this.api.setBreakpoints(run.runId, next).catch((error: Error) => this.say(`Cannot update the breakpoints of run ${run.runId}: ${error.message}`));
+      }
     }
   }
 
@@ -1935,11 +2107,41 @@ export class Studio {
     this.setRuns((state) => ({ runs: state.runs.map((run) => (run.runId !== undefined && byRun.has(run.runId) ? applyEvents(run, byRun.get(run.runId)!) : run)) }));
     for (const event of batch) {
       const run = this.state.runs.find((r) => r.runId === event.runId);
+      if (run !== undefined && event.kind === 'debug.paused') {
+        this.paused(run, event);
+      }
+
       if (run !== undefined && !event.parentExecutionId && event.kind === 'execution.completed') {
         const where = event.error?.nodeId ? ` at ${event.error.nodeId}` : '';
         this.say(`Run ${event.runId} ${event.status ?? 'finished'}${event.error ? `${where}: ${event.error.message}` : ''}.`);
         void this.fetchResult(run.key, event.runId);
       }
+    }
+  }
+
+  /** A debug run paused: say where, show the node when it is in the open file, and fetch the values in scope. */
+  private paused(run: RunView, event: ExecutionEvent): void {
+    const file = this.state.file;
+    const where = event.parentExecutionId ? `${event.nodeId} (in ${event.workflowId})` : event.nodeId;
+    this.say(`Run ${event.runId} paused before ${where}: ${event.reason ?? 'pause'}.`);
+    if (!event.parentExecutionId && event.nodeId && file !== undefined && run.project === file.project && run.path === file.path) {
+      this.selectNodeId(event.nodeId);
+    }
+
+    void this.fetchPaused(run.key, event.runId, event.sequence);
+  }
+
+  private async fetchPaused(key: string, runId: string, sequence: number): Promise<void> {
+    try {
+      const state = await this.api.debugState(runId);
+      const at = state.paused;
+      if (at !== null) {
+        this.updateRun(key, (run) =>
+          run.paused?.sequence === sequence && run.paused.nodeId === at.nodeId ? { ...run, paused: { ...run.paused, values: at.values } } : run,
+        );
+      }
+    } catch {
+      // Where the run paused is known from the stream; the values are shown when they can be read.
     }
   }
 

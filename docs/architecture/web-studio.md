@@ -189,6 +189,19 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
     new one and resubscribes each unfinished run after the last sequence it saw. Duplicates are ignored.
   - Streamed events are applied once per animation frame, so a burst of events costs one render.
   - The workflow stays editable during and after a run. An unsaved document runs as a buffer at its path.
+- **Debug** (ADR-0040): breakpoints, pause and stepping, through the server's debug endpoints.
+  - **Breakpoints:** F9, or the dot on the selected card or canvas step, toggles a breakpoint. It stays visible on the
+    card while set. Breakpoints are remembered per browser and file (`myrpa.ui.breakpoints`), never saved in the
+    workflow. Debug runs of the open file that are still going on receive the change.
+  - **Debug** (button or F6) runs like Run (arguments dialog, validation first) and pauses before every activity with
+    a breakpoint. F11 before a debug run starts one paused before its first activity.
+  - **Debug bar:** above the designer, while the shown run is an unfinished debug run. It shows where the run is paused
+    and why, then **Continue** (F5), **Pause**, **Step into** (F11), **Step over** (F10), **Step out** (Shift+F11)
+    and **Stop debugging** (Shift+F5). Each is disabled with its reason when it does not apply.
+  - **Paused:** the card shows **Paused**, is selected and revealed (also inside a flowchart), and the status reads
+    Paused. The Execution panel shows "Paused before …" and a table of the arguments, variables and locals in scope.
+    The values are read from `GET /api/runs/{id}/debug`, never from the event stream. Values read for an earlier
+    pause are never shown at a later one.
 
 ## Structure
 
@@ -274,6 +287,11 @@ nothing about the client.
   `DraftValidator` places it (`tests/corpus/expected/locations.json`, written by the .NET `CorpusParityTests`), and
   every editable corpus file round-trips unchanged (ADR-0035).
 - `App.test.tsx` also covers Ctrl+S, F5 and leaving the page with focus still in an edited field (W9).
+- `DebugUi.test.tsx` (ADR-0040) covers:
+  - breakpoints by F9 and the card dot, remembered per browser and file;
+  - Debug and F11 starts, with the arguments dialog;
+  - the paused card, the debug bar, values and the commands by button and key;
+  - stale values never shown, stop while paused, breakpoint changes sent to a running debug run, refusals.
 - `src/test-setup.ts` clears local storage before every test.
 - `scripts/smoke.mjs`: the full demo against the real server and engine (W6 scenarios: New, rename with F2, the
   unsaved prompt, a save conflict made on disk and overwritten, Save as, recovery after a page reload, delete with the

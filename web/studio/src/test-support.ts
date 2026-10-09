@@ -2,7 +2,7 @@
 
 import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
-import type { ActivityDescriptor, ExecutionEvent, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugState, ExecutionEvent, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
 
 export const helloWorld = `{
   "schemaVersion": "1.0",
@@ -112,6 +112,13 @@ export class FakeApi implements StudioApi {
   cancels: string[] = [];
   startFailure?: ApiError;
   cancelFailure?: ApiError;
+  /** Debug commands sent (ADR-0040). */
+  debugCommands: { runId: string; command: DebugCommandName }[] = [];
+  /** Breakpoint updates sent to running debug runs. */
+  breakpointUpdates: { runId: string; breakpoints: readonly string[] }[] = [];
+  /** What `GET /api/runs/{id}/debug` answers, per run. */
+  debugStates = new Map<string, DebugState>();
+  debugCommandFailure?: ApiError;
   validations = 0;
   /** The server's `--open` workflow, if any. */
   openOnStart?: { project: string; path: string };
@@ -269,6 +276,26 @@ export class FakeApi implements StudioApi {
     if (this.cancelFailure) {
       throw this.cancelFailure;
     }
+  }
+
+  async debugState(runId: string): Promise<DebugState> {
+    const state = this.debugStates.get(runId);
+    if (!state) {
+      throw new ApiError(404, `Unknown debug run '${runId}'.`);
+    }
+
+    return state;
+  }
+
+  async debugCommand(runId: string, command: DebugCommandName) {
+    this.debugCommands.push({ runId, command });
+    if (this.debugCommandFailure) {
+      throw this.debugCommandFailure;
+    }
+  }
+
+  async setBreakpoints(runId: string, breakpoints: readonly string[]) {
+    this.breakpointUpdates.push({ runId, breakpoints: [...breakpoints] });
   }
 
   async run(runId: string): Promise<RunStatus> {

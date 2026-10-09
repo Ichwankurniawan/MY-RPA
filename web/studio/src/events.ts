@@ -16,7 +16,7 @@ export interface EventSourceLike {
 
 export type EventSourceFactory = (url: string) => EventSourceLike;
 
-export const executionEventKinds = ['execution.started', 'node.started', 'node.completed', 'execution.completed', 'log', 'stream.gap'];
+export const executionEventKinds = ['execution.started', 'node.started', 'node.completed', 'execution.completed', 'log', 'stream.gap', 'debug.paused', 'debug.resumed'];
 
 export const recordingEventKinds = ['recording.step', 'recording.ended'];
 

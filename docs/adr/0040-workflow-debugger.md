@@ -54,8 +54,9 @@ Constraints that shape it:
   the workflow file.
 - **Debug** (F6) runs with breakpoints; a debug bar shows Continue (F5), Pause, Step into (F11), Step over (F10),
   Step out (Shift+F11) and Stop (Shift+F5), each with its disabled reason.
-- When paused: the paused card is highlighted and revealed (a step inside a flowchart opens it), the Variables and
-  Arguments tabs show the paused values (read-only), and Execution shows where and why it paused.
+- When paused: the paused card is highlighted and revealed (a step inside a flowchart opens it), and the Execution
+  panel shows where and why it paused, with the values in scope (read-only). (Built in D-3; the plan first named the
+  Variables and Arguments tabs, which edit declarations.)
 
 ## Alternatives considered
 - **Breakpoints as a workflow field** (saved in the JSON): rejected. They are a developer's working state, and would

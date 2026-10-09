@@ -85,6 +85,34 @@ export interface ExecutionEvent {
   message?: string;
   missingFromSequence?: number;
   missingToSequence?: number;
+  /** `debug.paused`: breakpoint, step or pause; `debug.resumed`: the command (ADR-0040). */
+  reason?: string;
+}
+
+/** A command for a debug run (ADR-0040). */
+export type DebugCommandName = 'continue' | 'stepInto' | 'stepOver' | 'stepOut' | 'pause';
+
+/** One name in scope where a debug run is paused, with its value. */
+export interface DebugValue {
+  name: string;
+  /** Argument, Variable or Local. */
+  kind: string;
+  type: string;
+  value: Json;
+}
+
+/** `GET /api/runs/{runId}/debug`: where a debug run is paused (the only place its values appear), and its breakpoints. */
+export interface DebugState {
+  paused: {
+    executionId: string;
+    parentExecutionId?: string | null;
+    workflowId: string;
+    nodeId: string;
+    activityType: string;
+    reason: string;
+    values: DebugValue[];
+  } | null;
+  breakpoints: string[];
 }
 
 export interface ExecutionError {
