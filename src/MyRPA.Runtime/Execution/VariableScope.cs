@@ -104,11 +104,15 @@ internal sealed class VariableScope : IExpressionScope
     public IReadOnlyDictionary<string, object?> GetOutputs() =>
         WorkflowValues.Dictionary(_slots.Where(s => s.Value.IsOutput).Select(s => new KeyValuePair<string, object?>(s.Key, s.Value.Value)));
 
+    /// <summary>What a debugger sees instead of a secret value.</summary>
+    public const string MaskedValue = "••••";
+
     /// <summary>
     /// The names in scope for a debugger (ADR-0040): the root's arguments and variables in declaration order, then the
-    /// locals from the outermost scope in. An inner name hides an outer one.
+    /// locals from the outermost scope in. An inner name hides an outer one. Values of <paramref name="secretNames"/>
+    /// are replaced by <see cref="MaskedValue"/> (ADR-0043).
     /// </summary>
-    public IReadOnlyList<DebugValue> Snapshot()
+    public IReadOnlyList<DebugValue> Snapshot(IReadOnlySet<string> secretNames)
     {
         var scopes = new List<VariableScope>();
         for (var scope = this; scope is not null; scope = scope._parent)
@@ -122,7 +126,7 @@ internal sealed class VariableScope : IExpressionScope
         {
             foreach (var (name, slot) in scope._slots)
             {
-                var value = new DebugValue(name, slot.Kind, slot.Type, slot.Value);
+                var value = new DebugValue(name, slot.Kind, slot.Type, slot.Value is not null && secretNames.Contains(name) ? MaskedValue : slot.Value);
                 if (positions.TryGetValue(name, out var position))
                 {
                     values[position] = value;

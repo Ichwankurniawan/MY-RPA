@@ -83,6 +83,26 @@ public sealed class DebuggerTests
     }
 
     [Fact]
+    public async Task Pause_MasksTheValuesOfNamesThatFeedASecretProperty()
+    {
+        using var h = new RuntimeHarness();
+        var workflow = RuntimeHarness.Workflow(
+            """{ "id": "main", "type": "Test.Sequence", "children": [ { "id": "login", "type": "Test.Login", "properties": { "password": "pw" } }, { "id": "a", "type": "Test.Set", "properties": { "to": "n", "value": "1" } } ] }""",
+            arguments: """[ { "name": "pw", "direction": "In", "type": "String", "default": "s3cret" } ]""",
+            variables: Variables);
+        var debugger = new ScriptedDebugger("a");
+
+        var run = h.Runner.RunTestAsync(h.Load(workflow), new WorkflowRunRequest { Debugger = debugger });
+        await debugger.Paused.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [new DebugValue("pw", DebugValueKind.Argument, WorkflowDataType.String, "••••"), new DebugValue("n", DebugValueKind.Variable, WorkflowDataType.Int, 0L)],
+            debugger.Values.Single());
+        debugger.Release.TrySetResult();
+        Assert.True((await run).Succeeded);
+    }
+
+    [Fact]
     public async Task Pause_DoesNotCountTowardsTheTimeout()
     {
         using var h = new RuntimeHarness();

@@ -22,9 +22,10 @@ A property marked secret in the catalog (`Http.Request` `token` and `password`) 
 literal, or an expression without a name, is rejected by validation with `MYRPA1066`. Give the value at run time:
 `myrpa run flow.json --arg apiToken=...`, the Studio's run dialog, or an `In` argument of an invoking workflow.
 
-Known limits until the credential provider of Phase 11: the value lives in an ordinary variable during the run, so the
-debugger can show it to the person running the workflow, and a `--arg` value is visible in the process list of the
-machine. Activities never write a secret to logs, events or error messages.
+The debugger shows the values of names that feed a secret property as `••••` (ADR-0043). On the command line, pass a
+secret with `--arg-env apiToken=MY_TOKEN_VARIABLE` or `--arg-file apiToken=token.txt` rather than `--arg`, whose value
+is visible in the process list. Until the credential provider of Phase 11 the value lives in an ordinary variable during
+the run. Activities never write a secret to logs, events or error messages.
 
 ## 2. Data built-ins (no side effects)
 
@@ -43,7 +44,8 @@ machine. Activities never write a secret to logs, events or error messages.
 | `Core.Collection.Filter` / `Core.Collection.Find` | `items`, `key`, `operator` (Equals, NotEquals, Contains, GreaterThan, LessThan, IsNull, IsNotNull), `value` | List / first match or null (+ `index`, -1 when none) | `InvalidInput` |
 | `Core.Collection.Merge` | `first`, `second`, `distinct` (false) | List | `InvalidInput` |
 
-In an expression string a backslash is itself escaped, so the regular expression `\d+` is written `'\\d+'`.
+Write regular expressions as raw strings, which have no escapes: `r'\d+'` (ADR-0043). In an ordinary string a
+backslash is itself escaped, so the same pattern would be `'\\d+'`.
 
 ## 3. Files (`MyRPA.Files`)
 

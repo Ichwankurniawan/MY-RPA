@@ -97,4 +97,10 @@ public sealed class WorkflowDefinition
 
     /// <summary>The root node.</summary>
     public NodeDefinition Root { get; }
+
+    /// <summary>
+    /// Names (arguments, variables, locals) that feed a secret property (ADR-0043): set by the loader, which knows the
+    /// catalog. A debugger shows their values masked. Empty for a workflow built without the loader.
+    /// </summary>
+    public IReadOnlySet<string> SecretNames { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 }
