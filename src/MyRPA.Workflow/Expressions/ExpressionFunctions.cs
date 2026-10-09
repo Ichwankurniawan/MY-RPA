@@ -85,8 +85,50 @@ public static class ExpressionFunctions
         new("round", 1, 2, (a, _) => Round(a)),
     }.ToFrozenDictionary(f => f.Name, StringComparer.Ordinal);
 
+    // What the Studio shows while completing a call (ADR-0041): a signature and one line per function. A test requires one
+    // for every function.
+    private static readonly FrozenDictionary<string, (string Signature, string Description)> _help = new Dictionary<string, (string, string)>
+    {
+        ["len"] = ("len(value)", "The length of a String, or the number of items in a List or Dictionary."),
+        ["upper"] = ("upper(text)", "The text in upper case."),
+        ["lower"] = ("lower(text)", "The text in lower case."),
+        ["trim"] = ("trim(text)", "The text without white space at the start and end."),
+        ["contains"] = ("contains(value, item)", "Whether a String contains the text, a List contains the item, or a Dictionary has the key."),
+        ["startsWith"] = ("startsWith(text, prefix)", "Whether the text starts with the prefix (case-sensitive)."),
+        ["endsWith"] = ("endsWith(text, suffix)", "Whether the text ends with the suffix (case-sensitive)."),
+        ["substring"] = ("substring(text, start, length?)", "Part of the text from start (0-based) to the end, or length characters."),
+        ["replace"] = ("replace(text, old, new)", "The text with every occurrence of old (not empty) replaced by new."),
+        ["toString"] = ("toString(value)", "The value as display text."),
+        ["toInt"] = ("toInt(value)", "An Int from an Int, a whole Decimal or a whole-number text."),
+        ["toDecimal"] = ("toDecimal(value)", "A Decimal from a number or a number text (invariant format)."),
+        ["toBoolean"] = ("toBoolean(value)", "A Boolean from a Boolean or the text true or false."),
+        ["toDateTime"] = ("toDateTime(value)", "A DateTime from a DateTime or a date and time text."),
+        ["now"] = ("now()", "The current date and time."),
+        ["append"] = ("append(list, item)", "A new List with the item added at the end."),
+        ["keys"] = ("keys(dictionary)", "The keys of a Dictionary, as a List."),
+        ["hasKey"] = ("hasKey(dictionary, key)", "Whether the Dictionary has the key."),
+        ["isNull"] = ("isNull(value)", "Whether the value is null."),
+        ["coalesce"] = ("coalesce(value, …)", "The first of 1 to 8 values that is not null."),
+        ["abs"] = ("abs(number)", "The number without its sign."),
+        ["min"] = ("min(a, b)", "The smaller of two numbers."),
+        ["max"] = ("max(a, b)", "The larger of two numbers."),
+        ["round"] = ("round(number, digits?)", "A Decimal rounded to digits (0 by default), halves away from zero; an Int stays as it is."),
+    }.ToFrozenDictionary(StringComparer.Ordinal);
+
+    private static readonly ExpressionFunctionInfo[] _infos =
+    [
+        .. _functions.Values
+            .OrderBy(f => f.Name, StringComparer.Ordinal)
+            .Select(f => _help.TryGetValue(f.Name, out var help)
+                ? new ExpressionFunctionInfo(f.Name, f.MinArguments, f.MaxArguments, help.Signature, help.Description)
+                : new ExpressionFunctionInfo(f.Name, f.MinArguments, f.MaxArguments, f.Name + "(…)", string.Empty)),
+    ];
+
     /// <summary>Names of all available functions.</summary>
     public static IEnumerable<string> Names => _functions.Keys;
+
+    /// <summary>All available functions with their arity, signature and description, by name (ADR-0041).</summary>
+    public static IReadOnlyList<ExpressionFunctionInfo> Functions => _infos;
 
     /// <summary>Returns the accepted argument count range of a function.</summary>
     /// <param name="name">Function name.</param>
@@ -201,3 +243,11 @@ public static class ExpressionFunctions
         int MaxArguments,
         Func<IReadOnlyList<object?>, IExpressionScope, object?> Implementation);
 }
+
+/// <summary>An expression function as the Studio describes it (ADR-0041).</summary>
+/// <param name="Name">The function name.</param>
+/// <param name="MinArguments">Fewest arguments.</param>
+/// <param name="MaxArguments">Most arguments.</param>
+/// <param name="Signature">How a call reads, e.g. <c>substring(text, start, length?)</c>.</param>
+/// <param name="Description">One line on what it returns.</param>
+public sealed record ExpressionFunctionInfo(string Name, int MinArguments, int MaxArguments, string Signature, string Description);

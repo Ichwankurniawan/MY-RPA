@@ -13,6 +13,8 @@ using MyRPA.Execution.Hosting;
 using MyRPA.Plugins;
 using MyRPA.Runtime;
 using MyRPA.Storage;
+using MyRPA.Workflow;
+using MyRPA.Workflow.Expressions;
 using MyRPA.Workflow.Serialization;
 using MyRPA.Workflow.Validation;
 using MyRPA.Workflow.Values;
@@ -225,6 +227,7 @@ internal static class ServerApplication
 
         MapProjects(api);
         MapRuns(api);
+        MapExpressions(api);
         MapStreams(api);
         MapRecordings(api);
     }
@@ -594,6 +597,69 @@ internal static class ServerApplication
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
+    /// <summary>
+    /// Expression assist (ADR-0041): the functions, the names in scope at a node and the uses of a name, computed by the
+    /// loader's own validation walk. Read-only: nothing is stored, and the document is the one being edited.
+    /// </summary>
+    private static void MapExpressions(RouteGroupBuilder api)
+    {
+        api.MapGet("/expressions/functions", () => Results.Json(ExpressionFunctions.Functions.Select(f => new
+        {
+            name = f.Name,
+            minArguments = f.MinArguments,
+            maxArguments = f.MaxArguments,
+            signature = f.Signature,
+            description = f.Description,
+        })));
+
+        api.MapPost("/expressions/scope", (ExpressionScopeRequest request, WorkflowLoader loader) =>
+        {
+            if (DocumentAndPathRefusal(request.Document, request.Path) is { } refusal)
+            {
+                return refusal;
+            }
+
+            var index = loader.IndexNames(request.Document!.Value.GetRawText());
+            return Results.Json(new { names = index.InScope(request.Path!).Select(SymbolJson) });
+        });
+
+        api.MapPost("/expressions/references", (ExpressionReferencesRequest request, WorkflowLoader loader) =>
+        {
+            if (DocumentAndPathRefusal(request.Document, request.Path) is { } refusal)
+            {
+                return refusal;
+            }
+
+            if (!WorkflowNames.IsValid(request.Name))
+            {
+                return BadRequest("'name' must be a variable, argument or local name.");
+            }
+
+            var index = loader.IndexNames(request.Document!.Value.GetRawText());
+            var declaration = index.Resolve(request.Path!, request.Name!);
+            IReadOnlyList<WorkflowNameReference> references = declaration is null ? [] : index.ReferencesTo(declaration);
+            return Results.Json(new
+            {
+                declaration = declaration is null ? null : SymbolJson(declaration),
+                references = references.Select(r => new { path = r.Path, start = r.Start, length = r.Length, declaration = r.IsDeclaration }),
+            });
+        });
+    }
+
+    private static IResult? DocumentAndPathRefusal(JsonElement? document, string? path) =>
+        document is not { ValueKind: JsonValueKind.Object } ? BadRequest("'document' must be a workflow JSON object.")
+        : string.IsNullOrEmpty(path) || path.Length > 4096 || !path.StartsWith('$') ? BadRequest("'path' must be a JSON path such as $.root.properties.message.")
+        : null;
+
+    private static object SymbolJson(WorkflowSymbol symbol) => new
+    {
+        name = symbol.Name,
+        kind = symbol.Kind.ToString(),
+        type = symbol.Type.ToString(),
+        direction = symbol.Direction?.ToString(),
+        path = symbol.DeclarationPath,
+    };
+
     private static void MapStreams(RouteGroupBuilder api)
     {
         api.MapPost("/streams", (HttpContext context, EventStreams streams) =>
@@ -836,6 +902,12 @@ internal sealed record DebugCommandRequest(string? Command);
 
 /// <summary>Body of <c>PUT /api/runs/{runId}/breakpoints</c>: node ids of the run's workflow.</summary>
 internal sealed record BreakpointsRequest(List<string?>? Breakpoints);
+
+/// <summary>Body of <c>POST /api/expressions/scope</c> (ADR-0041): the document being edited and a path in it.</summary>
+internal sealed record ExpressionScopeRequest(JsonElement? Document, string? Path);
+
+/// <summary>Body of <c>POST /api/expressions/references</c> (ADR-0041): a name as used at a path of the document.</summary>
+internal sealed record ExpressionReferencesRequest(JsonElement? Document, string? Path, string? Name);
 
 /// <summary>Body of <c>POST /api/streams/{streamId}/subscriptions</c>.</summary>
 internal sealed record SubscribeRequest(string? RunId, long? AfterSequence, string? RecordingId = null);

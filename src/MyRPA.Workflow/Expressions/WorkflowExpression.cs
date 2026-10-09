@@ -18,8 +18,10 @@ public sealed class WorkflowExpression
         var names = new SortedSet<string>(StringComparer.Ordinal);
         var functions = new SortedSet<string>(StringComparer.Ordinal);
         var calls = new List<(string Name, int Arguments)>();
-        Collect(root, names, functions, calls);
+        var occurrences = new List<ExpressionNameReference>();
+        Collect(root, names, functions, calls, occurrences);
         ReferencedNames = [.. names];
+        NameReferences = [.. occurrences.OrderBy(o => o.Start)];
         ReferencedFunctions = [.. functions];
         FunctionCalls = calls;
     }
@@ -32,6 +34,12 @@ public sealed class WorkflowExpression
 
     /// <summary>Variable/argument/local names referenced by the expression.</summary>
     public IReadOnlyList<string> ReferencedNames { get; }
+
+    /// <summary>
+    /// Every occurrence of a variable, argument or local name in <see cref="Source"/>, in text order, with its exact
+    /// position (ADR-0041). Member names (<c>x.name</c>), dictionary keys and text inside strings are not names.
+    /// </summary>
+    public IReadOnlyList<ExpressionNameReference> NameReferences { get; }
 
     /// <summary>Function names called by the expression.</summary>
     public IReadOnlyList<string> ReferencedFunctions { get; }
@@ -104,47 +112,48 @@ public sealed class WorkflowExpression
     /// <inheritdoc />
     public override string ToString() => Source;
 
-    private static void Collect(ExpressionNode node, SortedSet<string> names, SortedSet<string> functions, List<(string, int)> calls)
+    private static void Collect(ExpressionNode node, SortedSet<string> names, SortedSet<string> functions, List<(string, int)> calls, List<ExpressionNameReference> occurrences)
     {
         switch (node)
         {
             case NameNode n:
                 names.Add(n.Name);
+                occurrences.Add(new ExpressionNameReference(n.Name, n.Position, n.Name.Length));
                 break;
             case UnaryNode u:
-                Collect(u.Operand, names, functions, calls);
+                Collect(u.Operand, names, functions, calls, occurrences);
                 break;
             case BinaryNode b:
-                Collect(b.Left, names, functions, calls);
-                Collect(b.Right, names, functions, calls);
+                Collect(b.Left, names, functions, calls, occurrences);
+                Collect(b.Right, names, functions, calls, occurrences);
                 break;
             case IndexNode i:
-                Collect(i.Target, names, functions, calls);
-                Collect(i.Index, names, functions, calls);
+                Collect(i.Target, names, functions, calls, occurrences);
+                Collect(i.Index, names, functions, calls, occurrences);
                 break;
             case MemberNode m:
-                Collect(m.Target, names, functions, calls);
+                Collect(m.Target, names, functions, calls, occurrences);
                 break;
             case CallNode c:
                 functions.Add(c.Function);
                 calls.Add((c.Function, c.Arguments.Count));
                 foreach (var argument in c.Arguments)
                 {
-                    Collect(argument, names, functions, calls);
+                    Collect(argument, names, functions, calls, occurrences);
                 }
 
                 break;
             case ListNode l:
                 foreach (var item in l.Items)
                 {
-                    Collect(item, names, functions, calls);
+                    Collect(item, names, functions, calls, occurrences);
                 }
 
                 break;
             case DictionaryNode d:
                 foreach (var entry in d.Entries)
                 {
-                    Collect(entry.Value, names, functions, calls);
+                    Collect(entry.Value, names, functions, calls, occurrences);
                 }
 
                 break;
@@ -170,3 +179,9 @@ public sealed class WorkflowExpression
         return null;
     }
 }
+
+/// <summary>One occurrence of a name in an expression's text (ADR-0041).</summary>
+/// <param name="Name">The variable, argument or local name.</param>
+/// <param name="Start">Its offset in the expression text (0-based).</param>
+/// <param name="Length">Its length in the text.</param>
+public sealed record ExpressionNameReference(string Name, int Start, int Length);
