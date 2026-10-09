@@ -177,3 +177,23 @@ export interface GeneratedActivities {
   nodes: JsonObject[];
   arguments: JsonObject[];
 }
+
+/** An expression function (`GET /api/expressions/functions`, ADR-0041). */
+export interface ExpressionFunction {
+  name: string;
+  minArguments: number;
+  maxArguments: number;
+  signature: string;
+  description: string;
+}
+
+/** A name visible at a place in the workflow (`POST /api/expressions/scope`, ADR-0041). */
+export interface ScopeName {
+  name: string;
+  /** Argument, Variable or Local. */
+  kind: string;
+  type: string;
+  direction?: string | null;
+  /** Where it is declared. */
+  path: string;
+}

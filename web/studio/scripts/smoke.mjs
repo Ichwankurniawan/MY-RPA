@@ -377,16 +377,25 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     if ((await page.getByTestId('status-validation').count()) > 0) {
       await page.getByTestId('status-validation').filter({ hasNotText: 'Checking' }).waitFor();
     }
-    await from.scrollIntoViewIfNeeded();
+    // The point at `fy` of a locator's height, when the locator is really what is under it (nothing covers it, such as
+    // the pinned designer bar); a drop aimed at a covered point would silently land elsewhere.
+    const aim = async (locator, fy) => {
+      const box = await locator.boundingBox();
+      const point = { x: box.x + box.width / 2, y: box.y + box.height * fy };
+      return (await locator.evaluate((element, p) => element.contains(document.elementFromPoint(p.x, p.y)), point)) ? point : undefined;
+    };
+    await from.evaluate((element) => element.scrollIntoView({ block: 'center' }));
     // UX-3: a selected card shows its editors, so a drop target inside it can be below the visible area.
     await to.scrollIntoViewIfNeeded();
-    const a = await from.boundingBox();
-    const b = await to.boundingBox();
-    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    const a = await aim(from, 0.5);
+    const b = await aim(to, at);
+    check(a !== undefined && b !== undefined, `both ends of the drag are visible under the pointer (from ${JSON.stringify(a)}, to ${JSON.stringify(b)})`);
+    await page.mouse.move(a.x, a.y);
     await page.mouse.down();
-    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + 10, { steps: 3 });
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height * at, { steps: 8 });
-    // Follow the target if a card changed while dragging (as in manual.mjs).
+    await page.mouse.move(a.x, a.y + 10, { steps: 3 });
+    await page.mouse.move(b.x, b.y, { steps: 8 });
+    // Follow the target if a card changed while dragging (as in manual.mjs). The drag overlay now covers everything, so
+    // only the position is measured again.
     const settled = await to.boundingBox();
     await page.mouse.move(settled.x + settled.width / 2, settled.y + settled.height * at, { steps: 2 });
     await page.mouse.up();
@@ -682,6 +691,27 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await runStatus.filter({ hasText: 'Succeeded' }).waitFor();
   check((await page.getByRole('toolbar', { name: 'Debug' }).count()) === 0, 'the debug bar closes when the run ends');
   step('Debugger (ADR-0040). Breakpoint by F9; Debug paused before say (card marked, n = 42 read from the server, say not run); Step over (F10) ran say and paused before done; Continue: Succeeded');
+
+  // ADR-0041, E-2: completion in an expression field, by keyboard only: a function, a nested function, the variable n
+  // (from the server's names in scope); the result validates on the server.
+  await page.locator('[role=treeitem][data-node-id="done"] > .node').click();
+  const expression = page.getByRole('complementary', { name: 'Properties' }).getByRole('combobox', { name: /^message/ });
+  const completions = page.getByRole('listbox', { name: 'Completions' });
+  await expression.fill('');
+  await expression.pressSequentially('lo');
+  await completions.getByRole('option', { name: /^lower/ }).waitFor();
+  await page.keyboard.press('Enter');
+  await page.locator('.signature-hint').filter({ hasText: 'lower(text)' }).waitFor();
+  await expression.pressSequentially('toS');
+  await page.keyboard.press('Enter');
+  await expression.pressSequentially('n');
+  check((await completions.getByRole('option').first().textContent()).startsWith('n'), 'the variable n comes before the function now()');
+  await page.keyboard.press('Enter');
+  await expression.pressSequentially('))');
+  check((await expression.inputValue()) === 'lower(toString(n))', `completed expression: ${await expression.inputValue()}`);
+  check((await completions.count()) === 0, 'the list closed');
+  await page.getByTestId('status-validation').filter({ hasText: 'No problems' }).waitFor();
+  step("Expression assist E-2 (ADR-0041). Completion by keyboard: lower( → toString( → n (the variable before now(), from the server's names in scope), the signature shown inside the call; the result validates");
 
   // W6-8: Single-command start: only --open <file> (no --project, no --web). The server serves the Studio bundled
   // next to it, makes the file's folder the project, and the Studio opens the file.

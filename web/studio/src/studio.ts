@@ -23,7 +23,7 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, WorkflowFile } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExpressionFunction, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, ScopeName, WorkflowFile } from './types';
 import { isBreakpointMap, isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 import {
@@ -220,6 +220,8 @@ export interface StudioState {
   readonly zoom: number;
   /** Breakpoints per file (`project/path` → node ids; ADR-0040). Remembered per browser, never in the workflow file. */
   readonly breakpoints: Readonly<Record<string, readonly string[]>>;
+  /** The expression functions, for completion (ADR-0041); empty until the server answered. */
+  readonly expressionFunctions: readonly ExpressionFunction[];
 }
 
 /** The designer's zoom range and step (UX-3). */
@@ -729,6 +731,8 @@ export class Studio {
   private clipboard?: string;
   /** Events received since the last flush, applied together (ADR-0030: one store update per frame). */
   private pending: ExecutionEvent[] = [];
+  /** Names in scope per document version and path (ADR-0041). */
+  private readonly scopeCache = new WeakMap<JsonObject, Map<string, Promise<readonly ScopeName[]>>>();
 
   private readonly drafts: DraftStore;
   private readonly draftDelayMs: number;
@@ -768,6 +772,7 @@ export class Studio {
       treeShowsRun: false,
       stream: 'idle',
       breakpoints: this.preferences.read(preferenceKeys.breakpoints, isBreakpointMap) ?? {},
+      expressionFunctions: [],
     });
     this.events = new RunEventStream(
       api,
@@ -798,6 +803,34 @@ export class Studio {
         }
       }
     });
+  }
+
+  /**
+   * The names visible at `path` of the open document (ADR-0041), from the server's validation. Asked once per document
+   * version and path (a field gets them when it gains focus); empty when the server cannot answer.
+   */
+  namesInScope(path: string): Promise<readonly ScopeName[]> {
+    const document = this.state.document;
+    if (document === undefined) {
+      return Promise.resolve([]);
+    }
+
+    let byPath = this.scopeCache.get(document);
+    if (byPath === undefined) {
+      byPath = new Map();
+      this.scopeCache.set(document, byPath);
+    }
+
+    let names = byPath.get(path);
+    if (names === undefined) {
+      names = this.api.namesInScope(document, path).catch(() => {
+        byPath.delete(path);
+        return [];
+      });
+      byPath.set(path, names);
+    }
+
+    return names;
   }
 
   /** Writes (or, when the document is clean again, removes) the open file's draft now. */
@@ -834,6 +867,8 @@ export class Studio {
       const activities = await this.api.activities();
       // Plugin load problems (W5): a plugin that failed to load is not fatal for optional plugins; say so up front.
       const plugins = await this.api.plugins().catch(() => undefined);
+      // Completion works without them (names still come per field); never a reason not to connect.
+      const expressionFunctions = await this.api.expressionFunctions().catch(() => []);
       const problems = plugins?.diagnostics.length ?? 0;
       this.store.set({
         connection: 'ready',
@@ -841,6 +876,7 @@ export class Studio {
         activities,
         catalog: new Map(activities.map((activity) => [activity.type, activity])),
         plugins,
+        expressionFunctions,
         message: `Connected to ${info.name} (${info.mode} mode).${problems > 0 ? ` ${problems} plugin problem(s): see the notice above the designer.` : ''}`,
       });
       if (info.open) {

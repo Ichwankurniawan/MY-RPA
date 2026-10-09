@@ -189,6 +189,15 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
     new one and resubscribes each unfinished run after the last sequence it saw. Duplicates are ignored.
   - Streamed events are applied once per animation frame, so a burst of events costs one render.
   - The workflow stays editable during and after a run. An unsaved document runs as a buffer at its path.
+- **Expression completion** (ADR-0041): every expression field (properties inline and in Properties, expression map
+  values, transition conditions) is a combobox.
+  - **Opening it:** typing a name opens a list of the names in scope at that place and the expression functions;
+    Ctrl+Space opens it anywhere. It never opens inside a string or after a `.`.
+  - **Keys:** Up and Down move, Enter or Tab accepts (a function is inserted with its `(`), Escape closes.
+  - **Hints:** inside a function call, its signature and description show under the field.
+  - **Where the names come from:** `POST /api/expressions/scope`, asked when the field gets focus, once per document
+    version and place. The functions come from `GET /api/expressions/functions`, once per connection. The browser only
+    filters while typing.
 - **Debug** (ADR-0040): breakpoints, pause and stepping, through the server's debug endpoints.
   - **Breakpoints:** F9, or the dot on the selected card or canvas step, toggles a breakpoint. It stays visible on the
     card while set. Breakpoints are remembered per browser and file (`myrpa.ui.breakpoints`), never saved in the
@@ -287,6 +296,10 @@ nothing about the client.
   `DraftValidator` places it (`tests/corpus/expected/locations.json`, written by the .NET `CorpusParityTests`), and
   every editable corpus file round-trips unchanged (ADR-0035).
 - `App.test.tsx` also covers Ctrl+S, F5 and leaving the page with focus still in an edited field (W9).
+- `ExpressionUi.test.tsx` (ADR-0041) covers:
+  - finding the word at the caret (not in strings, after `.` or in numbers) and the call at the caret;
+  - completing a name and a function by keyboard, Ctrl+Space, the arrows, Escape, the mouse;
+  - the signature hint.
 - `DebugUi.test.tsx` (ADR-0040) covers:
   - breakpoints by F9 and the card dot, remembered per browser and file;
   - Debug and F11 starts, with the arguments dialog;

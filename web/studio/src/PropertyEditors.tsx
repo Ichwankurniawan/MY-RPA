@@ -4,6 +4,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useStudio, useStudioState } from './context';
+import { ExpressionInput } from './ExpressionInput';
 import { indexDocument, isObject, nodeAt, type Step } from './document';
 import { graphParentPath, moveTransitionRefusal, stepsOf } from './graph';
 import { addTransitionRefusalOf, setStartRefusalOf, workflowKey } from './studio';
@@ -286,7 +287,16 @@ function StepTransitions({ nodeKey, node, graph, path, disabled, diagnostics }: 
                     {i === 0 && transitions.length > 1 ? ' (checked first)' : ''}
                   </legend>
                   <TargetSelect label="Go to" value={to} steps={steps} disabled={disabled} onChange={(value) => studio.editTransition(nodeKey, i, { to: value })} />
-                  <TextField label="Condition" value={when} hint="A Boolean expression; empty means always." disabled={disabled} errors={[]} code onChange={(text) => studio.editTransition(nodeKey, i, { when: text })} />
+                  <TextField
+                    label="Condition"
+                    value={when}
+                    hint="A Boolean expression; empty means always."
+                    disabled={disabled}
+                    errors={[]}
+                    code
+                    expression={{ nodeKey, suffix: `.transitions[${i}].when` }}
+                    onChange={(text) => studio.editTransition(nodeKey, i, { when: text })}
+                  />
                   <TextField label="Label" value={label} hint="Shown on the arrow." disabled={disabled} errors={[]} onChange={(text) => studio.editTransition(nodeKey, i, { label: text })} />
                   {problems.length > 0 && <span className="field-error">{problemText(problems)}</span>}
                   <span className="row-actions">
@@ -355,6 +365,7 @@ function TextField({
   onChange,
   multiline,
   code,
+  expression,
 }: {
   label: string;
   value: string;
@@ -364,6 +375,8 @@ function TextField({
   onChange: (text: string) => void;
   multiline?: boolean;
   code?: boolean;
+  /** An expression with completion (ADR-0041): its node and the rest of its JSON path. */
+  expression?: { readonly nodeKey: string; readonly suffix: string };
 }) {
   const id = useId();
   const describedBy = `${id}-hint${errors.length > 0 ? ` ${id}-error` : ''}`;
@@ -381,7 +394,13 @@ function TextField({
       <label className="field-label" htmlFor={id}>
         {label}
       </label>
-      {multiline ? <textarea {...common} rows={3} onChange={(e) => onChange(e.target.value)} /> : <input {...common} onChange={(e) => onChange(e.target.value)} />}
+      {expression ? (
+        <ExpressionInput id={id} nodeKey={expression.nodeKey} suffix={expression.suffix} value={value} disabled={disabled} invalid={errors.length > 0} describedBy={describedBy} onChange={onChange} />
+      ) : multiline ? (
+        <textarea {...common} rows={3} onChange={(e) => onChange(e.target.value)} />
+      ) : (
+        <input {...common} onChange={(e) => onChange(e.target.value)} />
+      )}
       <small id={`${id}-hint`}>{hint}</small>
       {errors.length > 0 && (
         <span id={`${id}-error`} className="field-error">
@@ -436,18 +455,32 @@ function PropertyEditor({
         ))}
       </select>
     );
+  } else if (descriptor.kind === 'Expression') {
+    editor = (
+      <ExpressionInput
+        id={id}
+        nodeKey={nodeKey}
+        suffix={`.properties.${descriptor.name}`}
+        value={text}
+        disabled={disabled}
+        invalid={errors.length > 0}
+        describedBy={describedBy}
+        placeholder="expression, e.g. 'Hello ' + name"
+        onChange={onChange}
+      />
+    );
   } else {
     const list = descriptor.kind === 'AssignmentTarget' ? `${id}-names` : undefined;
     editor = (
       <>
         <input
           id={id}
-          className={descriptor.kind === 'Expression' || descriptor.kind === 'AssignmentTarget' || descriptor.kind === 'LocalName' ? 'code' : undefined}
+          className={descriptor.kind === 'AssignmentTarget' || descriptor.kind === 'LocalName' ? 'code' : undefined}
           value={text}
           disabled={disabled}
           spellCheck={false}
           list={list}
-          placeholder={descriptor.kind === 'Expression' ? "expression, e.g. 'Hello ' + name" : descriptor.kind === 'AssignmentTarget' ? 'variable or Out/InOut argument' : undefined}
+          placeholder={descriptor.kind === 'AssignmentTarget' ? 'variable or Out/InOut argument' : undefined}
           aria-invalid={errors.length > 0}
           aria-describedby={describedBy}
           onChange={(e) => onChange(e.target.value)}
@@ -529,6 +562,7 @@ function MapEditor({
           disabled={disabled}
           list={targets ? `${id}-targets` : undefined}
           valueLabel={targets ? 'target' : 'expression'}
+          expression={targets ? undefined : { nodeKey, suffix: `.properties.${descriptor.name}.${key}` }}
           onRename={(k) => rename(row, k)}
           onValue={(text) => setValue(row, text)}
           onRemove={() => remove(row)}
@@ -556,6 +590,7 @@ function MapRow({
   disabled,
   list,
   valueLabel,
+  expression,
   onRename,
   onValue,
   onRemove,
@@ -566,11 +601,14 @@ function MapRow({
   disabled: boolean;
   list?: string;
   valueLabel: string;
+  /** For an expression value: its node and the rest of its JSON path, for completion (ADR-0041). */
+  expression?: { readonly nodeKey: string; readonly suffix: string };
   onRename: (key: string) => void;
   onValue: (text: string) => void;
   onRemove: () => void;
 }) {
   const [draft, setDraft] = useState(entryKey);
+  const valueId = useId();
   useEffect(() => setDraft(entryKey), [entryKey]);
   const error = draft.trim() === '' ? 'A name is required.' : taken.includes(draft) ? `'${draft}' is already an entry.` : undefined;
   return (
@@ -591,7 +629,11 @@ function MapRow({
         }}
       />
       <span aria-hidden="true">→</span>
-      <input className="code" aria-label={`Entry ${valueLabel}`} value={text} disabled={disabled} spellCheck={false} list={list} onChange={(e) => onValue(e.target.value)} />
+      {expression ? (
+        <ExpressionInput id={valueId} nodeKey={expression.nodeKey} suffix={expression.suffix} label={`Entry ${valueLabel}`} value={text} disabled={disabled} onChange={onValue} />
+      ) : (
+        <input className="code" aria-label={`Entry ${valueLabel}`} value={text} disabled={disabled} spellCheck={false} list={list} onChange={(e) => onValue(e.target.value)} />
+      )}
       <button type="button" className="small" aria-label={`Remove ${entryKey}`} disabled={disabled} onClick={onRemove}>
         ×
       </button>

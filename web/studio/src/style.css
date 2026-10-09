@@ -277,6 +277,17 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 /* A run of this file is shown: nodes without a run state were not executed. */
 .shows-run .node:not([data-run-status]) .label { color: var(--muted); font-weight: normal; }
 
+/* Expression completion (ADR-0041): the list under the field, and the signature of the call the caret is in. */
+.expression-input { position: relative; }
+.expression-input input { width: 100%; }
+.completions { position: absolute; top: 100%; left: 0; z-index: 30; min-width: 100%; max-width: 420px; max-height: 220px; overflow: auto; margin: 2px 0 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); }
+.completion { display: flex; gap: 8px; align-items: baseline; padding: 3px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.completion.active { background: var(--accent-soft); }
+.completion-label { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; color: var(--text); }
+.completion-detail { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.signature-hint { display: block; margin-top: 2px; color: var(--muted); }
+.signature-hint code { color: var(--text); }
+
 /* Properties. */
 .properties { grid-area: properties; border-left: 1px solid var(--border); }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; }
