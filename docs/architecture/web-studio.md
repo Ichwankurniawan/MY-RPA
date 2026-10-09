@@ -93,6 +93,11 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
+- **Left panel:** two tabs, **Activities** (the catalog) and **Files** (the project), one shown at a time and
+  remembered per browser (`myrpa.ui.sidebarTab`). An activity entry shows its title only; its type, description and
+  side effects are the tooltip and the accessible description. A plugin namespace with one category lists its
+  activities without a second header. Panel sizes are capped by the window, and below 980 px wide or 640 px high the
+  command bar shows icons only (labels stay the accessible names), so a small window keeps the designer usable.
 - **Files** (W6, ADR-0031): the Files panel shows the project's `.json` files as folders and files (click selects).
   - **New…** asks for a path (a free name is suggested) and creates a valid workflow with an empty root Sequence.
   - **Rename…** (F2) renames or moves the file in the project (server `move`, atomic, never overwrites); an open

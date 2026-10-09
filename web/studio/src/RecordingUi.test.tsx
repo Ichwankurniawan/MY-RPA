@@ -19,7 +19,7 @@ async function renderStudio(api = new FakeApi()) {
   return { studio, api, state: () => studio.store.get() };
 }
 
-const recorder = () => within(screen.getByRole('tabpanel'));
+const recorder = () => within(document.querySelector<HTMLElement>('.bottom-panel [role="tabpanel"]')!);
 const steps = () => within(screen.getByRole('list', { name: 'Recorded steps' })).queryAllByRole('listitem');
 
 let sequence = 0;

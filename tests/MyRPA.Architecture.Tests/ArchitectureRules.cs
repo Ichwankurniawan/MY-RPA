@@ -55,7 +55,7 @@ public static class ArchitectureRules
             IsCompositionRoot: true,
             AllowsAspNetCore: true),
         new("MyRPA.Cli", typeof(MyRPA.Cli.CliApplication).Assembly,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins"],
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Browser.Contracts"],
             AllowedPackages: ["Microsoft.Extensions.Hosting"],
             IsCompositionRoot: true),
     ];
@@ -114,6 +114,7 @@ public static class ArchitectureRules
     public static IReadOnlyDictionary<string, string> TechnologyPackageOwners { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["Microsoft.Playwright"] = "MyRPA.Browser.Playwright",
+        ["DocumentFormat.OpenXml"] = "MyRPA.Spreadsheet",
     };
 
     /// <summary>
@@ -208,6 +209,10 @@ public static class ArchitectureRules
         ["MyRPA.Plugins.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         // The browser plugin is tested through the real plugin host (it is only built, never compiled against).
         ["MyRPA.Browser.Playwright.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime", "MyRPA.Browser.Contracts"],
+        // The files, HTTP and Excel plugins likewise (ADR-0042).
+        ["MyRPA.Files.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Http.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Spreadsheet.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
         ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Server", "MyRPA.Cli"],
         // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.

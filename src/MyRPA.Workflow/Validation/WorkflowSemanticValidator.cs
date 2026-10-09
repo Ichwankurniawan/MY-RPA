@@ -499,6 +499,13 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
         switch (definition.Kind)
         {
             case ActivityPropertyKind.Expression:
+                if (definition.IsSecret && !NamesASource(raw.Value))
+                {
+                    // ADR-0042: a password or token is never written into the workflow; it comes from a name at run time.
+                    Error(DiagnosticCodes.SecretLiteral, raw.Path, $"'{definition.Name}' is a secret: give it from an argument or variable (for example a run argument), never as a value written in the workflow.", nodeId);
+                    return null;
+                }
+
                 return ParseExpression(raw.Value, raw.Path, scope, nodeId) is { } expression ? new ExpressionPropertyValue(expression) : null;
 
             case ActivityPropertyKind.Text:
@@ -553,6 +560,12 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
                 return null;
         }
     }
+
+    /// <summary>Whether a secret property's expression reads a name (a JSON literal or a constant expression does not).</summary>
+    private static bool NamesASource(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String
+        && WorkflowExpression.TryParse(value.GetString()!, out var expression, out _)
+        && expression.ReferencedNames.Count > 0;
 
     private List<KeyValuePair<string, T>>? ValidateMap<T>(RawProperty raw, string? nodeId, Func<JsonElement, string, T?> readValue)
         where T : class

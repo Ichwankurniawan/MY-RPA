@@ -4,12 +4,14 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 6 — Selectors & Recorder, complete
-  (S-1 to S-4, 2026-10-08; plan `docs/architecture/selectors-recorder-plan.md`, decisions ADR-0038 and ADR-0039).**
-  Phase 5, the Studio UX slice and graph workflows (ADR-0037) are complete. **Debugger slice authorized by the owner on
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 7 — Enterprise Automation Activities,
+  authorized by the owner on 2026-10-09 (the Phase 7 brief); plan `docs/architecture/enterprise-activities-plan.md`,
+  ADR-0042; slices P7-1 → P7-6 done (2026-10-09; catalog reference
+  `docs/architecture/enterprise-activities.md`).** Phase 6 (Selectors & Recorder, ADR-0038/0039) is complete, as are Phase 5, the
+  Studio UX slice and graph workflows (ADR-0037). **Debugger slice authorized by the owner on
   2026-10-08 ("merge and D-1"); plan `docs/architecture/debugger-plan.md`, ADR-0040; slices D-1 → D-3 done.** **Expression assist authorized by the owner on 2026-10-09 ("continue E-1"); plan
   `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 done.**
-  Phase 7 (Enterprise Automation Activities) must not start without the owner's explicit authorization.
+  Phase 8 (AI Automation) must not start without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -21,7 +23,8 @@ Guidance for AI agents and contributors working in this repository.
 2. `docs/adr/` — accepted decisions (they refine the PRD).
 3. `docs/architecture/overview.md`, `execution-model.md`, `workflow-format.md`, `automation-sdk.md`,
    `plugin-system.md`, `browser-automation.md`, `server.md`, `web-studio.md` — current architecture;
-   `web-studio-roadmap.md` and `web-studio-parity.md` — how Phase 5 was completed (W-roadmap, WPF exit evidence).
+   `web-studio-roadmap.md` and `web-studio-parity.md` — how Phase 5 was completed (W-roadmap, WPF exit evidence);
+   `enterprise-activities.md` — the Phase 7 activities, file policy, HTTP security and error types.
 4. `docs/research/` — Phase 0 OpenRPA evidence (codes R#/D#/N# in `openrpa-analysis.md`).
 5. `reference/openrpa/` — read-only OpenRPA clone (MPL-2.0). Never modify it; never copy its code into MyRPA.
 
@@ -48,7 +51,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 
 - Dependency direction (ADR-0003, amended by ADR-0010 and ADR-0013): Core ← Workflow; Core, Workflow ← Activities;
   Core, Workflow ← Runtime; Core, Workflow ← Storage; Core, Workflow ← Sdk; Core, Workflow, Sdk, Activities ← Plugins;
-  everything ← Cli; Contracts and Browser.Contracts have no references (Browser.Contracts ← Server, the browser plugin;
+  everything ← Cli; Contracts and Browser.Contracts have no references (Browser.Contracts ← Server, Cli, the browser plugin;
   ADR-0039);
   Core, Workflow, Contracts ← Execution.Hosting (ADR-0022); engine, Plugins, Contracts, Execution.Hosting ← Server. The engine and plugin host never reference Contracts or
   Execution.Hosting. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
@@ -59,7 +62,11 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   an extension contract interface, ADR-0039), set `EnableDynamicLoading`, and are never compiled against: tests reference them
   with `ReferenceOutputAssembly="false"` and load them through the plugin host.
 - Technology packages live only in their provider plugin (`ArchitectureRules.TechnologyPackageOwners`):
-  `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`. Never in src, tests or other plugins.
+  `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`, `DocumentFormat.OpenXml` only in
+  `plugins/MyRPA.Spreadsheet`. Never in src, tests or other plugins.
+- Product plugins with side effects (ADR-0042): file paths only through `MyRPA.Sdk.Files.FileRootPolicy` (no silent
+  overwrite, no folder delete, links refused); HTTP only in `plugins/MyRPA.Http` (allowedHosts per redirect hop, no
+  credentials to another origin, TLS validation never off); secrets only through secret properties (MYRPA1066).
 - Browser plugin rules (ADR-0017, ADR-0039): no JavaScript evaluation (`EvaluateAsync`; only the recorder adds its
   fixed script and binding, `BrowserPluginRulesTests`), http/https/about:blank URLs only, file
   access only through `BrowserFilePolicy`, one browser per session, sessions closed when the run ends.

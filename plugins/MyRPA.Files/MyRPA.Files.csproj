@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    File, folder and data-file activities (Phase 7, ADR-0042). A plugin: it references only the Automation SDK
+    (host-provided, so Private=false / ExcludeAssets=runtime) and no packages. Every path goes through the SDK's
+    FileRootPolicy (one configured root). The build output directory is a complete plugin directory.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Files</RootNamespace>
+    <Description>MyRPA file, folder, CSV, JSON and XML activities.</Description>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="myrpa-plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- MyRPA.Core and MyRPA.Workflow arrive transitively through MyRPA.Sdk; they are host-provided contract assemblies. -->
+  <Target Name="ExcludeHostContractAssemblies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow'" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -29,6 +29,7 @@ import {
   type StudioDialog,
   type StudioState,
   type PaneName,
+  type SidebarTab,
   paneLimits,
   workflowKey,
   zoomLimits,
@@ -167,10 +168,11 @@ function Shell() {
     }
 
     const hidden = (name: PaneName) => panes.hidden.includes(name);
-    const size = (name: PaneName, fallback: string) => (hidden(name) ? '0px' : panes[name] !== undefined ? `${panes[name]}px` : fallback);
     const custom = panes.hidden.length > 0 || panes.toolbox !== undefined || panes.properties !== undefined || panes.bottom !== undefined;
-    element.style.gridTemplateColumns = custom ? `${size('toolbox', '240px')} minmax(0, 1fr) ${size('properties', '340px')}` : '';
-    element.style.gridTemplateRows = custom ? `auto minmax(0, 1fr) ${size('bottom', 'minmax(240px, 40vh)')} auto` : '';
+    // A remembered size is capped by the window (min()), so shrinking the window never squeezes the designer away.
+    const capped = (name: PaneName, fallback: string, share: string) => (hidden(name) ? '0px' : panes[name] !== undefined ? `min(${panes[name]}px, ${share})` : fallback);
+    element.style.gridTemplateColumns = custom ? `${capped('toolbox', 'min(260px, 30vw)', '35vw')} minmax(0, 1fr) ${capped('properties', 'min(340px, 32vw)', '40vw')}` : '';
+    element.style.gridTemplateRows = custom ? `auto minmax(0, 1fr) ${capped('bottom', 'minmax(140px, 28vh)', '55vh')} auto` : '';
   }, [panes]);
 
   return (
@@ -178,10 +180,9 @@ function Shell() {
       <Toolbar />
       {connection === 'ready' ? (
         <>
-          <div className="sidebar" hidden={panes.hidden.includes('toolbox')}>
-            <FilesPanel />
-            <Toolbox />
-          </div>
+          <section className="sidebar" aria-label="Side panel" hidden={panes.hidden.includes('toolbox')}>
+            <SidebarTabs />
+          </section>
           <WorkflowTree />
           {!panes.hidden.includes('properties') && <PropertiesPanel />}
           {!panes.hidden.includes('bottom') && <OutputPanel />}
@@ -203,7 +204,7 @@ function Shell() {
 }
 
 /** A panel's size before it is resized: the stylesheet's defaults (the bottom panel: 40% of the window, at least 240 px). */
-const defaultPaneSize = (pane: PaneName) => (pane === 'toolbox' ? 240 : pane === 'properties' ? 340 : Math.max(240, Math.round(window.innerHeight * 0.4)));
+const defaultPaneSize = (pane: PaneName) => (pane === 'toolbox' ? 260 : pane === 'properties' ? 340 : Math.max(140, Math.round(window.innerHeight * 0.28)));
 
 /** The element whose size a splitter changes, and which way growing goes. */
 const splitterTargets: Record<PaneName, { readonly selector: string; readonly axis: 'x' | 'y'; readonly sign: 1 | -1 }> = {
@@ -569,6 +570,63 @@ const descriptionId = (type: string) => `activity-description-${type.replace(/[^
 const namespaceOf = (type: string) => type.split('.')[0];
 const namespaceLabel = (namespace: string) => (namespace === 'Core' ? 'Built-in' : namespace);
 
+const sidebarTabs: readonly { readonly id: SidebarTab; readonly label: string; readonly icon: IconName }[] = [
+  { id: 'activities', label: 'Activities', icon: 'activity' },
+  { id: 'files', label: 'Files', icon: 'folder-open' },
+];
+
+/** The left panel: the activity catalog or the project's files, one at a time (tabs; the choice is remembered). */
+function SidebarTabs() {
+  const studio = useStudio();
+  const tab = useStudioState((s) => s.sidebarTab);
+  const tabRefs = useRef<Partial<Record<SidebarTab, HTMLButtonElement | null>>>({});
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const at = sidebarTabs.findIndex((t) => t.id === tab);
+    const next =
+      event.key === 'ArrowRight' || event.key === 'ArrowLeft' ? sidebarTabs[(at + 1) % sidebarTabs.length]
+      : event.key === 'Home' ? sidebarTabs[0]
+      : event.key === 'End' ? sidebarTabs[sidebarTabs.length - 1]
+      : undefined;
+    if (next) {
+      event.preventDefault();
+      studio.showSidebar(next.id);
+      tabRefs.current[next.id]?.focus();
+    }
+  };
+
+  return (
+    <>
+      <div role="tablist" aria-label="Side panel" className="tabs sidebar-tabs" onKeyDown={onKeyDown}>
+        {sidebarTabs.map((t) => (
+          <button
+            key={t.id}
+            ref={(element) => {
+              tabRefs.current[t.id] = element;
+            }}
+            type="button"
+            role="tab"
+            id={`sidebar-${t.id}`}
+            aria-selected={tab === t.id}
+            aria-controls={`sidebar-${t.id}-panel`}
+            tabIndex={tab === t.id ? 0 : -1}
+            onClick={() => studio.showSidebar(t.id)}
+          >
+            <Icon name={t.icon} size={14} />
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {/* Both stay mounted (search text, selection and collapsed groups survive a tab switch); only one is shown. */}
+      <div role="tabpanel" id="sidebar-activities-panel" aria-labelledby="sidebar-activities" className="sidebar-panel" hidden={tab !== 'activities'}>
+        <Toolbox />
+      </div>
+      <div role="tabpanel" id="sidebar-files-panel" aria-labelledby="sidebar-files" className="sidebar-panel" hidden={tab !== 'files'}>
+        <FilesPanel />
+      </div>
+    </>
+  );
+}
+
 function Toolbox() {
   const studio = useStudio();
   const activities = useStudioState((s) => s.activities);
@@ -602,7 +660,7 @@ function Toolbox() {
   const insertProps = (a: ActivityDescriptor) => ({
     type: 'button' as const,
     'data-activity': a.type,
-    title: a.description,
+    title: [a.displayName, a.type, a.description, sideEffectsText(a)].filter(Boolean).join(' — '),
     disabled: blocked,
     'aria-disabled': !blocked && refusal !== undefined ? true : undefined,
     onClick: () => studio.insertActivity(a.type),
@@ -621,7 +679,7 @@ function Toolbox() {
               <li key={a.type}>
                 {/* Its own accessible name ("Log (Core.Log) from Recent"): never the same as the catalog's insert button. */}
                 <button className="insert shortcut" aria-label={`${a.displayName} (${a.type}) from ${title}`} aria-describedby="toolbox-hint" {...insertProps(a)}>
-                  <span>{a.displayName}</span> <small>({a.type})</small>
+                  <span>{a.displayName}</span>
                 </button>
               </li>
             ))}
@@ -653,12 +711,15 @@ function Toolbox() {
               {namespaceOpen && (
                 <ul aria-label={namespaceLabel(namespace)}>
                   {categories.map(([category, members]) => {
-                    const open = searching || !collapsed.has(`${namespace}:${category}`);
+                    const single = categories.length === 1;
+                    const open = single || searching || !collapsed.has(`${namespace}:${category}`);
                     return (
-                      <li key={category} className="category">
-                        <button type="button" className="category-toggle" aria-expanded={open} onClick={() => toggle(`${namespace}:${category}`)}>
-                          <span aria-hidden="true">{open ? '▾' : '▸'}</span> {category} <small>({members.length})</small>
-                        </button>
+                      <li key={category} className={single ? 'category single' : 'category'}>
+                        {!single && (
+                          <button type="button" className="category-toggle" aria-expanded={open} onClick={() => toggle(`${namespace}:${category}`)}>
+                            <span aria-hidden="true">{open ? '▾' : '▸'}</span> {category} <small>({members.length})</small>
+                          </button>
+                        )}
                         {open && (
                           <ul aria-label={category}>
                             {members.map((a) => {
@@ -669,10 +730,10 @@ function Toolbox() {
                                   <button
                                     className="insert"
                                     aria-label={`Insert ${a.displayName} (${a.type})`}
-                                    aria-describedby={a.description ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
+                                    aria-describedby={a.description || sideEffectsText(a) ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
                                     {...insertProps(a)}
                                   >
-                                    <span>{a.displayName}</span> <small>({a.type})</small>
+                                    <span>{a.displayName}</span>
                                   </button>
                                   <button
                                     type="button"
@@ -684,9 +745,11 @@ function Toolbox() {
                                   >
                                     <Icon name="star" size={14} />
                                   </button>
-                                  {a.description && (
-                                    <small className="description" id={descriptionId(a.type)}>
+                                  {(a.description || sideEffectsText(a)) && (
+                                    <small className="description visually-hidden" id={descriptionId(a.type)}>
                                       {a.description}
+                                      {a.description && sideEffectsText(a) && ' '}
+                                      {sideEffectsText(a) && <span className="side-effects">{sideEffectsText(a)}</span>}
                                     </small>
                                   )}
                                 </li>
@@ -1539,6 +1602,14 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
     </li>
   );
 });
+
+const sideEffectNames: Readonly<Record<string, string>> = { FileSystem: 'files', Network: 'network', Browser: 'browser' };
+
+/** What an activity touches outside the workflow, from catalog 1.2 (ADR-0042), e.g. "Uses: files, network". */
+export function sideEffectsText(activity: ActivityDescriptor): string {
+  const effects = (activity.sideEffects ?? []).map((e) => sideEffectNames[e] ?? e.toLowerCase());
+  return effects.length > 0 ? `Uses: ${effects.join(', ')}.` : '';
+}
 
 /** Whether the open file has a breakpoint on the node with `id` (ADR-0040). */
 function hasBreakpoint(state: StudioState, id: string | undefined): boolean {

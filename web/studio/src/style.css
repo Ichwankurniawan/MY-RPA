@@ -105,8 +105,9 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 
 .studio {
   display: grid;
-  grid-template-columns: 240px 1fr 340px;
-  grid-template-rows: auto minmax(0, 1fr) minmax(240px, 40vh) auto;
+  /* Side panels and the bottom panel take at most a share of the window, so a small window keeps the designer usable. */
+  grid-template-columns: min(260px, 30vw) minmax(0, 1fr) min(340px, 32vw);
+  grid-template-rows: auto minmax(0, 1fr) minmax(140px, 28vh) auto;
   grid-template-areas: 'commandbar commandbar commandbar' 'toolbox designer properties' 'output output output' 'status status status';
   height: 100vh;
 }
@@ -115,7 +116,7 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--bord
 .commandbar { grid-area: commandbar; background: var(--chrome); border-bottom: 1px solid var(--border); }
 .titlebar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--panel); }
 .titlebar label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
-.titlebar select { padding: 3px 6px; }
+.titlebar select { padding: 3px 6px; max-width: min(360px, 34vw); }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); margin-right: 6px; }
 .brand h1 { color: var(--text); }
 .document-title { flex: 1; font-weight: 600; min-width: 120px; }
@@ -134,17 +135,33 @@ label.command { color: var(--accent); }
 label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 /* The run status wraps to two short lines rather than widening the bar (it stays one row at 1400 px, Phase 6). */
 .command-group .toolbar-status { align-self: center; font-size: 12px; padding: 0 6px; max-width: 104px; line-height: 1.25; }
+/* Compact command bar for small windows: icons only (the label stays the accessible name; the title is the tooltip), so
+   the bar keeps one row and the panels keep their height. */
+@media (max-width: 980px), (max-height: 640px) {
+  button.command { position: relative; min-width: 34px; padding: 5px 6px; }
+  button.command > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .command-group { grid-template-rows: 1fr; padding: 2px 6px; }
+  .command-group .group-label { display: none; }
+  .commands { padding: 2px 4px; }
+}
+/* On a short window the bottom panel starts smaller. */
+@media (max-height: 640px) {
+  .studio { grid-template-rows: auto minmax(0, 1fr) minmax(110px, 24vh) auto; }
+}
 .toolbox, .designer, .properties, .output, .connection { padding: 12px; overflow: auto; background: var(--panel); }
 /* The left column: project files above the activity catalog, each scrolling on its own. */
 .sidebar { grid-area: toolbox; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: var(--panel); }
-.sidebar > section, .sidebar > aside { padding: 12px; overflow: auto; min-height: 0; }
-.files { flex: 0 1 40%; border-bottom: 1px solid var(--border); scroll-padding-top: 52px; }
+.sidebar-tabs { margin: 0; padding: 4px 8px 0; flex: none; }
+.sidebar-tabs [role='tab'] { flex: 1; justify-content: center; }
+.sidebar-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* position: relative keeps the visually hidden activity descriptions inside the scrolling panel (not the page). */
+.sidebar-panel > section, .sidebar-panel > aside { position: relative; flex: 1 1 auto; padding: 12px; overflow: auto; min-height: 0; }
+.files { scroll-padding-top: 52px; }
 /* The heading and the New / Rename / Delete buttons stay in view while the file list scrolls. */
 .files-header { position: sticky; top: -12px; padding: 12px 0 8px; margin-top: -12px; background: var(--panel); z-index: 1; }
 /* Compact buttons keep New / Rename / Delete on one row; the bar's margin would fall outside the header's background. */
-.files-header .editbar { margin-bottom: 0; flex-wrap: nowrap; }
+.files-header .editbar { margin-bottom: 0; flex-wrap: wrap; }
 .files-header .editbar button { padding: 1px 8px; }
-.toolbox { flex: 1 1 60%; }
 .files [role='tree'] { list-style: none; margin: 0; padding: 0; }
 .files .file { padding: 2px 6px; border-radius: 4px; cursor: pointer; outline: none; }
 .files .file.selected { background: var(--selected); }
@@ -162,7 +179,6 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .toolbox .shortcuts { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .toolbox .shortcuts h3 { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 12px; font-weight: 650; color: var(--accent); }
 .toolbox .activity-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
-.toolbox .activity-entry .description { grid-column: 1 / -1; }
 .toolbox button.favorite { border: 1px solid transparent; background: none; padding: 3px 4px; color: var(--muted); line-height: 0; }
 .toolbox button.favorite:hover { color: var(--accent); }
 .toolbox button.favorite[aria-pressed='true'] { color: var(--accent); }
@@ -171,7 +187,6 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .toolbox button.insert:hover:not(:disabled):not([aria-disabled='true']) { border-color: var(--border); background: var(--panel-2); }
 .toolbox button.insert[aria-disabled='true'] { opacity: 0.55; }
 .toolbox small { color: var(--muted); }
-.toolbox .description { display: block; padding: 0 6px 2px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 
 /* Designer: activity cards; containers have a tinted boundary; nesting is indented with a guide line. */
@@ -294,6 +309,10 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .local-actions { display: inline-flex; gap: 4px; margin-top: 4px; }
 .usages { list-style: none; margin: 0 0 8px; padding: 0; }
 .usages li { padding: 2px 0; }
+
+/* Catalog 1.2 (ADR-0042): secret properties and what an activity touches. */
+.badge.secret { background: var(--warn-bg); color: var(--warn); }
+.description .side-effects { font-style: italic; }
 
 /* Properties. */
 .properties { grid-area: properties; border-left: 1px solid var(--border); }

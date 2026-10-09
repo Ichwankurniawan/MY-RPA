@@ -53,7 +53,7 @@ public sealed class PluginDiscoveryTests
 
     [Theory]
     [InlineData("2.0")]
-    [InlineData("1.2")]
+    [InlineData("1.3")]
     public async Task IncompatibleSdk_IsRejected(string sdkVersion)
     {
         using var staged = new StagedPlugin(Manifests.Fixture(sdkVersion: sdkVersion));

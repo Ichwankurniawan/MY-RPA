@@ -28,9 +28,12 @@ public sealed class ActivityCatalogTests
 
         Assert.Equal(
             [
-                "Core.Assign", "Core.Decision", "Core.Delay", "Core.DoWhile", "Core.Flowchart", "Core.ForEach", "Core.If",
-                "Core.InvokeWorkflow", "Core.Log", "Core.Sequence", "Core.State", "Core.StateMachine", "Core.Switch", "Core.Throw",
-                "Core.TryCatch", "Core.While",
+                "Core.Assign", "Core.Collection.Filter", "Core.Collection.Find", "Core.Collection.Merge", "Core.Collection.Sort",
+                "Core.Date.Add", "Core.Date.Difference", "Core.Date.Format", "Core.Date.Parse", "Core.Decision", "Core.Delay",
+                "Core.DoWhile", "Core.Flowchart", "Core.ForEach", "Core.If", "Core.InvokeWorkflow", "Core.Json.Parse",
+                "Core.Json.Serialize", "Core.Log", "Core.Sequence", "Core.State", "Core.StateMachine", "Core.Switch",
+                "Core.Text.Join", "Core.Text.Match", "Core.Text.Replace", "Core.Text.Split", "Core.Throw", "Core.TryCatch",
+                "Core.While",
             ],
             provider.GetRequiredService<IActivityCatalog>().Descriptors.Select(d => d.TypeName.Value));
     }
@@ -40,7 +43,7 @@ public sealed class ActivityCatalogTests
     {
         using var provider = Build(s => s.AddMyRpaActivities().AddMyRpaActivities());
 
-        Assert.Equal(16, provider.GetRequiredService<IActivityCatalog>().Descriptors.Count);
+        Assert.Equal(30, provider.GetRequiredService<IActivityCatalog>().Descriptors.Count);
         Assert.Same(provider.GetRequiredService<IActivityCatalog>(), provider.GetRequiredService<IActivityFactory>());
     }
 

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0",
+  "id": "http-demo",
+  "name": "HTTP tour",
+  "version": "1.0.0",
+  "description": "Phase 7 Http.Request against a public test API (JSONPlaceholder, fake data): GET with Dictionary headers, a JSON response filtered as a table, a POST with a JSON body, and a 404 both caught (HttpStatus) and kept (failOnErrorStatus false). Needs MyRPA.Http with allowedHosts set (see all-plugins.json) and Internet access.",
+  "arguments": [
+    { "name": "apiBase", "direction": "In", "type": "String", "default": "https://jsonplaceholder.typicode.com" },
+    { "name": "todoCount", "direction": "Out", "type": "Int" },
+    { "name": "doneCount", "direction": "Out", "type": "Int" },
+    { "name": "firstTitle", "direction": "Out", "type": "String" },
+    { "name": "createdStatus", "direction": "Out", "type": "Int" },
+    { "name": "createdId", "direction": "Out", "type": "Int" },
+    { "name": "missingError", "direction": "Out", "type": "String" },
+    { "name": "missingStatus", "direction": "Out", "type": "Int" }
+  ],
+  "variables": [
+    { "name": "headers", "type": "Dictionary", "default": { "Accept": "application/json", "X-Demo": "myrpa-phase7" } },
+    { "name": "newPost", "type": "Dictionary", "default": { "title": "From MyRPA", "body": "Phase 7 demo", "userId": 1 } },
+    { "name": "todos", "type": "List" },
+    { "name": "done", "type": "List" },
+    { "name": "created", "type": "Object" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "get-todos", "type": "Http.Request", "properties": { "url": "apiBase + '/todos?userId=1'", "headers": "headers", "timeoutMs": "15000", "responseBody": "todos" } },
+      { "id": "todo-count", "type": "Core.Assign", "properties": { "to": "todoCount", "value": "len(todos)" } },
+      { "id": "only-done", "type": "Core.Collection.Filter", "properties": { "items": "todos", "key": "'completed'", "operator": "Equals", "value": "true", "result": "done" } },
+      { "id": "done-count", "type": "Core.Assign", "properties": { "to": "doneCount", "value": "len(done)" } },
+      { "id": "first-title", "type": "Core.Assign", "properties": { "to": "firstTitle", "value": "todos[0].title" } },
+      { "id": "create-post", "type": "Http.Request", "properties": { "method": "POST", "url": "apiBase + '/posts'", "body": "newPost", "status": "createdStatus", "responseBody": "created" } },
+      { "id": "created-id", "type": "Core.Assign", "properties": { "to": "createdId", "value": "created.id" } },
+      {
+        "id": "try-missing",
+        "type": "Core.TryCatch",
+        "properties": { "exceptionVariable": "err" },
+        "slots": {
+          "try": { "id": "get-missing", "type": "Http.Request", "properties": { "url": "apiBase + '/does-not-exist'" } },
+          "catch": { "id": "note-missing", "type": "Core.Assign", "properties": { "to": "missingError", "value": "err.errorType" } }
+        }
+      },
+      { "id": "keep-missing", "type": "Http.Request", "properties": { "url": "apiBase + '/does-not-exist'", "failOnErrorStatus": "false", "status": "missingStatus" } },
+      { "id": "report", "type": "Core.Log", "properties": { "message": "toString(doneCount) + ' of ' + toString(todoCount) + ' todos done; created post ' + toString(createdId)" } }
+    ]
+  }
+}

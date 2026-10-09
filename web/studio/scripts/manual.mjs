@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { check, repo, results, withStudio } from './harness.mjs';
+import { check, repo, results, withStudio, showTab } from './harness.mjs';
 
 const shot = (page, n) => page.screenshot({ path: join(results, `manual-${String(n).padStart(2, '0')}.png`) });
 const ok = (text) => console.log(`  PASS ${text}`);
@@ -49,11 +49,13 @@ await withStudio(async ({ project, page, startServer, problems }) => {
 
   // 1. Start
   await page.goto(link);
+  await showTab(page, 'Files');
   await files.locator('[data-path="hello-world.json"]').waitFor();
   await shot(page, 1);
   ok('1. Start link signed in; the Files panel lists the project (hello-world.json, control-flow.json, ...)');
 
   // 2. Create
+  await showTab(page, 'Files');
   await page.getByRole('button', { name: 'New…', exact: true }).click();
   await dialog.getByLabel('Path in the project').fill('greeter.json');
   await dialog.getByRole('button', { name: 'Create', exact: true }).click();
@@ -66,10 +68,13 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   ok('2. New... created greeter.json (empty Sequence); Name = Greeter; the title shows the unsaved marker');
 
   // 3. Add activities by dragging from the toolbox
+  await showTab(page, 'Activities');
   await drag(tool('Assign'), page.getByRole('button', { name: 'Empty list: insert here' }));
   await appears('assign-1');
+  await showTab(page, 'Activities');
   await drag(tool('If'), row('assign-1'), 0.6);
   await appears('if-1');
+  await showTab(page, 'Activities');
   await drag(tool('Log'), zone('if-1', 'then: empty (required)'));
   await appears('log-1');
   check((await ids()) === 'main,assign-1,if-1,log-1', `tree ${await ids()}`);
@@ -140,8 +145,10 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   ok(`7. Ctrl+S saved (marker gone); myrpa validate greeter.json exit 0: ${cli.stdout.trim().split('\n')[0]}`);
 
   // 8. Open another file, then greeter.json again
+  await showTab(page, 'Files');
   await files.locator('[data-path="hello-world.json"]').dblclick();
   await title.filter({ hasText: /^hello-world\.json$/ }).waitFor();
+  await showTab(page, 'Files');
   await files.locator('[data-path="greeter.json"]').dblclick();
   await title.filter({ hasText: /^greeter\.json$/ }).waitFor();
   check((await ids()) === 'main,assign-1,if-1,log-1', `reopened ${await ids()}`);
@@ -164,6 +171,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   ok(`9. F5, who = Ada, Start: Succeeded; log "${logs.find((l) => l.includes('Hello'))}"; node states ${states.join(' ')}`);
 
   // 10. Failure: a Throw at the end
+  await showTab(page, 'Activities');
   await drag(tool('Throw'), row('if-1'), 0.6);
   await appears('throw-1');
   check((await ids()) === 'main,assign-1,if-1,log-1,throw-1', `throw at the end: ${await ids()}`);
@@ -189,6 +197,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.goto('about:blank');
   const again = page;
   await again.goto(new URL(link).origin + '/');
+  await showTab(page, 'Files');
   await again.getByRole('tree', { name: 'Workflow files' }).locator('[data-path="greeter.json"]').dblclick();
   await again.getByRole('dialog').getByRole('button', { name: 'Restore', exact: true }).click();
   await again.locator('[role=treeitem][data-node-id="throw-1"] > .node').click();

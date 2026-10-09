@@ -1,0 +1,19 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Spreadsheet",
+  "name": "MyRPA Excel workbooks",
+  "version": "0.1.0",
+  "description": "Excel.GetSheets, Excel.ReadRange and Excel.WriteRange on .xlsx workbooks (DocumentFormat.OpenXml), confined to one configured folder (fileRoot). Excel is not needed and never started.",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Spreadsheet.dll",
+    "type": "MyRPA.Spreadsheet.SpreadsheetPlugin"
+  },
+  "capabilities": [ "FileSystem" ],
+  "activities": [
+    "Excel.GetSheets",
+    "Excel.ReadRange",
+    "Excel.WriteRange"
+  ]
+}

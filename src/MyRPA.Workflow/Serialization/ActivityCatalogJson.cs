@@ -17,13 +17,16 @@ namespace MyRPA.Workflow.Serialization;
 /// "properties": [ { "name", "kind", "required", "description", "allowedValues", "scopeSlots" } ],
 /// "slots": [ { "name", "required", "prefix", "description" } ] } ] }</c>. Version 1.1 adds <c>childLayout</c>
 /// (<c>List</c> or <c>Graph</c>, ADR-0037); snapshots of version 1.0 are still read (no <c>childLayout</c>: <c>List</c>).
+/// Version 1.2 (ADR-0042) adds, when set, a property's <c>valueType</c>, <c>default</c> (a JSON value) and <c>secret</c>,
+/// and an activity's <c>sideEffects</c> (a list of <c>FileSystem</c>, <c>Network</c>, <c>Browser</c>); older snapshots
+/// read without them.
 /// </remarks>
 public static class ActivityCatalogJson
 {
     /// <summary>The snapshot format version written and read by this build.</summary>
-    public const string FormatVersion = "1.1";
+    public const string FormatVersion = "1.2";
 
-    private const string InitialFormatVersion = "1.0";
+    private static readonly string[] _readableVersions = ["1.0", "1.1", FormatVersion];
 
     private static readonly JsonWriterOptions _writerOptions = new() { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -61,9 +64,9 @@ public static class ActivityCatalogJson
             using var document = JsonDocument.Parse(json);
             var root = Object(document.RootElement, "$");
             var version = String(root, "catalogVersion", "$");
-            if (version is not (FormatVersion or InitialFormatVersion))
+            if (!_readableVersions.Contains(version))
             {
-                throw new FormatException($"$.catalogVersion: '{version}' is not supported; this build reads {InitialFormatVersion} and {FormatVersion}.");
+                throw new FormatException($"$.catalogVersion: '{version}' is not supported; this build reads {string.Join(", ", _readableVersions)}.");
             }
 
             var descriptors = new List<ActivityDescriptor>();
@@ -98,6 +101,11 @@ public static class ActivityCatalogJson
 
         writer.WriteBoolean("allowsChildren", descriptor.AllowsChildren);
         writer.WriteString("childLayout", descriptor.ChildLayout.ToString());
+        if (descriptor.SideEffects != ActivitySideEffects.None)
+        {
+            WriteStrings(writer, "sideEffects", [.. Enum.GetValues<ActivitySideEffects>().Where(f => f != ActivitySideEffects.None && descriptor.SideEffects.HasFlag(f)).Select(f => f.ToString())]);
+        }
+
         writer.WriteStartArray("properties");
         foreach (var property in descriptor.Properties)
         {
@@ -112,6 +120,22 @@ public static class ActivityCatalogJson
 
             WriteStrings(writer, "allowedValues", property.AllowedValues);
             WriteStrings(writer, "scopeSlots", property.ScopeSlots);
+            if (property.ValueType != ActivityValueType.Any)
+            {
+                writer.WriteString("valueType", property.ValueType.ToString());
+            }
+
+            if (property.DefaultValue is not null)
+            {
+                writer.WritePropertyName("default");
+                writer.WriteRawValue(property.DefaultValue);
+            }
+
+            if (property.IsSecret)
+            {
+                writer.WriteBoolean("secret", true);
+            }
+
             writer.WriteEndObject();
         }
 
@@ -173,7 +197,12 @@ public static class ActivityCatalogJson
                 Boolean(property, "required", propertyPath),
                 OptionalString(property, "description", propertyPath),
                 Strings(property, "allowedValues", propertyPath),
-                Strings(property, "scopeSlots", propertyPath)));
+                Strings(property, "scopeSlots", propertyPath))
+            {
+                ValueType = ValueType(property, propertyPath),
+                DefaultValue = property.TryGetProperty("default", out var defaultValue) ? defaultValue.GetRawText() : null,
+                IsSecret = property.TryGetProperty("secret", out _) && Boolean(property, "secret", propertyPath),
+            });
         }
 
         var slots = new List<ActivitySlotDefinition>();
@@ -197,7 +226,36 @@ public static class ActivityCatalogJson
             properties,
             Boolean(element, "allowsChildren", path),
             slots,
-            ChildLayout(element, path));
+            ChildLayout(element, path))
+        {
+            SideEffects = SideEffects(element, path),
+        };
+    }
+
+    private static ActivityValueType ValueType(JsonElement property, string path)
+    {
+        var text = OptionalString(property, "valueType", path);
+        if (text is null)
+        {
+            return ActivityValueType.Any;
+        }
+
+        return Enum.TryParse<ActivityValueType>(text, ignoreCase: false, out var type) && Enum.IsDefined(type) && !int.TryParse(text, out _)
+            ? type
+            : throw new FormatException($"{path}.valueType: '{text}' is not a value type.");
+    }
+
+    private static ActivitySideEffects SideEffects(JsonElement element, string path)
+    {
+        var effects = ActivitySideEffects.None;
+        foreach (var text in Strings(element, "sideEffects", path))
+        {
+            effects |= Enum.TryParse<ActivitySideEffects>(text, ignoreCase: false, out var effect) && effect != ActivitySideEffects.None && Enum.IsDefined(effect) && !int.TryParse(text, out _)
+                ? effect
+                : throw new FormatException($"{path}.sideEffects: '{text}' is not a side effect (FileSystem, Network, Browser).");
+        }
+
+        return effects;
     }
 
     private static ActivityChildLayout ChildLayout(JsonElement element, string path)

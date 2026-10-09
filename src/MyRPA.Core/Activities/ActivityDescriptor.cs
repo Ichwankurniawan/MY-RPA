@@ -90,6 +90,15 @@ public sealed record ActivityDescriptor
     /// <summary>How the children list is run: a list, or the steps of a graph (ADR-0037).</summary>
     public ActivityChildLayout ChildLayout { get; }
 
+    /// <summary>What the activity touches outside the workflow (catalog 1.2, ADR-0042).</summary>
+    public ActivitySideEffects SideEffects
+    {
+        get;
+        init => field = (value & ~(ActivitySideEffects.FileSystem | ActivitySideEffects.Network | ActivitySideEffects.Browser)) == 0
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(value));
+    }
+
     /// <summary>Finds a property definition by name.</summary>
     /// <param name="name">Property name.</param>
     public ActivityPropertyDefinition? FindProperty(string name) =>

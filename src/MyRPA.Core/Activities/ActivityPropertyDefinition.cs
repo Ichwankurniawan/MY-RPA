@@ -54,4 +54,48 @@ public sealed record ActivityPropertyDefinition
 
     /// <summary>Slots in which a declared local name is visible.</summary>
     public IReadOnlyList<string> ScopeSlots { get; }
+
+    /// <summary>The kind of value the property expects (catalog 1.2, ADR-0042); <see cref="ActivityValueType.Any"/> when not declared.</summary>
+    public ActivityValueType ValueType
+    {
+        get;
+        init => field = Enum.IsDefined(value) ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
+
+    /// <summary>
+    /// The value the activity uses when the property is omitted, as JSON text (catalog 1.2): documentation for tools; the
+    /// activity itself applies it.
+    /// </summary>
+    public string? DefaultValue
+    {
+        get;
+        init
+        {
+            if (value is not null)
+            {
+                try
+                {
+                    using var parsed = System.Text.Json.JsonDocument.Parse(value);
+                }
+                catch (System.Text.Json.JsonException ex)
+                {
+                    throw new ArgumentException($"The default of property '{Name}' is not JSON text: {ex.Message}", nameof(value), ex);
+                }
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether the property holds a secret (catalog 1.2, ADR-0042), such as a password or token. Only for expression
+    /// properties: validation refuses a literal there, so the secret comes from an argument or variable at run time.
+    /// </summary>
+    public bool IsSecret
+    {
+        get;
+        init => field = !value || Kind == ActivityPropertyKind.Expression
+            ? value
+            : throw new ArgumentException($"Property '{Name}' is not an expression and cannot be a secret.", nameof(value));
+    }
 }

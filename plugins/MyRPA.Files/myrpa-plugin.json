@@ -1,0 +1,29 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Files",
+  "name": "MyRPA files and data files",
+  "version": "0.1.0",
+  "description": "File, folder, CSV, JSON and XML activities, confined to one configured folder (fileRoot).",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Files.dll",
+    "type": "MyRPA.Files.FilesPlugin"
+  },
+  "capabilities": [ "FileSystem" ],
+  "activities": [
+    "File.Exists",
+    "File.List",
+    "File.ReadText",
+    "File.WriteText",
+    "File.Copy",
+    "File.Move",
+    "File.Delete",
+    "Folder.Create",
+    "Csv.Read",
+    "Csv.Write",
+    "Json.ReadFile",
+    "Json.WriteFile",
+    "Xml.ReadFile"
+  ]
+}

@@ -3,11 +3,32 @@
     <ProjectReference Include="..\..\src\MyRPA.Cli\MyRPA.Cli.csproj" />
     <!-- Built first, never compiled against: the CLI loads it with the plugin option like a user would. -->
     <ProjectReference Include="..\..\samples\plugins\MyRPA.Samples.DemoPlugin\MyRPA.Samples.DemoPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Phase 7 (ADR-0042): the order-report sample runs with the product plugins, loaded by the CLI like a user would. -->
+    <ProjectReference Include="..\..\plugins\MyRPA.Files\MyRPA.Files.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Http\MyRPA.Http.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Spreadsheet\MyRPA.Spreadsheet.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Browser.Playwright\MyRPA.Browser.Playwright.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
   <ItemGroup>
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>SamplePluginDirectory</_Parameter1>
       <_Parameter2>$(MSBuildThisFileDirectory)..\..\samples\plugins\MyRPA.Samples.DemoPlugin\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>FilesPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Files\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>HttpPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Http\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SpreadsheetPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Spreadsheet\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BrowserPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Browser.Playwright\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 </Project>
