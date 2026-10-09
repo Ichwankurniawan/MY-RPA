@@ -184,6 +184,13 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.screenshot({ path: join(results, 'completion.png') });
   await page.keyboard.press('Escape');
 
+  // ADR-0041: the Rename dialog with the uses found by the server.
+  await page.getByRole('tab', { name: /^Variables/ }).click();
+  await page.getByRole('button', { name: 'Rename variable message', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Rename message' }).getByText(/will change/).waitFor();
+  await scan('Rename dialog');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+
   const blocking = findings.filter((f) => f.impact === 'serious' || f.impact === 'critical');
   check(blocking.length === 0, `${blocking.length} serious or critical accessibility violation(s)`);
   check(problems.length === 0, `browser errors: ${problems.join('; ')}`);

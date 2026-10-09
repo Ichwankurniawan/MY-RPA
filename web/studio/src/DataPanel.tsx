@@ -164,7 +164,7 @@ function RowsEditor({ list }: { list: DataList }) {
               {list === 'arguments' && <th>Required</th>}
               <th>Default (JSON)</th>
               <th>
-                <span className="visually-hidden">Remove</span>
+                <span className="visually-hidden">Actions</span>
               </th>
             </tr>
           </thead>
@@ -224,7 +224,20 @@ function RowsEditor({ list }: { list: DataList }) {
                       onCommit={(value) => set('default', value)}
                     />
                   </td>
-                  <td>
+                  <td className="row-actions">
+                    <button
+                      type="button"
+                      className="small"
+                      aria-label={`Rename ${singular} ${name}`}
+                      title="Rename it and every use of it"
+                      disabled={disabled || name === ''}
+                      onClick={() => void studio.openRename(`$.${list}[${index}]`, name)}
+                    >
+                      Rename…
+                    </button>
+                    <button type="button" className="small" aria-label={`Usages of ${name}`} title="Where it is used" disabled={name === ''} onClick={() => void studio.openUsages(`$.${list}[${index}]`, name)}>
+                      Usages
+                    </button>
                     <button type="button" className="small" aria-label={`Remove ${singular} ${name || index + 1}`} disabled={disabled} onClick={() => edit(`Remove ${singular} ${name}`, undefined, (d) => removeRow(d, list, index))}>
                       ×
                     </button>

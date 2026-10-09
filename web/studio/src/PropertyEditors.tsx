@@ -9,7 +9,7 @@ import { indexDocument, isObject, nodeAt, type Step } from './document';
 import { graphParentPath, moveTransitionRefusal, stepsOf } from './graph';
 import { addTransitionRefusalOf, setStartRefusalOf, workflowKey } from './studio';
 import type { Diagnostic, Json, JsonObject, PropertyDescriptor } from './types';
-import { assignableNames, diagnosticTarget, jsonText, parseJsonText, setMetadata, type MetadataField } from './workflowData';
+import { assignableNames, diagnosticTarget, jsonText, nodeJsonPath, parseJsonText, setMetadata, type MetadataField } from './workflowData';
 
 const problemText = (diagnostics: readonly Diagnostic[]) => diagnostics.map((d) => `${d.code}: ${d.message}`).join(' ');
 
@@ -492,6 +492,7 @@ function PropertyEditor({
             ))}
           </datalist>
         )}
+        {descriptor.kind === 'LocalName' && descriptor.scopeSlots.length > 0 && text !== '' && <LocalActions nodeKey={nodeKey} slot={descriptor.scopeSlots[0]} name={text} disabled={disabled} />}
       </>
     );
   }
@@ -511,6 +512,30 @@ function PropertyEditor({
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Rename… and Usages for a local (ADR-0041), asked at the slot that sees it: the local is not visible at its own
+ * activity, only inside its scope slots.
+ */
+function LocalActions({ nodeKey, slot, name, disabled }: { nodeKey: string; slot: string; name: string; disabled: boolean }) {
+  const studio = useStudio();
+  const path = () => {
+    const document = studio.store.get().document;
+    const entry = document ? indexDocument(document).byKey.get(nodeKey) : undefined;
+    return entry ? `${nodeJsonPath(entry.path)}.slots.${slot}` : '$';
+  };
+
+  return (
+    <span className="local-actions">
+      <button type="button" className="small" aria-label={`Rename ${name}`} title="Rename it and every use of it" disabled={disabled} onClick={() => void studio.openRename(path(), name)}>
+        Rename…
+      </button>
+      <button type="button" className="small" aria-label={`Usages of ${name}`} title="Where it is used" onClick={() => void studio.openUsages(path(), name)}>
+        Usages
+      </button>
+    </span>
   );
 }
 

@@ -23,8 +23,9 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExpressionFunction, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, ScopeName, WorkflowFile } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExpressionFunction, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, NameReference, ScopeName, WorkflowFile } from './types';
 import { isBreakpointMap, isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
+import { renameReferences, usagesOf, type Usage } from './rename';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
 import {
   addTransition,
@@ -313,13 +314,26 @@ export const workflowKey = '@workflow';
  * - `delete`: confirm deleting a file (`dirty`: it is open with unsaved changes).
  * - `conflict`: saving found the file changed on disk (412).
  * - `recover`: a draft of unsaved changes was found for the file just opened (`stale`: the file changed since).
+ * - `rename-name`: renaming a variable, argument or local and every use of it (ADR-0041); `references` once the server
+ *   found them for `document`.
+ * - `usages`: where a variable, argument or local is used.
  */
 export type StudioDialog =
   | { readonly kind: 'unsaved'; readonly path: string; readonly next: string }
   | { readonly kind: 'name'; readonly purpose: 'new' | 'rename' | 'save-as'; readonly from?: string; readonly initial: string; readonly error?: string }
   | { readonly kind: 'delete'; readonly path: string; readonly dirty: boolean }
   | { readonly kind: 'conflict'; readonly path: string }
-  | { readonly kind: 'recover'; readonly path: string; readonly savedAt: string; readonly stale: boolean };
+  | { readonly kind: 'recover'; readonly path: string; readonly savedAt: string; readonly stale: boolean }
+  | {
+      readonly kind: 'rename-name';
+      readonly name: string;
+      readonly path: string;
+      readonly document: JsonObject;
+      readonly references?: readonly NameReference[];
+      readonly busy?: boolean;
+      readonly error?: string;
+    }
+  | { readonly kind: 'usages'; readonly name: string; readonly usages?: readonly Usage[]; readonly error?: string };
 
 export interface StudioOptions {
   /** Where unsaved documents are kept for crash recovery (the browser's local storage by default). */
@@ -2087,6 +2101,121 @@ export class Studio {
       this.updateRun(run.key, { cancelRequested: false });
       this.say(`Cannot stop run ${run.runId}: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Rename… (ADR-0041): asks the server where the name at `path` is declared and used, then shows the Rename dialog.
+   * `path` is a place where the name is visible (its row, or a slot that sees a local).
+   */
+  async openRename(path: string, name: string): Promise<void> {
+    const document = this.state.document;
+    const refusal = editRefusal(this.state);
+    if (document === undefined || refusal !== undefined) {
+      this.say(`Cannot rename: ${refusal}`);
+      return;
+    }
+
+    this.store.set({ dialog: { kind: 'rename-name', name, path, document } });
+    let error: string | undefined;
+    let references: readonly NameReference[] | undefined;
+    try {
+      const found = await this.api.references(document, path, name);
+      if (found.declaration === null) {
+        error = `'${name}' is not declared here, so it cannot be renamed.`;
+      } else {
+        references = found.references;
+      }
+    } catch (e) {
+      error = `Cannot find the uses of '${name}': ${(e as Error).message}`;
+    }
+
+    const dialog = this.state.dialog;
+    if (dialog?.kind === 'rename-name' && dialog.document === document) {
+      this.store.set({ dialog: { ...dialog, references, error } });
+    }
+  }
+
+  /**
+   * Applies the Rename dialog: the declaration and every use in one undo step. The server validates the renamed
+   * workflow first; a rename that would add a problem (an invalid name, a name already declared, a name a local would
+   * hide) is refused with the server's own message, and nothing changes.
+   */
+  async applyRename(newName: string): Promise<void> {
+    const dialog = this.state.dialog;
+    const document = this.state.document;
+    if (dialog?.kind !== 'rename-name' || dialog.references === undefined || document === undefined) {
+      return;
+    }
+
+    const name = newName.trim();
+    const refuse = (error: string) => this.store.set({ dialog: { ...dialog, busy: false, error } });
+    if (name === dialog.name) {
+      this.closeDialog();
+      return;
+    }
+
+    if (document !== dialog.document) {
+      refuse('The workflow changed since its uses were found; open Rename again.');
+      return;
+    }
+
+    const renamed = renameReferences(document, dialog.references, dialog.name, name);
+    if (typeof renamed === 'string') {
+      refuse(renamed);
+      return;
+    }
+
+    this.store.set({ dialog: { ...dialog, busy: true, error: undefined } });
+    try {
+      const [before, after] = await Promise.all([this.api.validate(document), this.api.validate(renamed)]);
+      const known = new Set(before.diagnostics.filter((d) => d.severity === 'Error').map((d) => `${d.code}@${d.path}`));
+      const added = after.diagnostics.filter((d) => d.severity === 'Error' && !known.has(`${d.code}@${d.path}`));
+      if (added.length > 0) {
+        refuse(`Not renamed: ${added[0].message}`);
+        return;
+      }
+    } catch (e) {
+      refuse(`Not renamed: the server could not check the new name (${(e as Error).message}).`);
+      return;
+    }
+
+    if (this.state.document !== document) {
+      refuse('The workflow changed while the new name was checked; open Rename again.');
+      return;
+    }
+
+    const uses = dialog.references.filter((r) => !r.declaration).length;
+    this.commit(renamed, this.state.selectedKey, `Rename ${dialog.name} to ${name}`);
+    this.closeDialog();
+    this.say(`Renamed ${dialog.name} to ${name} (the declaration and ${uses} use${uses === 1 ? '' : 's'}).`);
+  }
+
+  /** Usages (ADR-0041): the activities that use the name visible at `path`, to jump to. */
+  async openUsages(path: string, name: string): Promise<void> {
+    const document = this.state.document;
+    if (document === undefined) {
+      return;
+    }
+
+    this.store.set({ dialog: { kind: 'usages', name } });
+    let usages: readonly Usage[] | undefined;
+    let error: string | undefined;
+    try {
+      const found = await this.api.references(document, path, name);
+      usages = found.declaration === null ? [] : usagesOf(document, found.references, this.state.catalog);
+    } catch (e) {
+      error = `Cannot find the uses of '${name}': ${(e as Error).message}`;
+    }
+
+    if (this.state.dialog?.kind === 'usages' && this.state.dialog.name === name) {
+      this.store.set({ dialog: { kind: 'usages', name, usages, error } });
+    }
+  }
+
+  /** Selects (and reveals) an activity chosen in the Usages dialog. */
+  goToUsage(key: string): void {
+    this.closeDialog();
+    this.select(key);
   }
 
   /** Debug (F6): runs the open file pausing at its breakpoints; `step` pauses before its first activity (ADR-0040). */

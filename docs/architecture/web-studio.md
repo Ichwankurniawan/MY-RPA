@@ -198,6 +198,15 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   - **Where the names come from:** `POST /api/expressions/scope`, asked when the field gets focus, once per document
     version and place. The functions come from `GET /api/expressions/functions`, once per connection. The browser only
     filters while typing.
+- **Rename and usages** (ADR-0041):
+  - **Where:** each Variables and Arguments row has **Rename…** and **Usages**; so does a loop's item variable (a
+    `LocalName` property) next to its field.
+  - **Finding the uses:** both ask `POST /api/expressions/references` for the declaration and every use, scope-aware
+    (another loop's `item` is another name; text in strings and member names are never uses).
+  - **Rename:** the dialog says how many uses will change. Applying it changes exactly those characters in one undo
+    step, after the server validated the renamed workflow; a name it reports a new problem for is refused with its
+    message. If the workflow changed after the uses were found, the rename is refused.
+  - **Usages:** lists the activities and what of them use the name; choosing one selects and reveals it.
 - **Debug** (ADR-0040): breakpoints, pause and stepping, through the server's debug endpoints.
   - **Breakpoints:** F9, or the dot on the selected card or canvas step, toggles a breakpoint. It stays visible on the
     card while set. Breakpoints are remembered per browser and file (`myrpa.ui.breakpoints`), never saved in the
@@ -300,6 +309,12 @@ nothing about the client.
   - finding the word at the caret (not in strings, after `.` or in numbers) and the call at the caret;
   - completing a name and a function by keyboard, Ctrl+Space, the arrows, Escape, the mouse;
   - the signature hint.
+- `rename.test.ts` and `RenameUi.test.tsx` (ADR-0041) cover:
+  - path resolution;
+  - exact renames that never touch strings and keep node keys;
+  - stale and clashing renames refused;
+  - one undo step;
+  - Usages.
 - `DebugUi.test.tsx` (ADR-0040) covers:
   - breakpoints by F9 and the card dot, remembered per browser and file;
   - Debug and F11 starts, with the arguments dialog;
@@ -325,8 +340,8 @@ nothing about the client.
 
 ## Deferred
 
-- **Editing:** multi-selection; renaming a variable does not rewrite the expressions that use it; syntax highlighting
-  and completion in expressions (ADR-0032 decided against CodeMirror for now).
+- **Editing:** multi-selection; syntax highlighting in expressions (ADR-0032 decided against CodeMirror; completion,
+  rename and usages came with ADR-0041).
 - **Running:** persistent run history (only recent runs of this tab are kept); searching by execution or correlation
   id.
 - **Files:** folder operations; moving files between projects; noticing outside changes before saving; recovery across
