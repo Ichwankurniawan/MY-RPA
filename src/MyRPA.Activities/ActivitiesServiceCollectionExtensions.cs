@@ -43,7 +43,22 @@ public static class ActivitiesServiceCollectionExtensions
             .AddActivity<FlowchartActivity>(FlowchartActivity.Descriptor)
             .AddActivity<DecisionActivity>(DecisionActivity.Descriptor)
             .AddActivity<StateMachineActivity>(StateMachineActivity.Descriptor)
-            .AddActivity<StateActivity>(StateActivity.Descriptor);
+            .AddActivity<StateActivity>(StateActivity.Descriptor)
+            // Phase 7 (ADR-0042): text, JSON, date and collection built-ins, without side effects.
+            .AddActivity<TextSplitActivity>(TextSplitActivity.Descriptor)
+            .AddActivity<TextJoinActivity>(TextJoinActivity.Descriptor)
+            .AddActivity<TextMatchActivity>(TextMatchActivity.Descriptor)
+            .AddActivity<TextReplaceActivity>(TextReplaceActivity.Descriptor)
+            .AddActivity<JsonParseActivity>(JsonParseActivity.Descriptor)
+            .AddActivity<JsonSerializeActivity>(JsonSerializeActivity.Descriptor)
+            .AddActivity<DateParseActivity>(DateParseActivity.Descriptor)
+            .AddActivity<DateFormatActivity>(DateFormatActivity.Descriptor)
+            .AddActivity<DateAddActivity>(DateAddActivity.Descriptor)
+            .AddActivity<DateDifferenceActivity>(DateDifferenceActivity.Descriptor)
+            .AddActivity<CollectionSortActivity>(CollectionSortActivity.Descriptor)
+            .AddActivity<CollectionFilterActivity>(CollectionFilterActivity.Descriptor)
+            .AddActivity<CollectionFindActivity>(CollectionFindActivity.Descriptor)
+            .AddActivity<CollectionMergeActivity>(CollectionMergeActivity.Descriptor);
     }
 
     /// <summary>

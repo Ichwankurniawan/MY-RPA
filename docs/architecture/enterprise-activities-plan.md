@@ -66,22 +66,22 @@ Settings: `allowedHosts`, `maxResponseBytes` (default 10 MB), `maxRedirects` (de
 
 Numbers, Booleans, text and dates are read as the matching workflow values; formulas give their cached value.
 
-### Built-ins (no side effects)
+### Built-ins (no side effects; `Core.*` like the other built-ins)
 | Type | Inputs | Outputs |
 |---|---|---|
-| `Text.Split` | `text`, `separator`, `removeEmpty` (default false) | `result` (List) |
-| `Text.Join` | `items`, `separator` | `result` (String) |
-| `Text.Match` | `text`, `pattern` (.NET regex, 1 s timeout), `all` (default false) | `result` (the match, its groups as a Dictionary, or a List of them) |
-| `Text.Replace` (regex) | `text`, `pattern`, `replacement` | `result` |
-| `Json.Parse` / `Json.Serialize` | `text` / `value`, `indented` | `result` |
-| `Date.Parse` | `text`, `format` (optional exact format), `timeZone` (IANA id, default UTC) | `result` (DateTime) |
-| `Date.Format` | `value`, `format`, `timeZone` | `result` (String) |
-| `Date.Add` | `value`, `days`, `hours`, `minutes`, `seconds`, `months` | `result` |
-| `Date.Difference` | `from`, `to`, `unit` (Days, Hours, Minutes, Seconds) | `result` (Decimal) |
-| `Collection.Sort` | `items`, `key` (for dictionaries), `descending` | `result` |
-| `Collection.Filter` | `items`, `key`, `operator` (Equals, NotEquals, Contains, GreaterThan, LessThan, IsNull, IsNotNull), `value` | `result` |
-| `Collection.Find` | same as Filter | `result` (first match or null), `index` (Int, −1 when none) |
-| `Collection.Merge` | `first`, `second`, `distinct` (default false) | `result` |
+| `Core.Text.Split` | `text`, `separator`, `removeEmpty` (default false) | `result` (List) |
+| `Core.Text.Join` | `items`, `separator` | `result` (String) |
+| `Core.Text.Match` | `text`, `pattern` (.NET regex, 1 s timeout; in an expression string a backslash is written twice: `'\d+'`), `all`, `ignoreCase` (default false) | `result` (the match, its groups as a Dictionary, or a List of them) |
+| `Core.Text.Replace` (regex) | `text`, `pattern`, `replacement` | `result` |
+| `Core.Json.Parse` / `Core.Json.Serialize` | `text` / `value`, `indented` | `result` |
+| `Core.Date.Parse` | `text`, `format` (optional exact format), `timeZone` (IANA id, default UTC) | `result` (DateTime) |
+| `Core.Date.Format` | `value`, `format`, `timeZone` | `result` (String) |
+| `Core.Date.Add` | `value`, `days`, `hours`, `minutes`, `seconds`, `months` | `result` |
+| `Core.Date.Difference` | `from`, `to`, `unit` (Days, Hours, Minutes, Seconds) | `result` (Decimal) |
+| `Core.Collection.Sort` | `items`, `key` (for dictionaries), `descending` | `result` |
+| `Core.Collection.Filter` | `items`, `key`, `operator` (Equals, NotEquals, Contains, GreaterThan, LessThan, IsNull, IsNotNull), `value` | `result` |
+| `Core.Collection.Find` | same as Filter | `result` (first match or null), `index` (Int, −1 when none) |
+| `Core.Collection.Merge` | `first`, `second`, `distinct` (default false) | `result` |
 
 Simple one-call operations stay as expression functions (they already exist: `len`, `contains`, `replace`, `trim`,
 `upper`, `lower`, `substring`, `now`, `append`, `keys`); there are no duplicate activities for them.
