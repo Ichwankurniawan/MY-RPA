@@ -148,6 +148,8 @@ export function ExpressionInput({
   const functions = useStudioState((s) => s.expressionFunctions);
   const input = useRef<HTMLInputElement>(null);
   const caretAfter = useRef<number | undefined>(undefined);
+  // Whether the user typed since the field got focus (the names may arrive after the first keystrokes).
+  const typed = useRef(false);
   const [names, setNames] = useState<readonly ScopeName[]>([]);
   const [menu, setMenu] = useState<Menu | undefined>();
   const [caret, setCaret] = useState(-1);
@@ -161,18 +163,29 @@ export function ExpressionInput({
     }
   });
 
+  const suggestFrom = (from: readonly ScopeName[], text: string, at: number, explicit: boolean) => {
+    const context = completionContext(text, at);
+    const items = context !== undefined && (explicit || context.prefix !== '') ? completionItems(context.prefix, from, functions) : [];
+    setMenu(context !== undefined && items.length > 0 ? { start: context.start, end: context.end, items, active: 0 } : undefined);
+  };
+
+  const suggest = (text: string, at: number, explicit: boolean) => suggestFrom(names, text, at, explicit);
+
   const loadNames = () => {
     const document = studio.store.get().document;
     const entry = document ? indexDocument(document).byKey.get(nodeKey) : undefined;
-    if (entry !== undefined) {
-      void studio.namesInScope(nodeJsonPath(entry.path) + suffix).then(setNames);
+    if (entry === undefined) {
+      return;
     }
-  };
 
-  const suggest = (text: string, at: number, explicit: boolean) => {
-    const context = completionContext(text, at);
-    const items = context !== undefined && (explicit || context.prefix !== '') ? completionItems(context.prefix, names, functions) : [];
-    setMenu(context !== undefined && items.length > 0 ? { start: context.start, end: context.end, items, active: 0 } : undefined);
+    void studio.namesInScope(nodeJsonPath(entry.path) + suffix).then((loaded) => {
+      setNames(loaded);
+      // Typed before the names arrived: suggest again with them (never just for getting focus).
+      const field = input.current;
+      if (typed.current && field !== null && field === field.ownerDocument.activeElement) {
+        suggestFrom(loaded, field.value, field.selectionStart ?? field.value.length, false);
+      }
+    });
   };
 
   const accept = (item: CompletionItem) => {
@@ -237,6 +250,7 @@ export function ExpressionInput({
         aria-controls={menu !== undefined ? listId : undefined}
         aria-activedescendant={menu !== undefined ? `${listId}-${menu.active}` : undefined}
         onFocus={(event) => {
+          typed.current = false;
           loadNames();
           setCaret(event.currentTarget.selectionStart ?? value.length);
         }}
@@ -248,6 +262,7 @@ export function ExpressionInput({
         onKeyDown={onKeyDown}
         onChange={(event) => {
           const at = event.target.selectionStart ?? event.target.value.length;
+          typed.current = true;
           setCaret(at);
           onChange(event.target.value);
           suggest(event.target.value, at, false);
