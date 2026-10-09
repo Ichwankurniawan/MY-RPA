@@ -44,6 +44,9 @@ internal sealed class RunningServer(WebApplication app, Uri baseUri, PluginSet? 
 /// <summary>Composes and runs the local-mode control plane (ADR-0022, ADR-0024, ADR-0025).</summary>
 internal static class ServerApplication
 {
+    /// <summary>Most breakpoints a debug run accepts (ADR-0040).</summary>
+    private const int MaxBreakpoints = 10_000;
+
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         if (ServerCommandLine.Parse(args, out var usageError, Path.Combine(AppContext.BaseDirectory, "wwwroot")) is not { } options)
@@ -139,6 +142,7 @@ internal static class ServerApplication
         services.AddSingleton<LocalSessions>();
         services.AddSingleton<EventStreams>();
         services.AddSingleton<Recordings>();
+        services.AddSingleton<DebugRuns>();
         if (options.WebRoot is { } webRoot)
         {
             // Factory-created, so the container disposes it. Hidden, dot-prefixed and system files are never served.
@@ -341,7 +345,7 @@ internal static class ServerApplication
 
     private static void MapRuns(RouteGroupBuilder api)
     {
-        api.MapPost("/runs", async (StartRunRequest request, ProjectStore store, WorkflowLoader loader, ExecutionHost host, HttpContext context) =>
+        api.MapPost("/runs", async (StartRunRequest request, ProjectStore store, WorkflowLoader loader, ExecutionHost host, DebugRuns debugRuns, HttpContext context) =>
         {
             if (request.Project is null)
             {
@@ -423,12 +427,29 @@ internal static class ServerApplication
                 return BadRequest("'timeoutMs' must be positive.");
             }
 
+            DebugOptions? debug = null;
+            if (request.Debug is { } debugRequest)
+            {
+                if (!TryBreakpoints(debugRequest.Breakpoints, loaded.Workflow.Id.Value, out var breakpoints, out var breakpointError))
+                {
+                    return BadRequest(breakpointError);
+                }
+
+                debug = new DebugOptions { Breakpoints = breakpoints, PauseAtStart = debugRequest.PauseAtStart };
+            }
+
             var run = host.Start(loaded.Workflow, new ExecutionStartRequest
             {
                 Arguments = arguments,
                 Timeout = request.TimeoutMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null,
                 Location = file,
+                Debug = debug,
             });
+            if (debug is not null)
+            {
+                debugRuns.Add(run.RunId, Session(context), loaded.Workflow.Id.Value);
+            }
+
             return Results.Json(new { runId = run.RunId }, statusCode: StatusCodes.Status202Accepted);
         });
 
@@ -437,6 +458,140 @@ internal static class ServerApplication
 
         api.MapPost("/runs/{runId}/cancel", (string runId, ExecutionHost host) =>
             host.Cancel(runId) ? Results.Accepted() : host.TryGet(runId, out _) ? Problem(StatusCodes.Status409Conflict, "The run has already finished.") : NotFound($"Unknown run '{runId}'."));
+
+        MapDebug(api);
+    }
+
+    /// <summary>Debugging a run (ADR-0040): only the session that started a debug run may use these.</summary>
+    private static void MapDebug(RouteGroupBuilder api)
+    {
+        api.MapGet("/runs/{runId}/debug", (string runId, DebugRuns debugRuns, HttpContext context) =>
+            debugRuns.Find(runId, Session(context)) is { } found
+                ? Results.Text(DebugJson(found.Debug, found.WorkflowId), "application/json")
+                : NotFound($"Unknown debug run '{runId}'."));
+
+        api.MapPost("/runs/{runId}/debug", (string runId, DebugCommandRequest request, DebugRuns debugRuns, HttpContext context) =>
+        {
+            if (debugRuns.Find(runId, Session(context)) is not { } found)
+            {
+                return NotFound($"Unknown debug run '{runId}'.");
+            }
+
+            if (request.Command == "pause")
+            {
+                return found.Debug.RequestPause() ? Results.Accepted() : Problem(StatusCodes.Status409Conflict, "The run is already paused or has finished.");
+            }
+
+            DebugCommand? command = request.Command switch
+            {
+                "continue" => DebugCommand.Continue,
+                "stepInto" => DebugCommand.StepInto,
+                "stepOver" => DebugCommand.StepOver,
+                "stepOut" => DebugCommand.StepOut,
+                _ => null,
+            };
+            if (command is not { } resume)
+            {
+                return BadRequest("'command' must be continue, stepInto, stepOver, stepOut or pause.");
+            }
+
+            return found.Debug.Resume(resume) ? Results.Accepted() : Problem(StatusCodes.Status409Conflict, "The run is not paused.");
+        });
+
+        api.MapPut("/runs/{runId}/breakpoints", (string runId, BreakpointsRequest request, DebugRuns debugRuns, HttpContext context) =>
+        {
+            if (debugRuns.Find(runId, Session(context)) is not { } found)
+            {
+                return NotFound($"Unknown debug run '{runId}'.");
+            }
+
+            if (!TryBreakpoints(request.Breakpoints, found.WorkflowId, out var breakpoints, out var error))
+            {
+                return BadRequest(error);
+            }
+
+            found.Debug.SetBreakpoints(breakpoints);
+            return Results.NoContent();
+        });
+    }
+
+    /// <summary>Breakpoints are node ids of the run's workflow (at most <see cref="MaxBreakpoints"/>).</summary>
+    private static bool TryBreakpoints(List<string?>? nodeIds, string workflowId, out List<DebugBreakpoint> breakpoints, out string error)
+    {
+        breakpoints = [];
+        error = string.Empty;
+        if (nodeIds is { Count: > MaxBreakpoints })
+        {
+            error = $"At most {MaxBreakpoints} breakpoints.";
+            return false;
+        }
+
+        foreach (var nodeId in nodeIds ?? [])
+        {
+            if (string.IsNullOrEmpty(nodeId))
+            {
+                error = "Breakpoints must be node ids.";
+                return false;
+            }
+
+            breakpoints.Add(new DebugBreakpoint(workflowId, nodeId));
+        }
+
+        return true;
+    }
+
+    /// <summary>The paused state with its values (never part of the event stream) and the run's breakpoints.</summary>
+    private static string DebugJson(DebugSession debug, string workflowId)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            if (debug.Paused is { } paused)
+            {
+                writer.WriteStartObject("paused");
+                writer.WriteString("executionId", paused.ExecutionId);
+                writer.WriteString("parentExecutionId", paused.ParentExecutionId);
+                writer.WriteString("workflowId", paused.WorkflowId);
+                writer.WriteString("nodeId", paused.NodeId);
+                writer.WriteString("activityType", paused.ActivityType);
+                writer.WriteString("reason", paused.Reason switch
+                {
+                    DebugPauseReason.Breakpoint => "breakpoint",
+                    DebugPauseReason.Step => "step",
+                    _ => "pause",
+                });
+                writer.WriteStartArray("values");
+                foreach (var value in paused.Values)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("name", value.Name);
+                    writer.WriteString("kind", value.Kind.ToString());
+                    writer.WriteString("type", value.Type.ToString());
+                    writer.WritePropertyName("value");
+                    WorkflowValues.WriteJson(writer, value.Value);
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+            }
+            else
+            {
+                writer.WriteNull("paused");
+            }
+
+            writer.WriteStartArray("breakpoints");
+            foreach (var breakpoint in debug.Breakpoints.Where(b => b.WorkflowId == workflowId).OrderBy(b => b.NodeId, StringComparer.Ordinal))
+            {
+                writer.WriteStringValue(breakpoint.NodeId);
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
     private static void MapStreams(RouteGroupBuilder api)
@@ -664,7 +819,23 @@ internal sealed record MoveRequest(string? From, string? To);
 internal sealed record ValidateRequest(JsonElement? Document);
 
 /// <summary>Body of <c>POST /api/runs</c>.</summary>
-internal sealed record StartRunRequest(string? Project, string? Path, JsonElement? Document, Dictionary<string, JsonElement>? Arguments, int? TimeoutMs, Dictionary<string, string?>? ArgumentText = null);
+internal sealed record StartRunRequest(
+    string? Project,
+    string? Path,
+    JsonElement? Document,
+    Dictionary<string, JsonElement>? Arguments,
+    int? TimeoutMs,
+    Dictionary<string, string?>? ArgumentText = null,
+    DebugRunRequest? Debug = null);
+
+/// <summary>The <c>debug</c> part of <c>POST /api/runs</c> (ADR-0040): breakpoints are node ids of the run's workflow.</summary>
+internal sealed record DebugRunRequest(List<string?>? Breakpoints, bool PauseAtStart = false);
+
+/// <summary>Body of <c>POST /api/runs/{runId}/debug</c>: continue, stepInto, stepOver, stepOut or pause.</summary>
+internal sealed record DebugCommandRequest(string? Command);
+
+/// <summary>Body of <c>PUT /api/runs/{runId}/breakpoints</c>: node ids of the run's workflow.</summary>
+internal sealed record BreakpointsRequest(List<string?>? Breakpoints);
 
 /// <summary>Body of <c>POST /api/streams/{streamId}/subscriptions</c>.</summary>
 internal sealed record SubscribeRequest(string? RunId, long? AfterSequence, string? RecordingId = null);
