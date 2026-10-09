@@ -65,7 +65,8 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   Activities / Properties / Bottom hides or shows them. Favorites, recent activities and panel sizes are remembered per
   browser (`src/preferences.ts`, best effort).
 - **Designer (UX-3):** activities are cards in a centred flow with connectors; each card has an icon header (type icon,
-  display name, slot, badges) and a one-line summary of its values; properties are edited only in the Properties
+  display name, slot, badges); the type, id and a one-line summary of its values are its tooltip (the type and id
+  stay in its accessible name); properties are edited only in the Properties
   panel (the inline card editors were removed, ADR-0044). The selected card has a ⋮ menu (Cut, Copy, Paste, Delete,
   Move up/down). Containers collapse and expand (the card's toggle, ArrowLeft/ArrowRight, Expand all / Collapse all); a
   selection inside a collapsed container expands it. Zoom 50–200 % with Ctrl+= / Ctrl+- / Ctrl+0, the zoom buttons

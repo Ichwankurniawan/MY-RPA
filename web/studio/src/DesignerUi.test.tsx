@@ -50,28 +50,29 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Cards', () => {
-  it('shows a one-line summary of each card, also when selected; the selected card has its actions, never editors', async () => {
+  it('shows only the icon and display name on a card, with type, id and values in its tooltip; the selected card has its actions, never editors', async () => {
     await renderStudio();
 
-    expect(card('greet').querySelector('.summary')?.textContent).toBe("message: 'Hello' · level: Warning");
+    expect(card('greet').querySelector('.summary')).toBeNull();
+    expect(card('greet').title).toBe("Core.Log #greet\nmessage: 'Hello' · level: Warning");
+    expect([...card('greet').querySelectorAll('.title > :not(.visually-hidden)')].map((e) => e.textContent)).toEqual(['Log']);
     expect(within(card('greet')).queryByRole('textbox')).toBeNull();
 
     fireEvent.click(card('greet'));
 
-    expect(card('greet').querySelector('.summary')?.textContent).toBe("message: 'Hello' · level: Warning");
     expect(within(card('greet')).queryByRole('textbox')).toBeNull();
     expect(within(card('greet')).getByRole('button', { name: 'Actions for Log' })).toBeTruthy();
     expect(within(card('last')).queryByRole('button', { name: /^Actions/ })).toBeNull();
   });
 
-  it('edits in the Properties panel; the card summary follows', async () => {
+  it('edits in the Properties panel; the card tooltip follows', async () => {
     const { state } = await renderStudio();
     fireEvent.click(card('greet'));
     const panel = within(screen.getByRole('complementary', { name: 'Properties' }));
 
     fireEvent.change(panel.getByLabelText(/^message/), { target: { value: "'Hi'" } });
 
-    expect(card('greet').querySelector('.summary')?.textContent).toBe("message: 'Hi' · level: Warning");
+    expect(card('greet').title).toBe("Core.Log #greet\nmessage: 'Hi' · level: Warning");
     expect(state().selectedKey).toBe(item('greet').dataset.key);
   });
 

@@ -1697,6 +1697,12 @@ const activityIcon = (type: string | undefined, activity?: ActivityDescriptor): 
 const summaries = new WeakMap<JsonObject, string>();
 
 /** One line of a card's key values (UX-3), e.g. `message: 'Hello' · level: Warning`; cached per node version. */
+/** A card's hover text: its type and id, then its values (the card itself shows only the icon and display name). */
+export function cardTooltip(type: string | undefined, id: string | undefined, summary: string): string {
+  const head = [type, id === undefined ? undefined : `#${id}`].filter((part) => part !== undefined).join(' ');
+  return summary === '' ? head : `${head}\n${summary}`;
+}
+
 export function propertySummary(node: JsonObject, activity: ActivityDescriptor | undefined): string {
   const cached = summaries.get(node);
   if (cached !== undefined) {
@@ -1777,7 +1783,11 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
         studio.select(key);
       }}
     >
-      <div className={`node${container ? ' container' : ''}${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
+      <div
+        className={`node${container ? ' container' : ''}${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`}
+        data-run-status={status}
+        title={cardTooltip(type, id, summary)}
+      >
         <div className="card-header">
           {collapsible && (
             <button
@@ -1798,7 +1808,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
           <Icon name={activityIcon(type, activity)} size={16} />
           <span className="title">
             {slot !== undefined && <span className="slot">{slot}:</span>}{slot !== undefined && ' '}
-            <span className="label">{label}</span> <span className="type">{type}</span> {id !== undefined && <span className="id">#{id}</span>}
+            <span className="label">{label}</span> <span className="type visually-hidden">{type}</span> {id !== undefined && <span className="id visually-hidden">#{id}</span>}
             {hasError && ' '}
             {hasError && <span className="badge error">error</span>}
             {status !== undefined && ' '}
@@ -1824,7 +1834,6 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
           )}
           {selected && <CardMenu label={label} />}
         </div>
-        {summary !== '' && <p className="summary">{summary}</p>}
         {transitions.length > 0 && (
           <p className="transitions-summary">
             {transitions.map((t, i) => (
