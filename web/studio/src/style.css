@@ -175,7 +175,8 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .editbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 
 /* Designer: activity cards; containers have a tinted boundary; nesting is indented with a guide line. */
-.designer { grid-area: designer; background: var(--bg); }
+/* scroll-padding-top: scrolling a card into view stops below the sticky designer bar, never under it. */
+.designer { grid-area: designer; background: var(--bg); scroll-padding-top: 56px; }
 .workflow-title { margin: 0 0 10px; }
 .workflow-name { margin: 0; font-size: 18px; font-weight: 650; }
 .workflow-description { margin: 2px 0 0; color: var(--muted); white-space: pre-wrap; }
@@ -229,7 +230,8 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .node .collapsed-note { margin: 4px 0 0 22px; font-size: 12px; color: var(--muted); font-style: italic; }
 .inline-properties { margin: 8px 0 2px; padding-top: 8px; border-top: 1px solid var(--border); cursor: auto; }
 .inline-properties .field { margin-bottom: 8px; }
-.designer-bar { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+/* The breadcrumbs and Expand all / Collapse all stay at the top while the designer scrolls (like the Files header). */
+.designer-bar { position: sticky; top: -12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 0 -12px; padding: 12px 12px 0; background: var(--bg); }
 .designer-actions { display: flex; gap: 6px; margin-bottom: 8px; }
 .designer-actions button { font-size: 12px; }
 /* The zoom control floats at the bottom right of the designer while it scrolls. */

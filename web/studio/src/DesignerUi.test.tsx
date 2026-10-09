@@ -5,7 +5,7 @@ import { memoryDrafts } from './drafts';
 import { serialize } from './document';
 import { memoryPreferences } from './preferences';
 import { Studio, zoomLimits } from './studio';
-import { FakeApi, FakeEventSource, immediately, settle } from './test-support';
+import { catalog, FakeApi, FakeEventSource, immediately, settle } from './test-support';
 import type { JsonObject } from './types';
 
 // UX-3 (studio-ux-plan.md): the designer as cards — summaries, the selected card's editors and menu, collapse and
@@ -129,6 +129,61 @@ describe('Collapse and expand', () => {
     expect(visibleIds()).toEqual(['main', 'greet', 'check', 'last']);
     fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
     expect(visibleIds()).toEqual(['main', 'greet', 'check', 'inside', 'last']);
+  });
+
+  it('disables Expand all and Collapse all, with the reason, when they would do nothing', async () => {
+    const { studio } = await renderStudio();
+    const expand = () => screen.getByRole('button', { name: 'Expand all' }) as HTMLButtonElement;
+    const collapse = () => screen.getByRole('button', { name: 'Collapse all' }) as HTMLButtonElement;
+
+    expect([expand().disabled, expand().title]).toEqual([true, 'Nothing is collapsed.']);
+    expect(collapse().disabled).toBe(false);
+
+    fireEvent.click(collapse());
+    expect([collapse().disabled, collapse().title]).toEqual([true, 'Everything is already collapsed (the selection stays visible).']);
+    expect(expand().disabled).toBe(false);
+
+    // The only container holds the selection, so it stays open: nothing to collapse.
+    fireEvent.click(expand());
+    act(() => studio.selectNodeId('inside'));
+    expect([collapse().disabled, collapse().title]).toEqual([true, 'Everything is already collapsed (the selection stays visible).']);
+  });
+
+  it('on a flowchart canvas nothing collapses (steps open instead); in List view the steps’ containers do', async () => {
+    const api = new FakeApi();
+    const flowchart = { type: 'Core.Flowchart', displayName: 'Flowchart', category: 'Control Flow', allowsChildren: true, childLayout: 'Graph' as const, properties: [], slots: [] };
+    api.activities = async () => [...catalog, flowchart];
+    api.files.set('flow.json', {
+      text: serialize({
+        schemaVersion: '1.1',
+        id: 'f',
+        name: 'Flow',
+        version: '1',
+        root: {
+          id: 'flow',
+          type: 'Core.Flowchart',
+          children: [
+            { id: 'work', type: 'Core.Sequence', children: [{ id: 'step-log', type: 'Core.Log', properties: { message: "'x'" } }], transitions: [{ to: 'end' }] },
+            { id: 'end', type: 'Core.Log', properties: { message: "'done'" } },
+          ],
+        },
+      }),
+      etag: 1,
+    });
+    const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { drafts: memoryDrafts(), preferences: memoryPreferences(), validateDelayMs: undefined });
+    render(<App studio={studio} />);
+    await act(settle);
+    await act(async () => {
+      await studio.open('flow.json');
+    });
+    const collapse = () => screen.getByRole('button', { name: 'Collapse all' }) as HTMLButtonElement;
+
+    expect([collapse().disabled, collapse().title]).toEqual([true, 'Nothing to collapse: the steps of a flowchart open from the canvas (or show them with List view).']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    expect(collapse().disabled).toBe(false);
+    fireEvent.click(collapse());
+    expect(visibleIds()).toEqual(['flow', 'work', 'end']);
   });
 
   it('collapses with ArrowLeft, expands with ArrowRight, and arrow navigation skips hidden activities', async () => {

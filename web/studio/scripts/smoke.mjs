@@ -525,11 +525,22 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const zoom = await page.getByRole('tree', { name: 'Workflow', exact: true }).evaluate((tree) => getComputedStyle(tree).zoom);
   check(zoom === '1.1', `computed zoom ${zoom}`);
   await page.getByRole('button', { name: /, reset zoom$/ }).click();
+  check(await page.getByRole('button', { name: 'Collapse all', exact: true }).isDisabled(), 'Collapse all is disabled when nothing holds activities');
+  // Collapse and expand all on a nested workflow; the designer bar stays in view while the designer scrolls.
+  copyFileSync(join(repo, 'samples', 'control-flow.json'), join(project, 'control-flow.json'));
+  await page.reload();
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await openWorkflow('control-flow.json');
   const before = await treeIds();
   await page.getByRole('button', { name: 'Collapse all', exact: true }).click();
+  check((await treeIds()) !== before, `Collapse all hid the activities inside: ${await treeIds()}`);
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
   check((await treeIds()) === before, `expanded again: ${await treeIds()} (was ${before})`);
-  step('UX-3. Cards: the selected card edits inline (same value as Properties), summaries, CSS zoom 110% in Chromium, collapse and expand all');
+  await page.locator('main.designer').evaluate((m) => m.scrollTo(0, m.scrollHeight));
+  const barBox = await page.getByRole('button', { name: 'Collapse all', exact: true }).boundingBox();
+  const designerBox = await page.locator('main.designer').boundingBox();
+  check(barBox !== null && barBox.y >= designerBox.y && barBox.y + barBox.height <= designerBox.y + designerBox.height, `the designer bar stays in view while scrolling: ${JSON.stringify(barBox)}`);
+  step('UX-3. Cards: the selected card edits inline (same value as Properties), summaries, CSS zoom 110% in Chromium; Collapse all disabled with nothing to collapse; collapse and expand all on a nested workflow, the bar staying in view while scrolling');
 
   // G-2: a flowchart built from scratch in Chromium, by pointer (toolbox drops on the canvas, a connection drawn from a
   // step's handle, a step moved) and by keyboard (Properties: transitions); saved as 1.1, run, the arrow taken shown.
