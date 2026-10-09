@@ -1,0 +1,7 @@
+{ "pluginConfigVersion": "1.0",
+  "plugins": [
+    { "directory": "MyRPA.Samples.DemoPlugin/bin/Debug/net10.0" },
+    { "directory": "../../plugins/MyRPA.Browser.Playwright/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } },
+    { "directory": "../../plugins/MyRPA.Files/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } },
+    { "directory": "../../plugins/MyRPA.Spreadsheet/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } },
+    { "directory": "../../plugins/MyRPA.Http/bin/Debug/net10.0", "settings": { "allowedHosts": "jsonplaceholder.typicode.com, localhost" } } ] }

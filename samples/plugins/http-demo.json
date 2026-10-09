@@ -3,7 +3,7 @@
   "id": "http-demo",
   "name": "HTTP tour",
   "version": "1.0.0",
-  "description": "Phase 7 Http.Request against a public test API (JSONPlaceholder, fake data): GET with Dictionary headers, a JSON response filtered as a table, a POST with a JSON body, and a 404 both caught (HttpStatus) and kept (failOnErrorStatus false). Needs MyRPA.Http with allowedHosts set (see phase7-plugins.json) and Internet access.",
+  "description": "Phase 7 Http.Request against a public test API (JSONPlaceholder, fake data): GET with Dictionary headers, a JSON response filtered as a table, a POST with a JSON body, and a 404 both caught (HttpStatus) and kept (failOnErrorStatus false). Needs MyRPA.Http with allowedHosts set (see all-plugins.json) and Internet access.",
   "arguments": [
     { "name": "apiBase", "direction": "In", "type": "String", "default": "https://jsonplaceholder.typicode.com" },
     { "name": "todoCount", "direction": "Out", "type": "Int" },
