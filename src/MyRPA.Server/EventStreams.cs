@@ -239,11 +239,15 @@ internal sealed class EventStream(string id, string session, ServerOptions optio
 
         public CancellationTokenSource Lifetime { get; } = lifetime;
 
+        /// <summary>Starts reading after the subscription's position now (the caller holds the stream's lock).</summary>
         public void Start(Subscription subscription)
         {
             var pump = CancellationTokenSource.CreateLinkedTokenSource(Lifetime.Token);
             subscription.Pump = pump;
-            _pumps.Add(Task.Run(() => PumpAsync(subscription, subscription.Position, pump.Token)));
+            // Read the position here, under the caller's lock, never inside the task: until the thread pool runs it, a
+            // replaced connection that is still draining may move the position past events this client never received.
+            var after = subscription.Position;
+            _pumps.Add(Task.Run(() => PumpAsync(subscription, after, pump.Token)));
         }
 
         public async Task StopAsync()
