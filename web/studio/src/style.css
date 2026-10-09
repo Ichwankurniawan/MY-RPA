@@ -252,6 +252,9 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
     conic-gradient(from -45deg at 50% 100%, var(--border-strong) 90deg, transparent 0) bottom center / 10px 6px no-repeat;
 }
 .designer .container-item { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--container); box-shadow: var(--shadow); }
+/* A container step is itself the bordered box, so its connector sits above the box (outside it), in the gap it reserves. */
+.designer [role='group'].flow > [role='treeitem'] + .container-item { position: relative; margin-top: 22px; }
+.designer [role='group'].flow > [role='treeitem'] + .container-item::before { position: absolute; left: 50%; bottom: 100%; margin: 0 0 1px -5px; }
 .designer .container-item.selected { border-color: var(--accent); }
 .node { display: block; padding: 7px 10px; margin: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; box-shadow: var(--shadow); }
 .node.container { border: none; border-bottom: 1px solid var(--border); border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: transparent; box-shadow: none; }
