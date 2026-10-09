@@ -431,6 +431,79 @@ export function breakpointRefusalOf(state: StudioState, key: string | undefined)
   return typeof id === 'string' && id !== '' ? undefined : 'The activity needs an id to have a breakpoint.';
 }
 
+const collapsibleCache = new WeakMap<JsonObject, { readonly view: readonly unknown[]; readonly keys: readonly string[] }>();
+
+/**
+ * The containers that show a collapse toggle in the designer now (UX-3): below the shown root (the workflow's root, or
+ * the flowchart step opened in its place), holding activities, and not inside a flowchart shown as a canvas (its steps
+ * open instead). Computed once per document and view.
+ */
+export function collapsibleKeysOf(state: StudioState): readonly string[] {
+  const { document, catalog, graphLists, designerScope } = state;
+  if (document === undefined) {
+    return [];
+  }
+
+  const view = [catalog, graphLists, designerScope];
+  const cached = collapsibleCache.get(document);
+  if (cached !== undefined && cached.view.every((v, i) => v === view[i])) {
+    return cached.keys;
+  }
+
+  const root = designerScope !== undefined ? indexDocument(document).byKey.get(designerScope)?.node : isObject(document.root) ? document.root : undefined;
+  const keys: string[] = [];
+  const visit = (node: JsonObject, shownRoot: boolean) => {
+    const children = childSteps(node);
+    if (children.length === 0) {
+      return;
+    }
+
+    if (!shownRoot) {
+      keys.push(keyOf(node));
+    }
+
+    if (!isGraphNode(node, catalog) || graphLists.has(keyOf(node))) {
+      children.forEach((child) => visit(child.node, false));
+    }
+  };
+  if (root !== undefined) {
+    visit(root, true);
+  }
+
+  collapsibleCache.set(document, { view, keys });
+  return keys;
+}
+
+/** Why Expand all does nothing now (undefined when it would expand something). */
+export function expandAllRefusalOf(state: StudioState): string | undefined {
+  if (state.document === undefined) {
+    return 'Open a workflow first.';
+  }
+
+  return collapsibleKeysOf(state).some((key) => state.collapsed.has(key)) ? undefined : 'Nothing is collapsed.';
+}
+
+/** Why Collapse all does nothing now (undefined when it would collapse something). The selection always stays visible. */
+export function collapseAllRefusalOf(state: StudioState): string | undefined {
+  const { document } = state;
+  if (document === undefined) {
+    return 'Open a workflow first.';
+  }
+
+  const keys = collapsibleKeysOf(state);
+  if (keys.length === 0) {
+    const index = indexDocument(document);
+    const root = state.designerScope !== undefined ? index.byKey.get(state.designerScope)?.node : isObject(document.root) ? document.root : undefined;
+    return root !== undefined && isGraphNode(root, state.catalog) && !state.graphLists.has(keyOf(root))
+      ? 'Nothing to collapse: the steps of a flowchart open from the canvas (or show them with List view).'
+      : 'Nothing to collapse: no activity here holds other activities.';
+  }
+
+  const path = state.selectedKey !== undefined ? indexDocument(document).byKey.get(state.selectedKey)?.path : undefined;
+  const kept = new Set(path === undefined ? [] : Array.from({ length: path.length }, (_, depth) => keyOf(nodeAt(document, path.slice(0, depth)))));
+  return keys.some((key) => !state.collapsed.has(key) && !kept.has(key)) ? undefined : 'Everything is already collapsed (the selection stays visible).';
+}
+
 /** Why `run` cannot be stopped now (undefined when it can). */
 export function stopRefusalOf(run: RunView | undefined): string | undefined {
   if (run === undefined) {
@@ -898,16 +971,16 @@ export class Studio {
     this.store.set({ collapsed });
   }
 
-  /** Collapses every container below the root (the root stays open: it is the workflow). */
+  /**
+   * Collapses every container the designer shows below the root (the root stays open: it is the workflow). The
+   * containers above the selection stay open, so the selection stays visible.
+   */
   collapseAll(): void {
-    const document = this.state.document;
-    if (document === undefined) {
-      return;
+    const keys = collapsibleKeysOf(this.state);
+    if (keys.length > 0) {
+      this.store.set({ collapsed: new Set([...this.state.collapsed, ...keys]) });
+      this.revealSelection();
     }
-
-    const keys = indexDocument(document).entries.filter((e) => e.path.length > 0 && childSteps(e.node).length > 0).map((e) => e.key);
-    this.store.set({ collapsed: new Set(keys) });
-    this.revealSelection();
   }
 
   /** Expands every container. */

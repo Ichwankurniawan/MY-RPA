@@ -9,10 +9,12 @@ import type { Position } from './placement';
 import { InlineProperties, PropertiesPanel } from './PropertyEditors';
 import { RecordingPanel } from './RecordingPanel';
 import {
+  collapseAllRefusalOf,
   currentRun,
   debugCommandLabels,
   debugRefusalOf,
   deleteRefusalOf,
+  expandAllRefusalOf,
   fileKeyOf,
   editRefusal,
   insertRefusal,
@@ -999,6 +1001,8 @@ function WorkflowTree() {
   const scopeKey = useStudioState((s) => s.designerScope);
   const graphLists = useStudioState((s) => s.graphLists);
   const catalog = useStudioState((s) => s.catalog);
+  const expandRefusal = useStudioState(expandAllRefusalOf);
+  const collapseRefusal = useStudioState(collapseAllRefusalOf);
   const tree = useRef<HTMLUListElement>(null);
   const designer = useRef<HTMLElement>(null);
   const refocus = useRef(false);
@@ -1108,11 +1112,23 @@ function WorkflowTree() {
       <div className="designer-bar">
         <Breadcrumbs />
         <div className="designer-actions" role="toolbar" aria-label="Designer">
-          <button type="button" className="with-icon small" onClick={() => studio.expandAll()} title="Show the activities inside every container">
+          <button
+            type="button"
+            className="with-icon small"
+            onClick={() => studio.expandAll()}
+            disabled={expandRefusal !== undefined}
+            title={expandRefusal ?? 'Show the activities inside every container'}
+          >
             <Icon name="expand-all" size={14} />
             <span>Expand all</span>
           </button>
-          <button type="button" className="with-icon small" onClick={() => studio.collapseAll()} title="Hide the activities inside every container (the selection stays visible)">
+          <button
+            type="button"
+            className="with-icon small"
+            onClick={() => studio.collapseAll()}
+            disabled={collapseRefusal !== undefined}
+            title={collapseRefusal ?? 'Hide the activities inside every container (the selection stays visible)'}
+          >
             <Icon name="collapse-all" size={14} />
             <span>Collapse all</span>
           </button>
