@@ -22,6 +22,7 @@ public sealed class DocumentationTests
         "plugins/MyRPA.Browser.Playwright/README.md",
         "plugins/MyRPA.Files/README.md",
         "plugins/MyRPA.Http/README.md",
+        "plugins/MyRPA.Spreadsheet/README.md",
     ];
 
     public static TheoryData<string> PluginDocuments() => [.. _pluginDocuments];
