@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "1.0",
+  "id": "data-builtins",
+  "name": "Data built-ins tour",
+  "version": "1.0.0",
+  "description": "Phase 7 built-ins without plugins: text split/join/regex, dates with a time zone, table filter/sort/find/merge and a JSON round trip.",
+  "arguments": [
+    { "name": "joinedNames", "direction": "Out", "type": "String" },
+    { "name": "invoiceCode", "direction": "Out", "type": "String" },
+    { "name": "cleaned", "direction": "Out", "type": "String" },
+    { "name": "reminderText", "direction": "Out", "type": "String" },
+    { "name": "gapDays", "direction": "Out", "type": "Decimal" },
+    { "name": "topCustomer", "direction": "Out", "type": "String" },
+    { "name": "bobIndex", "direction": "Out", "type": "Int" },
+    { "name": "mergedCount", "direction": "Out", "type": "Int" },
+    { "name": "roundTripCount", "direction": "Out", "type": "Int" }
+  ],
+  "variables": [
+    {
+      "name": "orders",
+      "type": "List",
+      "default": [
+        { "id": 1, "customer": "Ada", "amount": 120.5, "status": "open" },
+        { "id": 2, "customer": "Bob", "amount": 80, "status": "closed" },
+        { "id": 3, "customer": "Cy", "amount": 250, "status": "open" },
+        { "id": 4, "customer": "Dee", "amount": 42, "status": "open" }
+      ]
+    },
+    { "name": "extra", "type": "List", "default": [ { "id": 5, "customer": "Eve", "amount": 99, "status": "open" } ] },
+    { "name": "names", "type": "List" },
+    { "name": "match", "type": "Object" },
+    { "name": "due", "type": "DateTime" },
+    { "name": "reminder", "type": "DateTime" },
+    { "name": "open", "type": "List" },
+    { "name": "sorted", "type": "List" },
+    { "name": "bob", "type": "Object" },
+    { "name": "merged", "type": "List" },
+    { "name": "json", "type": "String" },
+    { "name": "parsed", "type": "List" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "split-names", "type": "Core.Text.Split", "properties": { "text": "'Ada, Bob,, Cy'", "separator": "','", "removeEmpty": "true", "trim": "true", "result": "names" } },
+      { "id": "join-names", "type": "Core.Text.Join", "properties": { "items": "names", "separator": "' | '", "result": "joinedNames" } },
+      { "id": "find-invoice", "type": "Core.Text.Match", "properties": { "text": "'Invoice INV-2026-0042 is due 15/11/2026'", "pattern": "'(?<code>INV-\\\\d{4}-\\\\d{4})'", "result": "match" } },
+      { "id": "invoice-code", "type": "Core.Assign", "properties": { "to": "invoiceCode", "value": "match.groups.code" } },
+      { "id": "squash-spaces", "type": "Core.Text.Replace", "properties": { "text": "'  too   many    spaces  '", "pattern": "'\\\\s+'", "replacement": "' '", "result": "cleaned" } },
+      { "id": "trim-cleaned", "type": "Core.Assign", "properties": { "to": "cleaned", "value": "trim(cleaned)" } },
+      { "id": "parse-due", "type": "Core.Date.Parse", "properties": { "text": "'15/11/2026'", "format": "'dd/MM/yyyy'", "timeZone": "'Europe/Paris'", "result": "due" } },
+      { "id": "add-30-days", "type": "Core.Date.Add", "properties": { "value": "due", "days": "30", "result": "reminder" } },
+      { "id": "format-reminder", "type": "Core.Date.Format", "properties": { "value": "reminder", "format": "'yyyy-MM-dd'", "timeZone": "'Europe/Paris'", "result": "reminderText" } },
+      { "id": "gap", "type": "Core.Date.Difference", "properties": { "from": "due", "to": "reminder", "unit": "Days", "result": "gapDays" } },
+      { "id": "open-orders", "type": "Core.Collection.Filter", "properties": { "items": "orders", "key": "'status'", "operator": "Equals", "value": "'open'", "result": "open" } },
+      { "id": "by-amount", "type": "Core.Collection.Sort", "properties": { "items": "open", "key": "'amount'", "descending": "true", "result": "sorted" } },
+      { "id": "top", "type": "Core.Assign", "properties": { "to": "topCustomer", "value": "sorted[0].customer" } },
+      { "id": "find-bob", "type": "Core.Collection.Find", "properties": { "items": "orders", "key": "'customer'", "operator": "Equals", "value": "'Bob'", "result": "bob", "index": "bobIndex" } },
+      { "id": "merge", "type": "Core.Collection.Merge", "properties": { "first": "open", "second": "extra", "result": "merged" } },
+      { "id": "merged-count", "type": "Core.Assign", "properties": { "to": "mergedCount", "value": "len(merged)" } },
+      { "id": "to-json", "type": "Core.Json.Serialize", "properties": { "value": "sorted", "result": "json" } },
+      { "id": "from-json", "type": "Core.Json.Parse", "properties": { "text": "json", "result": "parsed" } },
+      { "id": "round-trip", "type": "Core.Assign", "properties": { "to": "roundTripCount", "value": "len(parsed)" } },
+      { "id": "report", "type": "Core.Log", "properties": { "message": "'Top open order: ' + topCustomer + '; reminder on ' + reminderText" } }
+    ]
+  }
+}

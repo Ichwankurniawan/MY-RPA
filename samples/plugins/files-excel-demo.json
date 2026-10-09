@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "1.0",
+  "id": "files-excel-demo",
+  "name": "Files and Excel tour",
+  "version": "1.0.0",
+  "description": "Phase 7 plugins without network: text, CSV (formula guard), JSON and XML files, copy/list/delete, an Excel workbook written and read back, and the file policy refusing a path outside the root and a silent overwrite. Needs MyRPA.Files and MyRPA.Spreadsheet (see samples/plugins/README.md, phase7-plugins.json).",
+  "arguments": [
+    { "name": "notes", "direction": "Out", "type": "String" },
+    { "name": "csvGuarded", "direction": "Out", "type": "String" },
+    { "name": "jsonCount", "direction": "Out", "type": "Int" },
+    { "name": "xmlFirstServer", "direction": "Out", "type": "String" },
+    { "name": "sheets", "direction": "Out", "type": "List" },
+    { "name": "excelBalance", "direction": "Out", "type": "Object" },
+    { "name": "excelFormulaText", "direction": "Out", "type": "String" },
+    { "name": "fileCount", "direction": "Out", "type": "Int" },
+    { "name": "outsideError", "direction": "Out", "type": "String" },
+    { "name": "overwriteError", "direction": "Out", "type": "String" }
+  ],
+  "variables": [
+    {
+      "name": "customers",
+      "type": "List",
+      "default": [
+        { "name": "Ada", "city": "Paris", "balance": 120.5, "vip": true },
+        { "name": "Bob", "city": "Lyon", "balance": -15, "vip": false },
+        { "name": "=SUM(A1:A9)", "city": "Nice", "balance": 0, "vip": false }
+      ]
+    },
+    { "name": "xmlText", "type": "String", "default": "<config><server name=\"alpha\" port=\"8080\"/><server name=\"beta\"/></config>" },
+    { "name": "csvRows", "type": "List" },
+    { "name": "jsonBack", "type": "List" },
+    { "name": "xml", "type": "Object" },
+    { "name": "excelRows", "type": "List" },
+    { "name": "files", "type": "List" },
+    { "name": "ignored", "type": "Object" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "make-folder", "type": "Folder.Create", "properties": { "path": "'demo'" } },
+      { "id": "write-notes", "type": "File.WriteText", "properties": { "path": "'demo/notes.txt'", "text": "'Phase 7 demo'", "overwrite": "true" } },
+      { "id": "append-notes", "type": "File.WriteText", "properties": { "path": "'demo/notes.txt'", "text": "' - appended'", "append": "true" } },
+      { "id": "read-notes", "type": "File.ReadText", "properties": { "path": "'demo/notes.txt'", "result": "notes" } },
+      { "id": "write-csv", "type": "Csv.Write", "properties": { "path": "'demo/customers.csv'", "rows": "customers", "overwrite": "true" } },
+      { "id": "read-csv", "type": "Csv.Read", "properties": { "path": "'demo/customers.csv'", "result": "csvRows" } },
+      { "id": "guarded", "type": "Core.Assign", "properties": { "to": "csvGuarded", "value": "csvRows[2].name" } },
+      { "id": "write-json", "type": "Json.WriteFile", "properties": { "path": "'demo/customers.json'", "value": "customers", "overwrite": "true" } },
+      { "id": "read-json", "type": "Json.ReadFile", "properties": { "path": "'demo/customers.json'", "result": "jsonBack" } },
+      { "id": "json-count", "type": "Core.Assign", "properties": { "to": "jsonCount", "value": "len(jsonBack)" } },
+      { "id": "write-xml", "type": "File.WriteText", "properties": { "path": "'demo/config.xml'", "text": "xmlText", "overwrite": "true" } },
+      { "id": "read-xml", "type": "Xml.ReadFile", "properties": { "path": "'demo/config.xml'", "result": "xml" } },
+      { "id": "first-server", "type": "Core.Assign", "properties": { "to": "xmlFirstServer", "value": "xml.children[0].attributes.name" } },
+      { "id": "write-excel", "type": "Excel.WriteRange", "properties": { "path": "'demo/customers.xlsx'", "sheet": "'Customers'", "rows": "customers" } },
+      { "id": "read-excel", "type": "Excel.ReadRange", "properties": { "path": "'demo/customers.xlsx'", "sheet": "'Customers'", "result": "excelRows" } },
+      { "id": "excel-sheets", "type": "Excel.GetSheets", "properties": { "path": "'demo/customers.xlsx'", "result": "sheets" } },
+      { "id": "excel-balance", "type": "Core.Assign", "properties": { "to": "excelBalance", "value": "excelRows[0].balance" } },
+      { "id": "excel-formula", "type": "Core.Assign", "properties": { "to": "excelFormulaText", "value": "excelRows[2].name" } },
+      { "id": "copy-notes", "type": "File.Copy", "properties": { "source": "'demo/notes.txt'", "destination": "'demo/archive/notes-copy.txt'", "overwrite": "true" } },
+      { "id": "list-files", "type": "File.List", "properties": { "folder": "'demo'", "recursive": "true", "result": "files" } },
+      { "id": "file-count", "type": "Core.Assign", "properties": { "to": "fileCount", "value": "len(files)" } },
+      { "id": "delete-copy", "type": "File.Delete", "properties": { "path": "'demo/archive/notes-copy.txt'" } },
+      {
+        "id": "try-outside",
+        "type": "Core.TryCatch",
+        "properties": { "exceptionVariable": "err" },
+        "slots": {
+          "try": { "id": "read-outside", "type": "File.ReadText", "properties": { "path": "'../outside.txt'", "result": "ignored" } },
+          "catch": { "id": "note-outside", "type": "Core.Assign", "properties": { "to": "outsideError", "value": "err.errorType" } }
+        }
+      },
+      {
+        "id": "try-overwrite",
+        "type": "Core.TryCatch",
+        "properties": { "exceptionVariable": "err" },
+        "slots": {
+          "try": { "id": "write-again", "type": "File.WriteText", "properties": { "path": "'demo/notes.txt'", "text": "'replaced?'" } },
+          "catch": { "id": "note-overwrite", "type": "Core.Assign", "properties": { "to": "overwriteError", "value": "err.errorType" } }
+        }
+      }
+    ]
+  }
+}
