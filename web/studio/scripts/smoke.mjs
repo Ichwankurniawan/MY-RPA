@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { check, repo, results, withStudio } from './harness.mjs';
+import { check, repo, results, withStudio, showTab } from './harness.mjs';
 
 const step = (text) => console.log(`  ✓ ${text}`);
 
@@ -103,6 +103,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check((await edit('Delete').isEnabled()) && !(await edit('Move down').isEnabled()), 'commands for the last child');
 
   // W4A: insert, move (keyboard), edit, undo, redo, delete, undo the delete.
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Log (Core.Log)' }).click();
   await expectTree('main,build-greeting,log-greeting,log-1', 'insert');
   check((await selected()) === 'log-1', 'the inserted node is selected');
@@ -314,6 +315,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const properties = page.getByRole('complementary', { name: 'Properties' });
 
   // W4B: rich authoring, the PRD 5.5 "Greeter" flow within W4B scope (inserting into slots is W7).
+  await showTab(page, 'Files');
   await page.getByRole('button', { name: 'New…', exact: true }).click();
   await dialog.getByLabel('Path in the project').fill('greeter.json');
   await dialogButton('Create').click();
@@ -328,9 +330,11 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await click('Add variable');
   await page.getByLabel('variable 1 name').fill('message');
   await row('main').click();
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Assign (Core.Assign)' }).click();
   await properties.getByLabel(/^to/).fill('message');
   await properties.getByLabel(/^value/).fill("'Hello, ' + who");
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Log (Core.Log)' }).click();
   await properties.getByLabel(/^message/).fill('message');
   await page.getByRole('tab', { name: /^Problems/ }).click();
@@ -359,6 +363,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check(greeter.root.children.map((c) => c.type).join(',') === 'Core.Assign,Core.Log', 'saved activities');
   await page.reload();
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await showTab(page, 'Files');
   await fileRow('greeter.json').dblclick();
   await titleIs('greeter.json');
   await runWithDefaults();
@@ -401,9 +406,11 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     await page.mouse.up();
   };
   await row('log-1').click();
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert If (Core.If)' }).click();
   await expectTree('main,assign-1,log-1,if-1', 'If inserted after the Log');
   await zone('if-1', 'then: empty (required)').click();
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Log (Core.Log)' }).click();
   await expectTree('main,assign-1,log-1,if-1,log-2', 'Log inserted into then');
   check((await page.locator('[role=treeitem][data-node-id="log-2"] .slot').first().textContent()) === 'then:', 'log-2 is in the then slot');
@@ -442,6 +449,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   // W6: project and file management. All through the Files panel and in-app dialogs, against the real file system.
 
   // W6-1: New… creates a valid workflow (in a new folder) and opens it.
+  await showTab(page, 'Files');
   await page.getByRole('button', { name: 'New…', exact: true }).click();
   await dialog.getByLabel('Path in the project').fill('flows/w6-created.json');
   await dialogButton('Create').click();
@@ -453,6 +461,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   step('W6-1. New…: created flows/w6-created.json (a valid workflow: the server finds no problems) and opened it');
 
   // W6-2: Rename (F2 in the Files panel) moves the file on disk; the open document follows it.
+  await showTab(page, 'Files');
   await fileRow('flows/w6-created.json').click();
   await page.keyboard.press('F2');
   await dialog.getByLabel('Path in the project').fill('flows/w6-renamed.json');
@@ -464,10 +473,12 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   // W6-3: Unsaved changes: the Studio asks in its own dialog; Cancel stays, Save saves and then opens the other file.
   await page.getByLabel('Display name').fill('Renamed workflow root');
   await titleIs('flows/w6-renamed.json •');
+  await showTab(page, 'Files');
   await fileRow('hello-world.json').dblclick();
   await page.getByRole('dialog', { name: 'Unsaved changes' }).waitFor();
   await dialogButton('Cancel').click();
   await titleIs('flows/w6-renamed.json •');
+  await showTab(page, 'Files');
   await fileRow('hello-world.json').dblclick();
   await dialogButton('Save').click();
   await titleIs('hello-world.json');
@@ -505,6 +516,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   page.once('dialog', (beforeUnload) => beforeUnload.accept());
   await page.reload();
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await showTab(page, 'Files');
   await fileRow('copy-of-hello.json').dblclick();
   await page.getByRole('dialog', { name: 'Recover unsaved changes' }).waitFor();
   await dialogButton('Restore').click();
@@ -516,10 +528,12 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   step('W6-6. Crash recovery: after a page reload, the unsaved edit was offered back, restored and saved');
 
   // W6-7: Delete (Delete key in the Files panel) after confirmation.
+  await showTab(page, 'Files');
   await fileRow('flows/w6-renamed.json').click();
   await page.keyboard.press('Delete');
   await page.getByRole('dialog', { name: 'Delete flows/w6-renamed.json' }).waitFor();
   await dialogButton('Delete').click();
+  await showTab(page, 'Files');
   await fileRow('flows/w6-renamed.json').waitFor({ state: 'detached' });
   check(!exists('flows/w6-renamed.json'), 'deleted on disk');
   step('W6-7. Delete (Delete key): confirmed in the Studio; the file is gone from disk and from the Files panel');
@@ -572,8 +586,10 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     await page.mouse.up();
   };
   await row('main').click();
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Flowchart (Core.Flowchart)' }).click();
   await page.getByRole('button', { name: 'Empty flowchart: insert the start step here' }).click();
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Assign (Core.Assign)' }).click();
   await panel.getByLabel(/^to/).fill('n');
   await panel.getByLabel(/^value/).fill('n + 1');
@@ -587,11 +603,13 @@ await withStudio(async ({ project, page, startServer, problems }) => {
     const box = await canvas.boundingBox();
     await pointerDrag(await center(entry), { x: box.x + dx, y: box.y + dy });
   };
+  await showTab(page, 'Activities');
   await dropOnCanvas('Insert Decision (Core.Decision)', 150, 260);
   await stepCard('decision-1').waitFor({ timeout: 5000 }).catch(async (error) => {
     await page.screenshot({ path: join(results, 'g2-drop-failed.png') });
     throw new Error(`${error.message}; status: ${await page.locator('.segment.message').textContent().catch(() => '?')}`);
   });
+  await showTab(page, 'Activities');
   await dropOnCanvas('Insert Log (Core.Log)', 430, 260);
   await stepCard('log-1').waitFor({ timeout: 5000 });
   await panel.getByLabel(/^message/).fill("'done after ' + n");
@@ -770,7 +788,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.getByText('Connected to MyRPA.Server').waitFor();
   await openWorkflow('rec.json');
   await row('main').click();
-  const recorderPanel = page.getByRole('tabpanel');
+  const recorderPanel = page.locator('.bottom-panel').getByRole('tabpanel');
   await click('Record');
   await recorderPanel.getByLabel('Start at').fill(siteUrl);
   await recorderPanel.getByRole('button', { name: 'Start recording', exact: true }).click();

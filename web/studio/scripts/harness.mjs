@@ -22,6 +22,14 @@ export const check = (condition, message) => {
 };
 
 /** Runs `body({ project, page, startLink })` against a fresh server and browser; cleans up; exits 1 on failure. */
+/** Shows a tab of the Studio's left panel ('Activities' or 'Files') unless it is already shown. */
+export async function showTab(page, name) {
+  const tab = page.getByRole('tablist', { name: 'Side panel' }).getByRole('tab', { name, exact: true });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') {
+    await tab.click();
+  }
+}
+
 export async function withStudio(body) {
   const configuration = process.env.MYRPA_CONFIGURATION ?? 'Release';
   const serverDll = join(repo, 'src', 'MyRPA.Server', 'bin', configuration, 'net10.0', 'MyRPA.Server.dll');

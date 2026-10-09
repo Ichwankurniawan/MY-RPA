@@ -15,6 +15,8 @@ async function renderStudio(api = new FakeApi(), drafts: DraftStore = memoryDraf
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { drafts, draftDelayMs: 60_000 });
   render(<App studio={studio} />);
   await act(settle);
+  // The files are the left panel's second tab.
+  await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Files' })));
   return { studio, api };
 }
 

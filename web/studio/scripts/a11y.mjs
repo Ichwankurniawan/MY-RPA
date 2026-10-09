@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { check, repo, results, withStudio } from './harness.mjs';
+import { check, repo, results, withStudio, showTab } from './harness.mjs';
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 const step = (text) => console.log(`  ✓ ${text}`);
@@ -51,6 +51,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   };
 
   const filesTree = page.getByRole('tree', { name: 'Workflow files' });
+  await showTab(page, 'Files');
   await filesTree.locator('[data-path="a11y.json"]').dblclick();
   await page.getByTestId('document-title').filter({ hasText: /^a11y\.json$/ }).waitFor();
   await page.locator('[role=treeitem][data-node-id="check"] > .node').click();
@@ -72,6 +73,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.locator('[role=treeitem][data-node-id="check"] > .node').click();
   await scan('Dark theme, an If selected');
   await page.emulateMedia({ colorScheme: 'light' });
+  await showTab(page, 'Files');
   await page.getByRole('button', { name: 'New…', exact: true }).click();
   await page.getByRole('dialog').waitFor();
   await scan('New workflow dialog');
@@ -85,11 +87,13 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.keyboard.press('Home');
   await page.keyboard.press('ArrowDown');
   check((await selected()) === 'set', `arrow keys select: ${await selected()}`);
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Log (Core.Log)' }).focus();
   await page.keyboard.press('Enter');
   check((await selected()) === 'log-1', `Enter on a toolbox entry inserts after the selection: ${await selected()}`);
   await page.locator('[role=treeitem][data-node-id="check"]').getByRole('button', { name: 'else: empty', exact: true }).focus();
   await page.keyboard.press('Enter');
+  await showTab(page, 'Activities');
   await page.getByRole('button', { name: 'Insert Delay (Core.Delay)' }).focus();
   await page.keyboard.press('Enter');
   check((await selected()) === 'delay-1', `a zone picked by keyboard receives the insert: ${await selected()}`);
@@ -114,6 +118,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   writeFileSync(join(project, 'flowchart.json'), readFileSync(join(repo, 'samples', 'flowchart.json'), 'utf8'));
   await page.reload();
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await showTab(page, 'Files');
   await filesTree.locator('[data-path="flowchart.json"]').dblclick();
   await page.getByTestId('document-title').filter({ hasText: /^flowchart\.json$/ }).waitFor();
   await page.locator('.flow-step[data-node-id="check"] > .node').click();
@@ -127,10 +132,12 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   writeFileSync(join(project, 'state-machine.json'), readFileSync(join(repo, 'samples', 'state-machine.json'), 'utf8'));
   await page.reload();
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await showTab(page, 'Files');
   await filesTree.locator('[data-path="state-machine.json"]').dblclick();
   await page.getByTestId('document-title').filter({ hasText: /^state-machine\.json$/ }).waitFor();
   await page.locator('.flow-step[data-node-id="process"] > .node').click();
   await scan('State machine canvas, a state selected');
+  await showTab(page, 'Files');
   await filesTree.locator('[data-path="flowchart.json"]').dblclick();
   await page.getByTestId('document-title').filter({ hasText: /^flowchart\.json$/ }).waitFor();
   await page.locator('.flow-step[data-node-id="check"] > .node').click();
@@ -159,6 +166,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
 
   // ADR-0040: the debugger paused at a breakpoint (the debug bar, the paused card, the values in scope). The flowchart
   // edited above by keyboard is left unsaved.
+  await showTab(page, 'Files');
   await filesTree.locator('[data-path="a11y-debug.json"]').dblclick();
   await page.getByRole('dialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Discard', exact: true }).click();
   await page.getByTestId('document-title').filter({ hasText: /^a11y-debug\.json$/ }).waitFor();

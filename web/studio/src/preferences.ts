@@ -12,6 +12,7 @@ export const preferenceKeys = {
   recent: 'myrpa.ui.recent',
   panes: 'myrpa.ui.panes',
   breakpoints: 'myrpa.ui.breakpoints',
+  sidebarTab: 'myrpa.ui.sidebarTab',
 } as const;
 
 /** Preferences in `storage` (the browser's localStorage by default); failures are ignored. */

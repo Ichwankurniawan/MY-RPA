@@ -26,6 +26,37 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Activity panel', () => {
+  it('shows Activities or Files as tabs, by click or arrow keys, and remembers the choice', async () => {
+    const { preferences } = await renderStudio();
+    const tabs = within(screen.getByRole('tablist', { name: 'Side panel' }));
+
+    expect(tabs.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Activities', 'Files']);
+    expect(screen.getByRole('list', { name: 'Activity catalog' })).toBeTruthy();
+    expect(screen.queryByRole('tree', { name: 'Workflow files' })).toBeNull();
+
+    fireEvent.click(tabs.getByRole('tab', { name: 'Files' }));
+    expect(screen.getByRole('tree', { name: 'Workflow files' })).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Activity catalog' })).toBeNull();
+    expect(preferences.values.get(preferenceKeys.sidebarTab)).toBe('"files"');
+
+    fireEvent.keyDown(tabs.getByRole('tab', { name: 'Files' }), { key: 'ArrowLeft' });
+    expect(tabs.getByRole('tab', { name: 'Activities' }).getAttribute('aria-selected')).toBe('true');
+
+    cleanup();
+    await renderStudio(preferences);
+    expect(screen.getByRole('tab', { name: 'Activities' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('shows only activity titles; the type and description are the tooltip and the accessible description', async () => {
+    await renderStudio();
+    const insert = screen.getByRole('button', { name: 'Insert Log (Core.Log)' });
+
+    expect(insert.textContent).toBe('Log');
+    expect(insert.title).toContain('Core.Log');
+    const description = document.getElementById(insert.getAttribute('aria-describedby')!.split(' ')[1]!)!;
+    expect(description.classList.contains('visually-hidden')).toBe(true);
+  });
+
   it('groups the catalog by namespace, built-in first, then by category', async () => {
     await renderStudio();
     const panel = screen.getByRole('list', { name: 'Activity catalog' });
@@ -83,7 +114,7 @@ describe('Bottom panel', () => {
     const tab = (name: RegExp) => screen.getByRole('tab', { name });
 
     expect(tab(/^Problems/).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Problems', 'Variables (0)', 'Arguments (2)', 'Execution', 'Recorder']);
+    expect(within(screen.getByRole('tablist', { name: 'Output' })).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Problems', 'Variables (0)', 'Arguments (2)', 'Execution', 'Recorder']);
 
     await act(async () => {
       await studio.run({ argumentText: {} });
@@ -135,7 +166,7 @@ describe('Panels', () => {
     fireEvent.keyDown(splitter, { key: 'Home' });
     expect(state().panes.toolbox).toBe(paneLimits.toolbox.min);
 
-    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe(`${paneLimits.toolbox.min}px minmax(0, 1fr) 340px`);
+    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe(`min(${paneLimits.toolbox.min}px, 35vw) minmax(0, 1fr) min(340px, 32vw)`);
     expect(JSON.parse(preferences.values.get(preferenceKeys.panes)!)).toMatchObject({ toolbox: paneLimits.toolbox.min });
   });
 
@@ -148,7 +179,7 @@ describe('Panels', () => {
     fireEvent.click(properties);
     expect(properties.getAttribute('aria-pressed')).toBe('false');
     expect(screen.queryByRole('complementary', { name: 'Properties' })).toBeNull();
-    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe('240px minmax(0, 1fr) 0px');
+    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe('min(260px, 30vw) minmax(0, 1fr) 0px');
 
     fireEvent.click(within(view).getByRole('button', { name: 'Activities' }));
     expect(document.querySelector<HTMLElement>('.sidebar')!.hidden).toBe(true);

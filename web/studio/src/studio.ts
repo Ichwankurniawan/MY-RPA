@@ -207,6 +207,8 @@ export interface StudioState {
   readonly outputTab: OutputTab;
   /** Panel sizes (px, only once resized) and hidden panels (UX-2; remembered per browser). */
   readonly panes: Panes;
+  /** The left panel's tab: the activity catalog or the project's files (remembered per browser). */
+  readonly sidebarTab: SidebarTab;
   /** Containers whose children are hidden in the designer (UX-3; never an ancestor of the selection). */
   readonly collapsed: ReadonlySet<string>;
   /** Graph containers (by key) shown as a list of steps instead of the canvas (G-2): the keyboard-first view. */
@@ -262,6 +264,11 @@ const isPanes = (value: unknown): value is Panes => {
 
 /** The tabs of the bottom panel. */
 export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution' | 'recording';
+
+/** The tabs of the left panel. */
+export type SidebarTab = 'activities' | 'files';
+
+const isSidebarTab = (value: unknown): value is SidebarTab => value === 'activities' || value === 'files';
 
 /** One recorded step as the user keeps it (ADR-0039): the chosen selector and, for typing, the edited text. */
 export interface RecordedItem {
@@ -770,6 +777,7 @@ export class Studio {
       recentActivities: (this.preferences.read(preferenceKeys.recent, isTypeList) ?? []).slice(0, maxRecent),
       outputTab: 'problems',
       panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
+      sidebarTab: this.preferences.read(preferenceKeys.sidebarTab, isSidebarTab) ?? 'activities',
       collapsed: new Set(),
       graphLists: new Set(),
       zoom: 1,
@@ -1345,6 +1353,12 @@ export class Studio {
 
   private updateItem(sequence: number, update: (item: RecordedItem) => RecordedItem): void {
     this.updateRecorder((r) => ({ ...r, items: r.items.map((item) => (item.step.sequence === sequence ? update(item) : item)) }));
+  }
+
+  /** Shows a tab of the left panel (remembered per browser). */
+  showSidebar(tab: SidebarTab): void {
+    this.store.set({ sidebarTab: tab });
+    this.preferences.write(preferenceKeys.sidebarTab, tab);
   }
 
   /** Shows a tab of the bottom panel. */
