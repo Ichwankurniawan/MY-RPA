@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ServerInfo, ValidationResult, WorkflowFile } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, ExpressionFunction, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -46,6 +46,10 @@ export interface StudioApi {
   /** Renames or moves the version with `etag` within the project; returns its ETag (unchanged). 409 when `to` exists. */
   moveWorkflow(project: string, from: string, to: string, etag: string): Promise<string>;
   validate(document: JsonObject): Promise<ValidationResult>;
+  /** The expression functions with their signatures (ADR-0041). */
+  expressionFunctions(): Promise<ExpressionFunction[]>;
+  /** The names visible at `path` of `document`, as the server's validation sees them (ADR-0041). */
+  namesInScope(document: JsonObject, path: string): Promise<ScopeName[]>;
   /** Runs the saved file, or `options.document` as if it were saved at `path`. 422 (invalid) and 400 mean not started. */
   startRun(project: string, path: string, options?: StartRunOptions): Promise<string>;
   run(runId: string): Promise<RunStatus>;
@@ -141,6 +145,11 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
       return response.headers.get('ETag') ?? etag;
     },
     validate: async (document) => (await send('POST', '/api/validate', JSON.stringify({ document }))).json() as Promise<ValidationResult>,
+    expressionFunctions: () => get<ExpressionFunction[]>('/api/expressions/functions'),
+    async namesInScope(document, path) {
+      const response = await send('POST', '/api/expressions/scope', JSON.stringify({ document, path }));
+      return ((await response.json()) as { names: ScopeName[] }).names;
+    },
     async startRun(project, path, options = {}) {
       const response = await send('POST', '/api/runs', JSON.stringify({ project, path, ...options }));
       return ((await response.json()) as { runId: string }).runId;

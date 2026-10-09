@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { check, repo, withStudio } from './harness.mjs';
+import { check, repo, results, withStudio } from './harness.mjs';
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 const step = (text) => console.log(`  ✓ ${text}`);
@@ -174,6 +174,15 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.getByRole('toolbar', { name: 'Debug' }).getByRole('button', { name: 'Continue' }).click();
   await page.getByTestId('run-status').filter({ hasText: 'Succeeded' }).waitFor();
+
+  // ADR-0041: the completion list open on an expression field (combobox and listbox).
+  const field = page.getByRole('complementary', { name: 'Properties' }).getByRole('combobox', { name: /^message/ });
+  await field.fill('');
+  await field.pressSequentially('me');
+  await page.getByRole('listbox', { name: 'Completions' }).waitFor();
+  await scan('Expression completion list open');
+  await page.screenshot({ path: join(results, 'completion.png') });
+  await page.keyboard.press('Escape');
 
   const blocking = findings.filter((f) => f.impact === 'serious' || f.impact === 'critical');
   check(blocking.length === 0, `${blocking.length} serious or critical accessibility violation(s)`);

@@ -1,6 +1,6 @@
 # Expression assist — completion, rename and usages (proposed)
 
-Status: **approved** by the owner on 2026-10-09 ("continue E-1"); E-1 done, E-2 and E-3 next. Decision record:
+Status: **approved** by the owner on 2026-10-09 ("continue E-1"); E-1 and E-2 done, E-3 next. Decision record:
 [ADR-0041](../adr/0041-expression-assist.md). Not a PRD phase: an authorized follow-up slice, like the debugger
 (ADR-0040). Phase 7 still needs its own authorization.
 
@@ -99,3 +99,24 @@ Writing expressions should not depend on remembering names:
     same-named locals in two loops kept separate; documents with errors; unchanged diagnostics; name positions;
     every function described.
   - Server `ExpressionAssistTests` (7): the three endpoints, bad input, session and anti-forgery.
+
+## E-2 result (2026-10-09)
+
+- **Studio:**
+  - **`ExpressionInput`:** the Studio's own combobox (ARIA combobox and listbox, no library), used for expression
+    properties (inline and in Properties), expression map values and transition conditions.
+  - **Names:** from `POST /api/expressions/scope`, asked when a field gets focus and cached per document version and
+    path (`Studio.namesInScope`).
+  - **Functions:** fetched once at connect (`expressionFunctions` in the store).
+  - **Filtering:** names come before functions, ignoring case. The list never opens inside a string, after `.` or in a
+    number.
+  - **Hint:** the signature of the call the caret is in.
+- **Tests:**
+  - Vitest `ExpressionUi.test.tsx` (8);
+  - smoke: completing `lower(toString(n))` by keyboard against the real server (the variable listed before `now()`),
+    and it validates;
+  - a11y: the list open, 0 violations;
+  - perf: keystroke p95 31.8 ms, all targets met.
+- **Also hardened:** the smoke drag helper now centres the dragged card and checks that both pointer points are really
+  on their targets. The one-off W7-2 failure on Windows CI (#18) would now fail with a clear message instead of a wrong
+  drop.

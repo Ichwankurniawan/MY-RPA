@@ -2,7 +2,7 @@
 
 import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
-import type { ActivityDescriptor, DebugCommandName, DebugState, ExecutionEvent, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugState, ExecutionEvent, ExpressionFunction, ScopeName, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
 
 export const helloWorld = `{
   "schemaVersion": "1.0",
@@ -112,6 +112,17 @@ export class FakeApi implements StudioApi {
   cancels: string[] = [];
   startFailure?: ApiError;
   cancelFailure?: ApiError;
+  /** Expression functions the fake server knows (ADR-0041). */
+  functions: ExpressionFunction[] = [
+    { name: 'len', minArguments: 1, maxArguments: 1, signature: 'len(value)', description: 'The length of a String, or the number of items in a List or Dictionary.' },
+    { name: 'lower', minArguments: 1, maxArguments: 1, signature: 'lower(text)', description: 'The text in lower case.' },
+    { name: 'now', minArguments: 0, maxArguments: 0, signature: 'now()', description: 'The current date and time.' },
+    { name: 'substring', minArguments: 2, maxArguments: 3, signature: 'substring(text, start, length?)', description: 'Part of the text from start (0-based) to the end, or length characters.' },
+  ];
+  /** What `POST /api/expressions/scope` answers (the same names for every path). */
+  scopeNames: ScopeName[] = [];
+  /** The paths names in scope were asked for. */
+  scopeRequests: string[] = [];
   /** Debug commands sent (ADR-0040). */
   debugCommands: { runId: string; command: DebugCommandName }[] = [];
   /** Breakpoint updates sent to running debug runs. */
@@ -276,6 +287,15 @@ export class FakeApi implements StudioApi {
     if (this.cancelFailure) {
       throw this.cancelFailure;
     }
+  }
+
+  async expressionFunctions() {
+    return this.functions;
+  }
+
+  async namesInScope(_document: JsonObject, path: string) {
+    this.scopeRequests.push(path);
+    return this.scopeNames;
   }
 
   async debugState(runId: string): Promise<DebugState> {
