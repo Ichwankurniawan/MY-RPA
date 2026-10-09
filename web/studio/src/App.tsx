@@ -6,7 +6,7 @@ import { Icon, type IconName } from './icons';
 import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel, type Step } from './document';
 import { arrowShape, arrowText, canvasPositions, canvasSize, isGraphActivity, isGraphNode, lastTaken, stepEntries, stepSize, transitionsOf, type Point } from './graph';
 import type { Position } from './placement';
-import { InlineProperties, PropertiesPanel } from './PropertyEditors';
+import { PropertiesPanel } from './PropertyEditors';
 import { RecordingPanel } from './RecordingPanel';
 import {
   collapseAllRefusalOf,
@@ -30,6 +30,7 @@ import {
   type StudioState,
   type PaneName,
   type StudioPage,
+  type NewWorkflowKind,
   type SidebarTab,
   paneLimits,
   workflowKey,
@@ -1312,10 +1313,18 @@ function RenameNameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'r
   );
 }
 
+/** The roots New workflow offers (ADR-0037): the root cannot be changed later, so it is chosen here. */
+const workflowKinds: readonly (readonly [NewWorkflowKind, string, string])[] = [
+  ['sequence', 'Sequence', 'activities run top to bottom'],
+  ['flowchart', 'Flowchart', 'steps joined by arrows, with decisions'],
+  ['state-machine', 'State machine', 'states and transitions'],
+];
+
 function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }> }) {
   const studio = useStudio();
   const id = useId();
   const [path, setPath] = useState(dialog.initial);
+  const [kind, setKind] = useState<NewWorkflowKind>('sequence');
   const title = dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'folder' ? 'New folder' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
   const action = dialog.purpose === 'new' || dialog.purpose === 'folder' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
   return (
@@ -1323,9 +1332,22 @@ function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void studio.submitName(path);
+          void studio.submitName(path, kind);
         }}
       >
+        {dialog.purpose === 'new' && (
+          <fieldset className="field workflow-kind">
+            <legend className="field-label">Type</legend>
+            {workflowKinds.map(([value, label, hint]) => (
+              <label key={value} className="kind-option">
+                <input type="radio" name={`${id}-kind`} value={value} checked={kind === value} onChange={() => setKind(value)} />
+                <span>
+                  <strong>{label}</strong> <span className="muted">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
         <div className="field">
           <label className="field-label" htmlFor={id}>
             Path in the project
@@ -1734,7 +1756,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
   const collapsible = depth > 1 && children.length > 0;
   const collapsed = collapsible && collapsedFlag === '1';
   const label = nodeLabel(node, activity);
-  const summary = selected ? '' : propertySummary(node, activity);
+  const summary = propertySummary(node, activity);
   // A flowchart (G-2) shows its steps on a canvas, or as this list of cards (the keyboard-first view).
   const graph = isGraphActivity(activity);
   const listView = listFlag === '1';
@@ -1802,7 +1824,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
           )}
           {selected && <CardMenu label={label} />}
         </div>
-        {selected ? <InlineProperties nodeKey={key} /> : summary !== '' && <p className="summary">{summary}</p>}
+        {summary !== '' && <p className="summary">{summary}</p>}
         {transitions.length > 0 && (
           <p className="transitions-summary">
             {transitions.map((t, i) => (

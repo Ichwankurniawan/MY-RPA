@@ -6,7 +6,7 @@ import { App } from './App';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, settle } from './test-support';
 
-/** The Properties panel (UX-3: the selected card has the same editors inline). */
+/** The Properties panel (the only place properties are edited). */
 const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
 
 

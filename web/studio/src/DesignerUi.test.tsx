@@ -50,7 +50,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Cards', () => {
-  it('shows a one-line summary of each card, and the selected card its own editors and actions', async () => {
+  it('shows a one-line summary of each card, also when selected; the selected card has its actions, never editors', async () => {
     await renderStudio();
 
     expect(card('greet').querySelector('.summary')?.textContent).toBe("message: 'Hello' · level: Warning");
@@ -58,25 +58,20 @@ describe('Cards', () => {
 
     fireEvent.click(card('greet'));
 
-    expect(card('greet').querySelector('.summary')).toBeNull();
-    expect((within(card('greet')).getByLabelText(/^message/) as HTMLInputElement).value).toBe("'Hello'");
+    expect(card('greet').querySelector('.summary')?.textContent).toBe("message: 'Hello' · level: Warning");
+    expect(within(card('greet')).queryByRole('textbox')).toBeNull();
     expect(within(card('greet')).getByRole('button', { name: 'Actions for Log' })).toBeTruthy();
     expect(within(card('last')).queryByRole('button', { name: /^Actions/ })).toBeNull();
   });
 
-  it('edits from the card; the Properties panel shows the same value, and Delete while typing deletes text, not the activity', async () => {
+  it('edits in the Properties panel; the card summary follows', async () => {
     const { state } = await renderStudio();
     fireEvent.click(card('greet'));
-    const field = within(card('greet')).getByLabelText(/^message/) as HTMLInputElement;
-    field.focus();
-
-    fireEvent.change(field, { target: { value: "'Hi'" } });
-    fireEvent.keyDown(field, { key: 'Delete' });
-    fireEvent.keyDown(field, { key: 'ArrowDown' });
-
     const panel = within(screen.getByRole('complementary', { name: 'Properties' }));
-    expect((panel.getByLabelText(/^message/) as HTMLInputElement).value).toBe("'Hi'");
-    expect(visibleIds()).toContain('greet');
+
+    fireEvent.change(panel.getByLabelText(/^message/), { target: { value: "'Hi'" } });
+
+    expect(card('greet').querySelector('.summary')?.textContent).toBe("message: 'Hi' · level: Warning");
     expect(state().selectedKey).toBe(item('greet').dataset.key);
   });
 

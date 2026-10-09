@@ -89,8 +89,8 @@ export function installDragAndDrop(root: HTMLElement, studio: Studio): () => voi
   const under = (x: number, y: number) => page.elementsFromPoint(x, y).find((element) => element !== overlay && element !== indicator) ?? null;
 
   const sourceAt = (target: EventTarget | null): Source | undefined => {
-    // A card's own controls and its inline editors (UX-3) never start a drag; a flowchart canvas moves its own steps (G-2).
-    if (!(target instanceof Element) || target.closest('input, textarea, select, .drop-zone, .inline-properties, .node button, [role="menu"], .flow-canvas')) {
+    // A card's own controls never start a drag; a flowchart canvas moves its own steps (G-2).
+    if (!(target instanceof Element) || target.closest('input, textarea, select, .drop-zone, .node button, [role="menu"], .flow-canvas')) {
       return undefined;
     }
 

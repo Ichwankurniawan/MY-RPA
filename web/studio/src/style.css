@@ -28,7 +28,8 @@
   --warn-bg: #fef3c7;
   --container: #f1f5f4;
   --canvas: #f7f9fb;
-  --canvas-dot: #dfe5ec;
+  --canvas-dot: #dfe5ec;
+
   --scroll-thumb: #c7d0da;
   --scroll-thumb-hover: #94a3b8;
   --radius: 6px;
@@ -70,7 +71,8 @@
     --warn-bg: #382c12;
     --container: #0c1a25;
     --canvas: #0b1620;
-    --canvas-dot: #1b2b3a;
+    --canvas-dot: #1b2b3a;
+
     --scroll-thumb: #2b3d4e;
     --scroll-thumb-hover: #46607a;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
@@ -106,7 +108,8 @@
   --warn-bg: #382c12;
   --container: #0c1a25;
   --canvas: #0b1620;
-  --canvas-dot: #1b2b3a;
+  --canvas-dot: #1b2b3a;
+
   --scroll-thumb: #2b3d4e;
   --scroll-thumb-hover: #46607a;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
@@ -271,8 +274,6 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .node .type, .node .id { color: var(--muted); font-size: 12px; }
 .node .summary { margin: 4px 0 0 22px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .node .collapsed-note { margin: 4px 0 0 22px; font-size: 12px; color: var(--muted); font-style: italic; }
-.inline-properties { margin: 8px 0 2px; padding-top: 8px; border-top: 1px solid var(--border); cursor: auto; }
-.inline-properties .field { margin-bottom: 8px; }
 /* The breadcrumbs and Expand all / Collapse all stay at the top while the designer scrolls (like the Files header). */
 .designer-bar { position: sticky; top: -12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 0 -12px; padding: 12px 12px 0; background: var(--bg); }
 .designer-actions { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -618,3 +619,8 @@ h2 { text-transform: none; font-size: 14px; font-weight: 650; letter-spacing: 0;
 ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background-color: var(--scroll-thumb-hover); }
 ::-webkit-scrollbar-button { display: none; }
+
+/* New workflow: the root type. */
+.workflow-kind { border: none; padding: 0; margin: 0 0 12px; }
+.kind-option { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; cursor: pointer; }
+.kind-option .muted { color: var(--muted); }

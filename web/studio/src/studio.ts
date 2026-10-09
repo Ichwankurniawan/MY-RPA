@@ -360,11 +360,27 @@ export interface StudioOptions {
   readonly preferences?: PreferenceStore;
 }
 
-/** A new workflow's document: valid, with an empty root Sequence; its id comes from the file name. */
-export function newWorkflowText(path: string): string {
+/** What a new workflow's root is: a sequence of activities, a flowchart or a state machine (ADR-0037). */
+export type NewWorkflowKind = 'sequence' | 'flowchart' | 'state-machine';
+
+/**
+ * A new workflow's document, valid as created; its id comes from the file name. A sequence starts empty (schema 1.0); a
+ * graph needs schema 1.1 and at least one step (MYRPA1055), so a flowchart starts with one Log step and a state machine
+ * with one final state.
+ */
+export function newWorkflowText(path: string, kind: NewWorkflowKind = 'sequence'): string {
   const name = path.split('/').at(-1)!.replace(/\.json$/i, '');
   const id = name.replace(/[^A-Za-z0-9\-_.:]/g, '-').slice(0, 128) || 'workflow';
-  return serialize({ schemaVersion: '1.0', id, name: name || id, version: '1.0.0', root: { id: 'main', type: 'Core.Sequence' } });
+  const header = { id, name: name || id, version: '1.0.0' };
+  const layout = { x: 240, y: 40 };
+  switch (kind) {
+    case 'flowchart':
+      return serialize({ schemaVersion: '1.1', ...header, root: { id: 'main', type: 'Core.Flowchart', children: [{ id: 'start', type: 'Core.Log', displayName: 'Start', properties: { message: "'Started'" }, layout }] } });
+    case 'state-machine':
+      return serialize({ schemaVersion: '1.1', ...header, root: { id: 'main', type: 'Core.StateMachine', children: [{ id: 'start', type: 'Core.State', displayName: 'Start', properties: { final: true }, layout }] } });
+    default:
+      return serialize({ schemaVersion: '1.0', ...header, root: { id: 'main', type: 'Core.Sequence' } });
+  }
 }
 
 /** Why `path` is not a usable workflow path (undefined when it is); the server checks the rest. */
@@ -1828,7 +1844,7 @@ export class Studio {
   }
 
   /** Carries out New, Rename or Save as with the path the user entered; a refusal keeps the dialog with the reason. */
-  async submitName(path: string): Promise<void> {
+  async submitName(path: string, kind: NewWorkflowKind = 'sequence'): Promise<void> {
     const dialog = this.state.dialog;
     const project = this.state.project;
     if (dialog?.kind !== 'name' || project === undefined) {
@@ -1849,7 +1865,7 @@ export class Studio {
 
     try {
       if (dialog.purpose === 'new') {
-        await this.api.createWorkflow(project, target, newWorkflowText(target));
+        await this.api.createWorkflow(project, target, newWorkflowText(target, kind));
         this.closeDialog();
         await this.refreshFiles();
         await this.requestOpen(target);
