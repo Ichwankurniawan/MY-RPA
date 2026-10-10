@@ -419,6 +419,20 @@ function PropertyEditor({
         ))}
       </select>
     );
+  } else if (descriptor.kind === 'Text' && descriptor.multiline) {
+    editor = (
+      <textarea
+        id={id}
+        className="code multiline-text"
+        rows={10}
+        value={text}
+        disabled={disabled}
+        spellCheck={false}
+        aria-invalid={errors.length > 0}
+        aria-describedby={describedBy}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
   } else if (descriptor.kind === 'Expression') {
     editor = (
       <ExpressionInput

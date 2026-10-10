@@ -627,3 +627,6 @@ h2 { text-transform: none; font-size: 14px; font-weight: 650; letter-spacing: 0;
 .workflow-kind { border: none; padding: 0; margin: 0 0 12px; }
 .kind-option { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; cursor: pointer; }
 .kind-option .muted { color: var(--muted); }
+
+/* ADR-0045: multi-line text properties (code, SQL). */
+textarea.multiline-text { width: 100%; min-height: 10em; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.45; tab-size: 4; white-space: pre; overflow: auto; }

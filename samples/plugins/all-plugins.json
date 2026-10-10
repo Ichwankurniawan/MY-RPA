@@ -8,4 +8,5 @@
     { "directory": "../../plugins/MyRPA.Documents/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } },
     { "directory": "../../plugins/MyRPA.Database/bin/Debug/net10.0", "settings": { "connection.demo.provider": "Sqlite", "connection.demo.connectionString": "Data Source=samples/plugins/work/demo.db;Pooling=False" } },
     { "directory": "../../plugins/MyRPA.Email/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } },
-    { "directory": "../../plugins/MyRPA.Sftp/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } } ] }
+    { "directory": "../../plugins/MyRPA.Sftp/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } },
+    { "directory": "../../plugins/MyRPA.Scripting/bin/Debug/net10.0", "settings": { "fileRoot": "samples/plugins/work" } } ] }

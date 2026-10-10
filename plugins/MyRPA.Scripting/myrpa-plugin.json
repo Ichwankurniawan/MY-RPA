@@ -1,0 +1,18 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Scripting",
+  "name": "MyRPA Scripting",
+  "version": "0.1.0",
+  "description": "Code.JavaScript (sandboxed: Jint, no access to files, network or .NET, time/statement/memory limits) and Code.Python (the operator's Python in a separate process, only when pythonPath is set; not a sandbox). Values cross as JSON.",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Scripting.dll",
+    "type": "MyRPA.Scripting.ScriptingPlugin"
+  },
+  "capabilities": [ "Process", "FileSystem" ],
+  "activities": [
+    "Code.JavaScript",
+    "Code.Python"
+  ]
+}

@@ -48,3 +48,4 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0042](0042-enterprise-automation-activities.md) | Enterprise automation activities: plugins for files, HTTP and Excel, built-ins, catalog 1.2 metadata, secret properties | Accepted (owner, 2026-10-09) | 7 |
 | [0043](0043-more-enterprise-integrations.md) | More enterprise integrations (7.1): mail, databases, SFTP, PDF, ZIP, HTTP extras; debugger masking, `--arg-env`, raw strings | Accepted (owner, 2026-10-09) | 7.1 |
 | [0044](0044-laconi-brand-and-studio-design.md) | Laconi brand and the Studio visual design: logo, tokens, navigation rail, Home page; code names unchanged | Accepted (owner, 2026-10-09) | Studio |
+| [0045](0045-scripting-javascript-and-python.md) | Scripting: sandboxed JavaScript (Jint) and opt-in Python in a plugin; catalog `multiline` text properties; amends 0008/0009 | Accepted (owner, 2026-10-10) | 7 |

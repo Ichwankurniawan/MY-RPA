@@ -15,6 +15,8 @@ Guidance for AI agents and contributors working in this repository.
   Studio UX slice and graph workflows (ADR-0037). **Debugger slice authorized by the owner on
   2026-10-08 ("merge and D-1"); plan `docs/architecture/debugger-plan.md`, ADR-0040; slices D-1 → D-3 done.** **Expression assist authorized by the owner on 2026-10-09 ("continue E-1"); plan
   `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 done.**
+  **Scripting authorized by the owner on 2026-10-10 ("do both"): ADR-0045, plugin `MyRPA.Scripting` (sandboxed
+  JavaScript, opt-in Python); scripting stays out of the engine and `src`.**
   Phase 8 (AI Automation) must not start without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
@@ -67,7 +69,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   with `ReferenceOutputAssembly="false"` and load them through the plugin host.
 - Technology packages live only in their provider plugin (`ArchitectureRules.TechnologyPackageOwners`):
   `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`, `DocumentFormat.OpenXml` only in
-  `plugins/MyRPA.Spreadsheet`, `PdfPig` only in `plugins/MyRPA.Documents`, `MailKit`/`MimeKit` only in `plugins/MyRPA.Email`, the database drivers (`Microsoft.Data.Sqlite`, `Microsoft.Data.SqlClient`, `Npgsql`) only in `plugins/MyRPA.Database`, `SSH.NET` only in `plugins/MyRPA.Sftp`. Never in src, tests or other plugins.
+  `plugins/MyRPA.Spreadsheet`, `PdfPig` only in `plugins/MyRPA.Documents`, `MailKit`/`MimeKit` only in `plugins/MyRPA.Email`, the database drivers (`Microsoft.Data.Sqlite`, `Microsoft.Data.SqlClient`, `Npgsql`) only in `plugins/MyRPA.Database`, `SSH.NET` only in `plugins/MyRPA.Sftp`, `Jint` only in `plugins/MyRPA.Scripting`. Never in src, tests or other plugins.
 - Product plugins with side effects (ADR-0042): file paths only through `MyRPA.Sdk.Files.FileRootPolicy` (no silent
   overwrite, no folder delete, links refused); HTTP only in `plugins/MyRPA.Http` (allowedHosts per redirect hop, no
   credentials to another origin, TLS validation never off); secrets only through secret properties (MYRPA1066).

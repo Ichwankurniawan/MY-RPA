@@ -30,13 +30,14 @@ from the host. Use `myrpa --plugin <dir> plugins` to see the SHA-256 digest you 
 | [`../data-builtins.json`](../data-builtins.json) | Text split/join/regex, dates with a time zone, table filter/sort/find/merge, JSON round trip | nothing (built-ins) |
 | [`files-excel-demo.json`](files-excel-demo.json) | Text, CSV (formula guard), JSON and XML files, copy/list/delete, an Excel workbook written and read back, `FileAccessDenied` and `FileAlreadyExists` caught | MyRPA.Files, MyRPA.Spreadsheet |
 | [`http-demo.json`](http-demo.json) | GET with Dictionary headers, JSON response as a table, POST with a JSON body, a 404 caught (`HttpStatus`) and kept (`failOnErrorStatus` false) | MyRPA.Http, Internet (JSONPlaceholder, fake data) |
+| [`script-demo.json`](script-demo.json) (ADR-0045) | Confined JavaScript (no files, network or .NET) totals invoice lines per customer and builds a summary; a thrown script error caught as `ScriptError` | MyRPA.Scripting (for Python: set its `pythonPath`) |
 | [`local-71-demo.json`](local-71-demo.json) (7.1) | A file hashed and waited for, a folder zipped and extracted, invoices stored and queried in SQLite with parameters only, an Excel register appended to and partly cleared | MyRPA.Files, MyRPA.Database (connection `demo`), MyRPA.Spreadsheet |
 
-[`all-plugins.json`](all-plugins.json) loads the Debug builds of every sample plugin (demo, browser, files, Excel, HTTP, documents, database with the SQLite connection `demo`, email and SFTP without servers, so their activities appear in the catalog); their `fileRoot` is
+[`all-plugins.json`](all-plugins.json) loads the Debug builds of every sample plugin (demo, browser, files, Excel, HTTP, documents, database with the SQLite connection `demo`, email and SFTP without servers, scripting without `pythonPath`, so their activities appear in the catalog); their `fileRoot` is
 `samples/plugins/work` (git-ignored), so run from the repository root:
 
 ```bash
-dotnet build plugins/MyRPA.Files && dotnet build plugins/MyRPA.Spreadsheet && dotnet build plugins/MyRPA.Http && dotnet build plugins/MyRPA.Documents && dotnet build plugins/MyRPA.Database && dotnet build plugins/MyRPA.Email && dotnet build plugins/MyRPA.Sftp
+dotnet build plugins/MyRPA.Files && dotnet build plugins/MyRPA.Spreadsheet && dotnet build plugins/MyRPA.Http && dotnet build plugins/MyRPA.Documents && dotnet build plugins/MyRPA.Database && dotnet build plugins/MyRPA.Email && dotnet build plugins/MyRPA.Sftp && dotnet build plugins/MyRPA.Scripting
 dotnet run --project src/MyRPA.Cli -- run samples/data-builtins.json
 dotnet run --project src/MyRPA.Cli -- --plugin-config samples/plugins/all-plugins.json run samples/plugins/files-excel-demo.json
 dotnet run --project src/MyRPA.Cli -- --plugin-config samples/plugins/all-plugins.json run samples/plugins/http-demo.json

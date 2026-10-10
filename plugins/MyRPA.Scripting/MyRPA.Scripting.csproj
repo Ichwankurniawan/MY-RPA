@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Scripting activities (ADR-0045). A plugin: it references the Automation SDK (host-provided, so
+    Private=false / ExcludeAssets=runtime) and Jint (sandboxed JavaScript), which is plugin-private and loaded into the plugin's
+    AssemblyLoadContext. Jint must never be referenced by src, tests or other plugins (architecture tests). Every path
+    goes through the SDK's FileRootPolicy. The build output directory is a complete plugin directory.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Scripting</RootNamespace>
+    <Description>MyRPA scripting: sandboxed JavaScript (Jint) and opt-in Python.</Description>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Jint" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="myrpa-plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- MyRPA.Core and MyRPA.Workflow arrive transitively through MyRPA.Sdk; they are host-provided contract assemblies. -->
+  <Target Name="ExcludeHostContractAssemblies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow'" />
+    </ItemGroup>
+  </Target>
+</Project>

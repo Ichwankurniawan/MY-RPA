@@ -30,6 +30,8 @@ export interface PropertyDescriptor {
   default?: Json;
   /** Catalog 1.2: a secret (password, token): it must come from an argument or variable, never a written value. */
   secret?: boolean;
+  /** ADR-0045: a text property of several lines (code, SQL), edited in a larger monospace box. */
+  multiline?: boolean;
 }
 
 export interface SlotDescriptor {

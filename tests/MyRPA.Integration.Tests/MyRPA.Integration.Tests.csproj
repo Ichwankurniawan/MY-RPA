@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\plugins\MyRPA.Documents\MyRPA.Documents.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\plugins\MyRPA.Database\MyRPA.Database.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\plugins\MyRPA.Sftp\MyRPA.Sftp.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Scripting\MyRPA.Scripting.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
   <ItemGroup>
     <!-- Test PDFs are written by hand (PdfPig belongs to the documents plugin only). -->
@@ -54,6 +55,10 @@
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>SftpPluginDirectory</_Parameter1>
       <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Sftp\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ScriptingPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Scripting\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 </Project>
