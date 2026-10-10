@@ -83,6 +83,7 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
             new(new("Test.Wait"), "Wait", "Test", properties: [new("milliseconds", ActivityPropertyKind.Expression, isRequired: true)]),
             new(new("Test.Probe"), "Probe", "Test"),
             new(new("Test.Log"), "Log", "Test", properties: [new("message", ActivityPropertyKind.Expression, isRequired: true)]),
+            new(new("Test.Login"), "Login", "Test", properties: [new("password", ActivityPropertyKind.Expression, isRequired: true) { IsSecret = true }]),
             new(new("Test.Invoke"), "Invoke", "Test", properties:
             [
                 new("workflow", ActivityPropertyKind.Text, isRequired: true),
@@ -111,8 +112,19 @@ public sealed class TestActivities : IActivityCatalog, IActivityFactory
         "Test.Probe" => new Probe(services.GetRequiredService<RunProbe>(), services.GetRequiredService<ProbeLog>()),
         "Test.Log" => new Log(services.GetRequiredService<ILoggerFactory>()),
         "Test.Invoke" => new Invoke(),
+        "Test.Login" => new Login(),
         _ => throw new InvalidOperationException($"Activity type '{typeName}' is not registered."),
     };
+
+    /// <summary>Reads its secret property and does nothing else (ADR-0043 masking tests).</summary>
+    private sealed class Login : IActivity
+    {
+        public ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+        {
+            _ = context.Evaluate("password");
+            return ActivityResult.CompletedTask;
+        }
+    }
 
     private sealed class Sequence : IActivity
     {

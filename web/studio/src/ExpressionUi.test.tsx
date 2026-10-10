@@ -51,6 +51,12 @@ describe('Completion helpers', () => {
     expect(completionContext("'gre", 4)).toBeUndefined();
     expect(completionContext("'it\\'s' + gre", 13)).toEqual({ start: 10, end: 13, prefix: 'gre' });
     expect(completionContext('12', 2)).toBeUndefined();
+    // ADR-0043: a raw string has no escapes, so a backslash before its closing quote does not keep it open.
+    expect(completionContext("r'\\d+ gre", 9)).toBeUndefined();
+    expect(completionContext("r'a\\' + gre", 11)).toEqual({ start: 8, end: 11, prefix: 'gre' });
+    expect(completionContext("r'it''s' + gre", 14)).toEqual({ start: 11, end: 14, prefix: 'gre' });
+    // The r of a name such as bar does not start a raw string.
+    expect(completionContext("bar + 'x' + gre", 15)).toEqual({ start: 12, end: 15, prefix: 'gre' });
   });
 
   it('finds the function call the caret is in, the innermost first', () => {

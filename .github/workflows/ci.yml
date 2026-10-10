@@ -152,3 +152,55 @@ jobs:
       - name: Performance
         working-directory: web/studio
         run: npm run perf
+
+  integration-services:
+    # ADR-0043 (Phase 7.1): the email, database and SFTP plugins and the invoice-intake sample against real servers in
+    # containers (Linux runners have Docker). build-and-test runs the same tests without servers, where they report
+    # themselves skipped; here MYRPA_TEST_REQUIRE_SERVERS turns a missing server into a failure, so this job cannot pass
+    # by skipping.
+    name: Integration services (mail, databases, SFTP)
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      MYRPA_TEST_REQUIRE_SERVERS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Start the servers
+        run: |
+          docker run -d --name greenmail -p 3025:3025 -p 3143:3143 -e GREENMAIL_OPTS="-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=robot:secret@example.test -Dgreenmail.users.login=email" greenmail/standalone:2.1.14
+          docker run -d --name postgres -p 55432:5432 -e POSTGRES_PASSWORD=Pg-Test-Pass-123 postgres:17-alpine
+          docker run -d --name mssql -p 14333:1433 -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=Sql-Test-Pass-123!' mcr.microsoft.com/mssql/server:2022-latest
+          docker run -d --name sftp -p 2222:22 atmoz/sftp:alpine robot:secret:1001::upload
+
+      - name: Build
+        run: dotnet build MyRPA.sln --configuration Release
+
+      - name: Wait for the servers and pin the SFTP host key
+        run: |
+          wait_for() { for i in $(seq 1 90); do docker logs "$1" 2>&1 | grep -q "$2" && return 0; sleep 2; done; docker logs "$1"; return 1; }
+          wait_for greenmail "Starting GreenMail API server"
+          wait_for postgres "database system is ready to accept connections"
+          wait_for mssql "SQL Server is now ready for client connections"
+          key=""
+          for i in $(seq 1 30); do key=$(ssh-keyscan -t ed25519 -p 2222 127.0.0.1 2>/dev/null | ssh-keygen -lf - 2>/dev/null | awk '{print $2}'); [ -n "$key" ] && break; sleep 2; done
+          test -n "$key"
+          echo "MYRPA_TEST_SFTP=host=127.0.0.1;port=2222;hostKey=$key;user=robot;password=secret;root=/upload" >> "$GITHUB_ENV"
+
+      - name: Test against the servers
+        env:
+          MYRPA_TEST_MAIL: smtpHost=127.0.0.1;smtpPort=3025;imapHost=127.0.0.1;imapPort=3143;address=robot@example.test;user=robot@example.test;password=secret
+          MYRPA_TEST_POSTGRES: Host=127.0.0.1;Port=55432;Database=postgres;Username=postgres
+          MYRPA_TEST_POSTGRES_PASSWORD: Pg-Test-Pass-123
+          MYRPA_TEST_SQLSERVER: Server=127.0.0.1,14333;Database=master;User ID=sa;TrustServerCertificate=True
+          MYRPA_TEST_SQLSERVER_PASSWORD: Sql-Test-Pass-123!
+        run: |
+          dotnet test --project tests/MyRPA.Email.Tests --configuration Release --no-build
+          dotnet test --project tests/MyRPA.Database.Tests --configuration Release --no-build
+          dotnet test --project tests/MyRPA.Sftp.Tests --configuration Release --no-build
+          dotnet test --project tests/MyRPA.Integration.Tests --configuration Release --no-build -- --filter-class "*InvoiceIntakeTests"

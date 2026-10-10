@@ -12,14 +12,18 @@ using MyRPA.Workflow.Validation;
 namespace MyRPA.Http.Tests;
 
 /// <summary>
-/// The HTTP plugin loaded through the real plugin host (allowedHosts = localhost, small limits), with two local test
-/// servers on different ports (two origins) and every log message captured.
+/// The HTTP plugin loaded through the real plugin host (allowedHosts = localhost, small limits, a temporary fileRoot),
+/// with two local test servers on different ports (two origins) and every log message captured.
 /// </summary>
-public sealed class HttpHost : IAsyncLifetime
+public class HttpHost : IAsyncLifetime
 {
     public const int MaxResponseBytes = 64 * 1024;
 
     public const int MaxRedirects = 3;
+
+    public const int MaxDownloadBytes = 32 * 1024;
+
+    public const int MaxUploadBytes = 16 * 1024;
 
     private static int _counter;
 
@@ -36,6 +40,12 @@ public sealed class HttpHost : IAsyncLifetime
 
     public IServiceProvider Services => _services!;
 
+    /// <summary>The plugin's fileRoot (a new temporary folder), or null for a host without one.</summary>
+    public string? FileRoot { get; private set; }
+
+    /// <summary>Whether the plugin gets a fileRoot setting.</summary>
+    protected virtual bool WithFileRoot => true;
+
     public async ValueTask InitializeAsync()
     {
         var options = new PluginHostOptions();
@@ -43,6 +53,14 @@ public sealed class HttpHost : IAsyncLifetime
         source.Settings["allowedHosts"] = "localhost";
         source.Settings["maxResponseBytes"] = $"{MaxResponseBytes}";
         source.Settings["maxRedirects"] = $"{MaxRedirects}";
+        source.Settings["maxDownloadBytes"] = $"{MaxDownloadBytes}";
+        source.Settings["maxUploadBytes"] = $"{MaxUploadBytes}";
+        if (WithFileRoot)
+        {
+            FileRoot = Directory.CreateTempSubdirectory("myrpa-http-").FullName;
+            source.Settings["fileRoot"] = FileRoot;
+        }
+
         options.Sources.Add(source);
         Plugins = await PluginLoader.LoadAsync(options, TestContext.Current.CancellationToken);
         Assert.False(Plugins.HasRequiredFailures, string.Join(Environment.NewLine, Plugins.Diagnostics));
@@ -63,6 +81,12 @@ public sealed class HttpHost : IAsyncLifetime
         await Plugins.DisposeAsync();
         Server.Dispose();
         Other.Dispose();
+        if (FileRoot is not null)
+        {
+            Directory.Delete(FileRoot, recursive: true);
+        }
+
+        GC.SuppressFinalize(this);
     }
 
     public WorkflowLoadResult Load(string nodes, IEnumerable<string> outputs, IEnumerable<string> inputs)
@@ -90,8 +114,11 @@ public sealed class HttpHost : IAsyncLifetime
     }
 
     /// <summary>An Http.Request node; <paramref name="properties"/> is the inside of its properties object.</summary>
-    public static string Request(string properties) =>
-        $$"""{ "id": "r{{Interlocked.Increment(ref _counter)}}", "type": "Http.Request", "properties": { {{properties}} } }""";
+    public static string Request(string properties) => Node("Http.Request", properties);
+
+    /// <summary>A node of <paramref name="type"/>; <paramref name="properties"/> is the inside of its properties object.</summary>
+    public static string Node(string type, string properties) =>
+        $$"""{ "id": "r{{Interlocked.Increment(ref _counter)}}", "type": "{{type}}", "properties": { {{properties}} } }""";
 
     public static void AssertSucceeded(WorkflowExecutionResult result) =>
         Assert.True(result.Status == ExecutionStatus.Succeeded, $"{result.Status}: {result.Error?.ErrorType} {result.Error?.Message}");
@@ -146,4 +173,15 @@ public static class ErrorTypes
     public const string TooManyRedirects = "TooManyRedirects";
     public const string InvalidJson = "InvalidJson";
     public const string InvalidInput = "InvalidInput";
+    public const string RedirectNotAllowed = "RedirectNotAllowed";
+    public const string FileAccessDenied = "FileAccessDenied";
+    public const string FileAlreadyExists = "FileAlreadyExists";
+    public const string FileNotFound = "FileNotFound";
+    public const string FileTooLarge = "FileTooLarge";
+}
+
+/// <summary>The HTTP plugin without a fileRoot setting.</summary>
+public sealed class HttpHostWithoutFiles : HttpHost
+{
+    protected override bool WithFileRoot => false;
 }

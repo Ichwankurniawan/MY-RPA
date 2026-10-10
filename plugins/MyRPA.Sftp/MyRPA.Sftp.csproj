@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    SFTP activities (Phase 7.1, ADR-0043). A plugin: it references the Automation SDK (host-provided, so
+    Private=false / ExcludeAssets=runtime) and SSH.NET, which is plugin-private and loaded into the plugin's
+    AssemblyLoadContext. SSH.NET must never be referenced by src, tests or other plugins (architecture tests). Every path
+    goes through the SDK's FileRootPolicy. The build output directory is a complete plugin directory.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Sftp</RootNamespace>
+    <Description>MyRPA SFTP activities based on SSH.NET, with pinned host keys.</Description>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SSH.NET" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="myrpa-plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- MyRPA.Core and MyRPA.Workflow arrive transitively through MyRPA.Sdk; they are host-provided contract assemblies. -->
+  <Target Name="ExcludeHostContractAssemblies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow'" />
+    </ItemGroup>
+  </Target>
+</Project>

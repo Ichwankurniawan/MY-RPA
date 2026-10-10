@@ -10,7 +10,7 @@ using MyRPA.Workflow.Values;
 namespace MyRPA.Cli.Commands;
 
 /// <summary>
-/// <c>myrpa run &lt;workflow.json&gt; [--arg name=value]... [--timeout seconds] [--correlation-id id]</c>:
+/// <c>myrpa run &lt;workflow.json&gt; [--arg name=value]... [--arg-env name=VARIABLE]... [--arg-file name=path]... [--timeout seconds] [--correlation-id id]</c>:
 /// load → validate → execute → print the execution result as JSON on stdout.
 /// Exit codes: 0 succeeded, 1 failed, 3 invalid workflow, 4 timed out, 130 cancelled, 2 usage.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class RunCommand(CliOutput output, WorkflowFileLoader files, IWork
     public string Name => "run";
 
     /// <inheritdoc />
-    public string Usage => "run <workflow.json> [--arg name=value]... [--timeout seconds] [--correlation-id id]";
+    public string Usage => "run <workflow.json> [--arg name=value]... [--arg-env name=VARIABLE]... [--arg-file name=path]... [--timeout seconds] [--correlation-id id]";
 
     /// <inheritdoc />
     public string Description => "Validate and execute a workflow; prints the result as JSON.";
@@ -130,6 +130,36 @@ public sealed class RunCommand(CliOutput output, WorkflowFileLoader files, IWork
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>The value of an environment variable, or a file's text without its trailing line break.</summary>
+    private static bool TryReadSource(string option, string source, out string value, out string error)
+    {
+        value = string.Empty;
+        error = string.Empty;
+        if (option == "--arg-env")
+        {
+            var variable = Environment.GetEnvironmentVariable(source);
+            if (variable is null)
+            {
+                error = $"--arg-env: the environment variable '{source}' is not set.";
+                return false;
+            }
+
+            value = variable;
+            return true;
+        }
+
+        try
+        {
+            value = File.ReadAllText(source).TrimEnd('\r', '\n');
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            error = $"--arg-file: cannot read '{source}'.";
+            return false;
+        }
+    }
+
     private static bool TryParseOptions(IReadOnlyList<string> arguments, out RunOptions options, out string error)
     {
         options = new RunOptions();
@@ -159,6 +189,31 @@ public sealed class RunCommand(CliOutput output, WorkflowFileLoader files, IWork
                     }
 
                     options.Arguments[name] = pair[(separator + 1)..];
+                    break;
+                case "--arg-env" or "--arg-file":
+                    // ADR-0043: a secret read from the environment or a file never appears in the process list.
+                    // Errors name the variable or file, never the value.
+                    var source = NextValue();
+                    var at = source?.IndexOf('=', StringComparison.Ordinal) ?? -1;
+                    if (source is null || at <= 0 || at == source.Length - 1)
+                    {
+                        error = $"{current} expects name={(current == "--arg-env" ? "VARIABLE" : "path")}.";
+                        return false;
+                    }
+
+                    var argumentName = source[..at];
+                    if (options.Arguments.ContainsKey(argumentName))
+                    {
+                        error = $"Argument {argumentName} is given more than once.";
+                        return false;
+                    }
+
+                    if (!TryReadSource(current, source[(at + 1)..], out var text, out error))
+                    {
+                        return false;
+                    }
+
+                    options.Arguments[argumentName] = text;
                     break;
                 case "--timeout":
                     if (!double.TryParse(NextValue(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var seconds)

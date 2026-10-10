@@ -11,6 +11,7 @@ namespace MyRPA.Files;
 /// <item><c>maxFileBytes</c> — the largest file read (default 50 MB).</item>
 /// <item><c>maxItems</c> — the most entries File.List returns (default 10000).</item>
 /// <item><c>maxRows</c> — the most rows Csv.Read returns (default 100000).</item>
+/// <item><c>maxExtractBytes</c> — the most bytes Zip.Extract writes from one archive (default 500 MB; ADR-0043).</item>
 /// </list>
 /// </summary>
 public sealed class FilesPlugin : IPlugin
@@ -27,7 +28,10 @@ public sealed class FilesPlugin : IPlugin
             new FileRootPolicy(root),
             Positive(settings, "maxFileBytes", 50L * 1024 * 1024),
             (int)Positive(settings, "maxItems", 10_000),
-            (int)Positive(settings, "maxRows", 100_000));
+            (int)Positive(settings, "maxRows", 100_000))
+        {
+            MaxExtractBytes = Positive(settings, "maxExtractBytes", 500L * 1024 * 1024, long.MaxValue),
+        };
     }
 
     /// <inheritdoc />
@@ -48,17 +52,21 @@ public sealed class FilesPlugin : IPlugin
             .AddActivity<CsvWriteActivity>(CsvWriteActivity.Descriptor)
             .AddActivity<JsonReadFileActivity>(JsonReadFileActivity.Descriptor)
             .AddActivity<JsonWriteFileActivity>(JsonWriteFileActivity.Descriptor)
-            .AddActivity<XmlReadFileActivity>(XmlReadFileActivity.Descriptor);
+            .AddActivity<XmlReadFileActivity>(XmlReadFileActivity.Descriptor)
+            .AddActivity<FileHashActivity>(FileHashActivity.Descriptor)
+            .AddActivity<FileWaitForActivity>(FileWaitForActivity.Descriptor)
+            .AddActivity<ZipCreateActivity>(ZipCreateActivity.Descriptor)
+            .AddActivity<ZipExtractActivity>(ZipExtractActivity.Descriptor);
     }
 
-    private static long Positive(IReadOnlyDictionary<string, string> settings, string name, long defaultValue)
+    private static long Positive(IReadOnlyDictionary<string, string> settings, string name, long defaultValue, long max = int.MaxValue)
     {
         if (!settings.TryGetValue(name, out var text))
         {
             return defaultValue;
         }
 
-        return long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value is > 0 and <= int.MaxValue
+        return long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value > 0 && value <= max
             ? value
             : throw new ArgumentException($"Setting '{name}' must be a positive whole number, not '{text}'.", nameof(settings));
     }
@@ -69,4 +77,8 @@ public sealed class FilesPlugin : IPlugin
 /// <param name="MaxFileBytes">The largest file read.</param>
 /// <param name="MaxItems">The most entries File.List returns.</param>
 /// <param name="MaxRows">The most rows Csv.Read returns.</param>
-public sealed record FilesOptions(FileRootPolicy Files, long MaxFileBytes, int MaxItems, int MaxRows);
+public sealed record FilesOptions(FileRootPolicy Files, long MaxFileBytes, int MaxItems, int MaxRows)
+{
+    /// <summary>The most bytes Zip.Extract writes from one archive.</summary>
+    public long MaxExtractBytes { get; init; } = 500L * 1024 * 1024;
+}

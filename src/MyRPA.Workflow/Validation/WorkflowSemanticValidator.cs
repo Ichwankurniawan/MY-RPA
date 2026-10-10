@@ -22,6 +22,7 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
     private const string StateType = "Core.State";
 
     private readonly HashSet<string> _nodeIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _secretNames = new(StringComparer.Ordinal);
     private WorkflowSchemaVersion _schemaVersion = WorkflowSchemaVersion.Current;
 
     private enum SymbolKind
@@ -58,7 +59,10 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
             return null;
         }
 
-        return new WorkflowDefinition(id, raw.Name, raw.Version, root, schemaVersion, arguments!, variables!, raw.Description);
+        return new WorkflowDefinition(id, raw.Name, raw.Version, root, schemaVersion, arguments!, variables!, raw.Description)
+        {
+            SecretNames = new HashSet<string>(_secretNames, StringComparer.Ordinal),
+        };
     }
 
     private static bool IsWritable(SymbolKind kind) => kind is SymbolKind.Variable or SymbolKind.OutArgument or SymbolKind.InOutArgument;
@@ -506,7 +510,18 @@ internal sealed class WorkflowSemanticValidator(IActivityCatalog catalog, List<V
                     return null;
                 }
 
-                return ParseExpression(raw.Value, raw.Path, scope, nodeId) is { } expression ? new ExpressionPropertyValue(expression) : null;
+                if (ParseExpression(raw.Value, raw.Path, scope, nodeId) is not { } expression)
+                {
+                    return null;
+                }
+
+                if (definition.IsSecret)
+                {
+                    // ADR-0043: the names that carry a secret are masked by debuggers.
+                    _secretNames.UnionWith(expression.ReferencedNames);
+                }
+
+                return new ExpressionPropertyValue(expression);
 
             case ActivityPropertyKind.Text:
                 if (raw.Value.ValueKind != JsonValueKind.String)

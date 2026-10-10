@@ -8,6 +8,15 @@
     <ProjectReference Include="..\..\plugins\MyRPA.Http\MyRPA.Http.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\plugins\MyRPA.Spreadsheet\MyRPA.Spreadsheet.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\plugins\MyRPA.Browser.Playwright\MyRPA.Browser.Playwright.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Phase 7.1 (ADR-0043): the invoice-intake sample. -->
+    <ProjectReference Include="..\..\plugins\MyRPA.Email\MyRPA.Email.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Documents\MyRPA.Documents.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Database\MyRPA.Database.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Sftp\MyRPA.Sftp.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Test PDFs are written by hand (PdfPig belongs to the documents plugin only). -->
+    <Compile Include="..\MyRPA.Documents.Tests\PdfFiles.cs" Link="PdfFiles.cs" />
   </ItemGroup>
   <ItemGroup>
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
@@ -29,6 +38,22 @@
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>BrowserPluginDirectory</_Parameter1>
       <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Browser.Playwright\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>EmailPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Email\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>DocumentsPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Documents\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>DatabasePluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Database\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SftpPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Sftp\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 </Project>

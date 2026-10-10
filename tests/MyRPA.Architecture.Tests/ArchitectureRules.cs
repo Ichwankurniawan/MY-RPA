@@ -115,6 +115,13 @@ public static class ArchitectureRules
     {
         ["Microsoft.Playwright"] = "MyRPA.Browser.Playwright",
         ["DocumentFormat.OpenXml"] = "MyRPA.Spreadsheet",
+        ["PdfPig"] = "MyRPA.Documents",
+        ["MailKit"] = "MyRPA.Email",
+        ["MimeKit"] = "MyRPA.Email",
+        ["Microsoft.Data.Sqlite"] = "MyRPA.Database",
+        ["Microsoft.Data.SqlClient"] = "MyRPA.Database",
+        ["Npgsql"] = "MyRPA.Database",
+        ["SSH.NET"] = "MyRPA.Sftp",
     };
 
     /// <summary>
@@ -213,6 +220,10 @@ public static class ArchitectureRules
         ["MyRPA.Files.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Http.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Spreadsheet.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Documents.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Email.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Database.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Sftp.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
         ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Server", "MyRPA.Cli"],
         // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.

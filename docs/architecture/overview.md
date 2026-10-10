@@ -31,7 +31,9 @@ Evidence from the OpenRPA study: [../research/openrpa-analysis.md](../research/o
   no JavaScript evaluation. Plugin assemblies are now loaded from their verified path (ADR-0016).
 - **Enterprise automation activities** (Phase 7, ADR-0042): catalog 1.2 metadata (value types, defaults, secret
   properties, side effects); text, JSON, date and collection built-ins; the `MyRPA.Files`, `MyRPA.Http` and
-  `MyRPA.Spreadsheet` plugins with a shared file-root policy. See [enterprise-activities.md](enterprise-activities.md).
+  `MyRPA.Spreadsheet` plugins with a shared file-root policy; Phase 7.1 (ADR-0043) adds HTTP retries, downloads,
+  uploads and chat webhooks, ZIP, hashing and waiting for files, Excel append/clear, and the `MyRPA.Documents` (PDF),
+  `MyRPA.Email` (SMTP/IMAP), `MyRPA.Database` (SQLite, SQL Server, PostgreSQL) and `MyRPA.Sftp` plugins. See [enterprise-activities.md](enterprise-activities.md).
 - **MyRPA Studio** (the Web Studio, ADR-0021): a browser designer served by `MyRPA.Server`, with toolbox, properties,
   variables, arguments, problems, execution and files; drag-and-drop, slots, undo/redo, cut/copy/paste, save/open and
   runs through the same engine, with live node states over SSE. The earlier WPF Studio (ADR-0018) is archived in
@@ -63,7 +65,8 @@ orchestrator/queues/triggers (10), RBAC/credentials (11), packages/signing (12).
 
 Plugins (outside `src`): `plugins/MyRPA.Browser.Playwright` (browser provider; the only project allowed to reference
 `Microsoft.Playwright`), `plugins/MyRPA.Files`, `plugins/MyRPA.Http`, `plugins/MyRPA.Spreadsheet` (the only project
-allowed to reference `DocumentFormat.OpenXml`), `samples/plugins/MyRPA.Samples.DemoPlugin` (sample) and
+allowed to reference `DocumentFormat.OpenXml`), `plugins/MyRPA.Documents` (the only project allowed to reference
+`PdfPig`), `plugins/MyRPA.Email` (`MailKit`), `plugins/MyRPA.Database` (the database drivers), `plugins/MyRPA.Sftp` (`SSH.NET`), `samples/plugins/MyRPA.Samples.DemoPlugin` (sample) and
 `tests/fixtures/*` (test fixtures).
 They reference only `MyRPA.Sdk` (plus their own technology packages) and are loaded exclusively through the plugin
 host.
@@ -72,7 +75,7 @@ Tests: `MyRPA.{Core,Workflow,Runtime,Activities,Storage}.Tests` (unit; Runtime u
 runs through the real engine and includes the concurrent-isolation regression test), `MyRPA.Sdk.Tests` (the frozen
 activity contract through the real engine), `MyRPA.Plugins.Tests` (manifests, discovery, trust, lifecycle, isolation,
 unloading, the sample plugin), `MyRPA.Browser.Playwright.Tests` (real headless Chromium against a local test site,
-through the real plugin host), `MyRPA.{Files,Http,Spreadsheet}.Tests` (the Phase 7 plugins through the real plugin host,
+through the real plugin host), `MyRPA.{Files,Http,Spreadsheet,Documents,Email,Database,Sftp}.Tests` (the Phase 7 plugins through the real plugin host,
 against temporary roots and local servers), `MyRPA.Integration.Tests` (CLI in-process and as a child process, shipped
 samples, `--plugin`, `--plugin-config`, `catalog`, the Phase 7 order-report sample end to end), `MyRPA.Server.Tests` (the real server on loopback: security, files, validation, runs, multiplexed streams),
 `MyRPA.Execution.Hosting.Tests` (runs, event streams and replay,
@@ -131,7 +134,7 @@ graph BT
 | The engine and plugin host never reference the control-plane layer (Contracts, Execution.Hosting) | `ProjectGraphTests.Engine_NeverDependsOnTheControlPlane` |
 | The engine and built-in libraries never reference the SDK or the plugin host | `ProjectGraphTests.Engine_NeverDependsOnThePluginSystem` |
 | Plugin projects reference only `MyRPA.Sdk` and set `EnableDynamicLoading`; tests only build plugins (never compile against them) | `ProjectGraphTests.PluginProjects_*`, `TestProjects_BuildOnlyReferencesArePluginProjects` |
-| Technology packages live only in their provider plugin (`Microsoft.Playwright` → `MyRPA.Browser.Playwright`, `DocumentFormat.OpenXml` → `MyRPA.Spreadsheet`) | `ProjectGraphTests.TechnologyPackages_AreReferencedOnlyByTheirPlugin` |
+| Technology packages live only in their provider plugin (`Microsoft.Playwright` → `MyRPA.Browser.Playwright`, `DocumentFormat.OpenXml` → `MyRPA.Spreadsheet`, `PdfPig` → `MyRPA.Documents`, `MailKit`/`MimeKit` → `MyRPA.Email`, `Microsoft.Data.Sqlite`/`Microsoft.Data.SqlClient`/`Npgsql` → `MyRPA.Database`, `SSH.NET` → `MyRPA.Sftp`) | `ProjectGraphTests.TechnologyPackages_AreReferencedOnlyByTheirPlugin` |
 | Test projects reference only their subjects | `ProjectGraphTests.TestProjects_ReferenceOnlyTheirSubjects` |
 | Plain `net10.0` (no `-windows`), no `UseWPF`/`UseWindowsForms`/`FrameworkReference` | `PlatformNeutralityTests.*` |
 | No project in the repository uses WPF or Windows Forms or targets a Windows-only framework (ADR-0036) | `PlatformNeutralityTests.NoProjectInTheRepository_UsesDesktopUi` |

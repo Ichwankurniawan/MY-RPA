@@ -13,13 +13,15 @@ public sealed record ReceivedRequest(string Method, string PathAndQuery, IReadOn
 /// <summary>
 /// A deterministic local HTTP server (HttpListener on localhost, random port). Endpoints:
 /// /echo (the request as JSON), /status/{code}, /text, /big, /big-chunked, /slow, /bad-json, /deep-json,
-/// /redirect?to=URL&amp;code=N, /loop.
+/// /redirect?to=URL&amp;code=N, /loop; /flaky?key=K&amp;fail=N&amp;code=C&amp;retryAfter=S (fails the first N requests of
+/// key K with status C, then answers 200), /download?size=N (N bytes with a length), /download-chunked?size=N (without).
 /// </summary>
 public sealed class TestServer : IDisposable
 {
     private readonly HttpListener _listener = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly ConcurrentQueue<ReceivedRequest> _received = new();
+    private readonly ConcurrentDictionary<string, int> _flaky = new();
     private readonly Task _loop;
 
     public TestServer()
@@ -142,6 +144,37 @@ public sealed class TestServer : IDisposable
                     response.RedirectLocation = request.QueryString["to"];
                     response.Close();
                     break;
+                case "/flaky":
+                    var seen = _flaky.AddOrUpdate(request.QueryString["key"] ?? string.Empty, 1, (_, n) => n + 1);
+                    if (seen <= int.Parse(request.QueryString["fail"] ?? "0", CultureInfo.InvariantCulture))
+                    {
+                        response.StatusCode = int.Parse(request.QueryString["code"] ?? "503", CultureInfo.InvariantCulture);
+                        if (request.QueryString["retryAfter"] is { } after)
+                        {
+                            response.AddHeader("Retry-After", after);
+                        }
+
+                        await WriteAsync(response, "try again", "text/plain");
+                        break;
+                    }
+
+                    await WriteAsync(response, $"ok after {seen}", "text/plain");
+                    break;
+                case "/download":
+                    var size = int.Parse(request.QueryString["size"] ?? "0", CultureInfo.InvariantCulture);
+                    await WriteAsync(response, Pattern(size), "application/octet-stream");
+                    break;
+                case "/download-chunked":
+                    response.SendChunked = true;
+                    response.ContentType = "application/octet-stream";
+                    var data = Encoding.Latin1.GetBytes(Pattern(int.Parse(request.QueryString["size"] ?? "0", CultureInfo.InvariantCulture)));
+                    for (var offset = 0; offset < data.Length; offset += 1000)
+                    {
+                        await response.OutputStream.WriteAsync(data.AsMemory(offset, Math.Min(1000, data.Length - offset)), _stop.Token);
+                    }
+
+                    response.Close();
+                    break;
                 case "/loop":
                     response.StatusCode = 302;
                     response.RedirectLocation = "/loop";
@@ -165,9 +198,18 @@ public sealed class TestServer : IDisposable
         }
     }
 
+    /// <summary>Deterministic content of <paramref name="size"/> bytes (Latin-1 letters).</summary>
+    public static string Pattern(int size) => string.Create(size, 0, (span, _) =>
+    {
+        for (var i = 0; i < span.Length; i++)
+        {
+            span[i] = (char)('a' + (i % 26));
+        }
+    });
+
     private static async Task WriteAsync(HttpListenerResponse response, string text, string contentType)
     {
-        var bytes = Encoding.UTF8.GetBytes(text);
+        var bytes = contentType == "application/octet-stream" ? Encoding.Latin1.GetBytes(text) : Encoding.UTF8.GetBytes(text);
         response.ContentType = contentType;
         response.ContentLength64 = bytes.Length;
         await response.OutputStream.WriteAsync(bytes);

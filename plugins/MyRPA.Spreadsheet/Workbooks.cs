@@ -291,7 +291,11 @@ internal static class Workbooks
         new(FileErrorTypes.TooManyItems, $"The workbook has more than {options.MaxCells} cells to read (setting maxCells); give a smaller range.");
 
     /// <summary>Writes a table into a worksheet (created when missing), starting at a cell; only the written cells change.</summary>
-    public static void WriteCells(WorkbookPart workbook, string sheetName, int startRow, int startColumn, List<List<object?>> table)
+    public static void WriteCells(WorkbookPart workbook, string sheetName, int startRow, int startColumn, List<List<object?>> table) =>
+        WriteCells(workbook, SheetForWriting(workbook, sheetName), startRow, startColumn, table);
+
+    /// <summary>The worksheet named <paramref name="sheetName"/> (case-insensitive), added when missing.</summary>
+    public static WorksheetPart SheetForWriting(WorkbookPart workbook, string sheetName)
     {
         workbook.Workbook ??= new Workbook();
         var sheets = workbook.Workbook.Sheets ?? workbook.Workbook.AppendChild(new Sheets());
@@ -311,7 +315,14 @@ internal static class Workbooks
         }
 
         part.Worksheet ??= new Worksheet(new SheetData());
-        var data = part.Worksheet.GetFirstChild<SheetData>() ?? part.Worksheet.AppendChild(new SheetData());
+        _ = part.Worksheet.GetFirstChild<SheetData>() ?? part.Worksheet.AppendChild(new SheetData());
+        return part;
+    }
+
+    /// <summary>Writes a table into a worksheet from a start cell; only the written cells change.</summary>
+    public static void WriteCells(WorkbookPart workbook, WorksheetPart part, int startRow, int startColumn, List<List<object?>> table)
+    {
+        var data = part.Worksheet!.GetFirstChild<SheetData>()!;
         var rows = data.Elements<Row>().ToList();
         uint previous = 0;
         foreach (var existing in rows)
@@ -336,6 +347,110 @@ internal static class Workbooks
             // Excel rebuilds the calculation chain; a stale one names cells that no longer hold formulas.
             workbook.DeletePart(chain);
         }
+    }
+
+    /// <summary>The first and last rows that hold a value (0 and 0 for an empty sheet).</summary>
+    public static (int First, int Last) UsedRows(WorksheetPart part)
+    {
+        int first = 0, last = 0, previous = 0;
+        foreach (var row in part.Worksheet?.GetFirstChild<SheetData>()?.Elements<Row>() ?? [])
+        {
+            var index = row.RowIndex?.Value is { } r ? (int)r : previous + 1;
+            previous = index;
+            if (row.Elements<Cell>().Any(c => c.CellValue is not null || c.InlineString is not null || c.CellFormula is not null))
+            {
+                first = first == 0 ? index : first;
+                last = index;
+            }
+        }
+
+        return (first, last);
+    }
+
+    /// <summary>Clears the values and formulas of the cells in a range; formatting stays. Returns the number of cells cleared.</summary>
+    public static int ClearCells(WorkbookPart workbook, WorksheetPart part, CellRange range)
+    {
+        var cleared = 0;
+        var formulasRemoved = false;
+        var previous = 0;
+        foreach (var row in part.Worksheet?.GetFirstChild<SheetData>()?.Elements<Row>() ?? [])
+        {
+            var index = row.RowIndex?.Value is { } r ? (int)r : previous + 1;
+            previous = index;
+            if (index < range.FirstRow || index > range.LastRow)
+            {
+                continue;
+            }
+
+            var lastColumn = 0;
+            foreach (var cell in row.Elements<Cell>().ToList())
+            {
+                var column = cell.CellReference?.Value is { } text && CellAddress.TryParse(text, out var c, out _) ? c : lastColumn + 1;
+                lastColumn = column;
+                if (column < range.FirstColumn || column > range.LastColumn)
+                {
+                    continue;
+                }
+
+                if (cell.CellValue is null && cell.InlineString is null && cell.CellFormula is null)
+                {
+                    continue;
+                }
+
+                formulasRemoved |= cell.CellFormula is not null;
+                cell.CellFormula?.Remove();
+                cell.CellValue?.Remove();
+                cell.InlineString?.Remove();
+                cell.DataType = null;
+                cell.CellReference ??= CellAddress.ColumnName(column) + index.ToString(CultureInfo.InvariantCulture);
+                if (cell.StyleIndex is null)
+                {
+                    cell.Remove();
+                }
+
+                cleared++;
+            }
+        }
+
+        if (formulasRemoved && workbook.CalculationChainPart is { } chain)
+        {
+            workbook.DeletePart(chain);
+        }
+
+        return cleared;
+    }
+
+    /// <summary>
+    /// Changes a workbook in memory and replaces the file in one step (written beside it, then moved), so a failure
+    /// never leaves a half-written workbook. A new workbook is created when <paramref name="exists"/> is false.
+    /// </summary>
+    public static T Rewrite<T>(string full, bool exists, SpreadsheetOptions options, Func<WorkbookPart, T> change)
+    {
+        using var memory = new MemoryStream();
+        if (exists)
+        {
+            using var file = File.OpenRead(full);
+            file.CopyTo(memory);
+        }
+
+        T result;
+        using (var document = exists ? SpreadsheetDocument.Open(memory, true, Settings(options)) : SpreadsheetDocument.Create(memory, SpreadsheetDocumentType.Workbook))
+        {
+            result = change(document.WorkbookPart ?? document.AddWorkbookPart());
+        }
+
+        var temporary = Path.Combine(Path.GetDirectoryName(full)!, "." + Path.GetFileName(full) + "." + Path.GetRandomFileName() + ".tmp");
+        try
+        {
+            File.WriteAllBytes(temporary, memory.ToArray());
+            File.Move(temporary, full, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+
+        return result;
     }
 
     private static Row RowAt(SheetData data, List<Row> rows, uint index)

@@ -50,6 +50,19 @@ public sealed class ExpressionTests
     [InlineData("'it\\'s'", "it's")]
     public void StringConcatenation(string expression, string expected) => Assert.Equal(expected, Eval(expression));
 
+    // ADR-0043: raw strings have no escapes (a regular expression is written as it is); a doubled quote is one quote.
+    [Theory]
+    [InlineData("""r'\d+'""", """\d+""")]
+    [InlineData("""r"C:\temp\new" """, """C:\temp\new""")]
+    [InlineData("""r'it''s'""", "it's")]
+    [InlineData("""r'a\' + 'b'""", """a\b""")]
+    [InlineData("""r''""", "")]
+    public void RawStrings_KeepBackslashes(string expression, string expected) => Assert.Equal(expected, Eval(expression));
+
+    [Fact]
+    public void RawString_Unterminated_IsAnError() =>
+        Assert.Contains("Unterminated string literal", Assert.Throws<WorkflowExpressionException>(() => Eval("r'abc")).Message, StringComparison.Ordinal);
+
     [Theory]
     [InlineData("1 == 1.0", true)]
     [InlineData("'a' != 'b'", true)]

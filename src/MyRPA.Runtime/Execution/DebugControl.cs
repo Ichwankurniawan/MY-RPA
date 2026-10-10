@@ -36,7 +36,7 @@ internal sealed class DebugControl(IExecutionDebugger debugger, TimeProvider tim
         VariableScope variables,
         CancellationToken cancellationToken)
     {
-        var stop = new DebugStop(identity, frame.Workflow.Id, node, depth, variables.Snapshot);
+        var stop = new DebugStop(identity, frame.Workflow.Id, node, depth, () => variables.Snapshot(frame.Workflow.SecretNames));
         var waiting = debugger.BeforeNodeAsync(stop, cancellationToken);
         if (waiting.IsCompletedSuccessfully)
         {

@@ -12,6 +12,16 @@
     <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
     <!-- ADR-0042: the Excel plugin reads and writes .xlsx without Excel (MIT, Microsoft). -->
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <!-- ADR-0043: the documents plugin reads PDF text (PdfPig by UglyToad, Apache-2.0, no dependencies on net8+). -->
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
+    <!-- ADR-0043: the email plugin speaks SMTP and IMAP (MailKit and its MimeKit, MIT, Jeffrey Stedfast; Microsoft recommends MailKit over System.Net.Mail). -->
+    <PackageVersion Include="MailKit" Version="4.18.1" />
+    <!-- ADR-0043: the database plugin (SQLite and SQL Server: MIT, Microsoft; PostgreSQL: Npgsql, PostgreSQL licence). -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <!-- ADR-0043: the SFTP plugin (SSH.NET, MIT, with BouncyCastle). -->
+    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>
   <ItemGroup Label="Composition roots only">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
