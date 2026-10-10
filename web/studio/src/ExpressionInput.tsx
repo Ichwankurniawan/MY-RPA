@@ -12,19 +12,26 @@ import { nodeJsonPath } from './workflowData';
 const identifierChar = /[A-Za-z0-9_]/;
 const identifierStart = /[A-Za-z_]/;
 
-/** Whether `caret` in `text` is inside a string literal ('…' or "…", with backslash escapes). */
+/**
+ * Whether `caret` in `text` is inside a string literal: '…' or "…" with backslash escapes, or a raw string r'…' / r"…"
+ * (ADR-0043: no escapes; a doubled quote is one quote).
+ */
 export function inString(text: string, caret: number): boolean {
   let quote: string | undefined;
+  let raw = false;
   for (let i = 0; i < caret && i < text.length; i++) {
     const c = text[i];
     if (quote !== undefined) {
-      if (c === '\\') {
+      if (raw && c === quote && text[i + 1] === quote && i + 1 < caret) {
+        i++;
+      } else if (!raw && c === '\\') {
         i++;
       } else if (c === quote) {
         quote = undefined;
       }
     } else if (c === "'" || c === '"') {
       quote = c;
+      raw = text[i - 1] === 'r' && !identifierChar.test(text[i - 2] ?? '');
     }
   }
 

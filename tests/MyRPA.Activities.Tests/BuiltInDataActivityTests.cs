@@ -67,6 +67,15 @@ public sealed class BuiltInDataActivityTests
     }
 
     [Fact]
+    public async Task TextMatch_WithARawStringPattern_NeedsNoDoubledBackslashes()
+    {
+        // ADR-0043: r'...' keeps the pattern as written; only JSON's own escaping remains (\\ in the file is \).
+        Assert.Equal(
+            "INV-2026-0042",
+            ((IReadOnlyDictionary<string, object?>)(await ValueAsync("Core.Text.Match", """ "text": "'Order INV-2026-0042 paid'", "pattern": "r'INV-\\d{4}-\\d+'" """))!)["value"]);
+    }
+
+    [Fact]
     public async Task TextMatch_RefusesABadPattern_AndStopsACatastrophicOne()
     {
         Assert.Equal("InvalidPattern", (await FailureAsync("Core.Text.Match", """ "text": "'x'", "pattern": "'(unclosed'" """)).ErrorType);

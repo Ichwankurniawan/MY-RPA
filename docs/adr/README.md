@@ -46,3 +46,4 @@ Format and rules: [ADR-0001](0001-record-architecture-decisions.md).
 | [0040](0040-workflow-debugger.md) | Workflow debugger: breakpoints, pause, stepping, paused variable values | Accepted (owner, 2026-10-08) | debugger slice |
 | [0041](0041-expression-assist.md) | Expression assist: completion, rename and usages from the server | Accepted (owner, 2026-10-09) | expression assist slice (complete) |
 | [0042](0042-enterprise-automation-activities.md) | Enterprise automation activities: plugins for files, HTTP and Excel, built-ins, catalog 1.2 metadata, secret properties | Accepted (owner, 2026-10-09) | 7 |
+| [0043](0043-more-enterprise-integrations.md) | More enterprise integrations (7.1): mail, databases, SFTP, PDF, ZIP, HTTP extras; debugger masking, `--arg-env`, raw strings | Accepted (owner, 2026-10-09) | 7.1 |

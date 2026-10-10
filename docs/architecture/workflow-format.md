@@ -155,7 +155,7 @@ are listed in [enterprise-activities.md](enterprise-activities.md).
 
 | Feature | Syntax |
 |---|---|
-| Literals | `42`, `3.14`, `'text'` or `"text"` (escapes `\\ \' \" \n \t \r`), `true`, `false`, `null`, `[1, 2]`, `{'key': value}` |
+| Literals | `42`, `3.14`, `'text'` or `"text"` (escapes `\\ \' \" \n \t \r`), raw strings `r'C:\data\*.csv'` or `r"..."` (no escapes; `''` is one quote, ADR-0043: regular expressions as written, `r'\d+'`), `true`, `false`, `null`, `[1, 2]`, `{'key': value}` |
 | Names | variables, arguments, locals |
 | Operators (low → high) | `\|\|` · `&&` · `== !=` · `< <= > >=` · `+ -` · `* / %` · unary `! -` · `x[i]`, `x.key` |
 | Functions | `len upper lower trim contains startsWith endsWith substring replace toString toInt toDecimal toBoolean toDateTime now append keys hasKey isNull coalesce abs min max round` |

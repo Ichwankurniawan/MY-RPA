@@ -38,7 +38,9 @@ public sealed class SpreadsheetPlugin : IPlugin
             .AddInstance(_options ?? throw new InvalidOperationException("Initialize must run before Register."))
             .AddActivity<ExcelGetSheetsActivity>(ExcelGetSheetsActivity.Descriptor)
             .AddActivity<ExcelReadRangeActivity>(ExcelReadRangeActivity.Descriptor)
-            .AddActivity<ExcelWriteRangeActivity>(ExcelWriteRangeActivity.Descriptor);
+            .AddActivity<ExcelWriteRangeActivity>(ExcelWriteRangeActivity.Descriptor)
+            .AddActivity<ExcelAppendRowsActivity>(ExcelAppendRowsActivity.Descriptor)
+            .AddActivity<ExcelClearRangeActivity>(ExcelClearRangeActivity.Descriptor);
     }
 
     private static long Positive(IReadOnlyDictionary<string, string> settings, string name, long defaultValue)

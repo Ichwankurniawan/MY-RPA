@@ -111,6 +111,43 @@ internal sealed class ExpressionParser
                 continue;
             }
 
+            // ADR-0043: a raw string r'...' (or r"...") has no escapes, so r'\d+' is the regular expression \d+; a
+            // doubled quote inside it is one quote.
+            if (c == 'r' && i + 1 < text.Length && text[i + 1] is '\'' or '"')
+            {
+                var quote = text[i + 1];
+                var raw = new StringBuilder();
+                i += 2;
+                var rawClosed = false;
+                while (i < text.Length)
+                {
+                    if (text[i] == quote)
+                    {
+                        if (i + 1 < text.Length && text[i + 1] == quote)
+                        {
+                            raw.Append(quote);
+                            i += 2;
+                            continue;
+                        }
+
+                        rawClosed = true;
+                        i++;
+                        break;
+                    }
+
+                    raw.Append(text[i]);
+                    i++;
+                }
+
+                if (!rawClosed)
+                {
+                    throw new WorkflowExpressionException("Unterminated string literal.", text, start);
+                }
+
+                tokens.Add(new Token(TokenKind.String, text[start..i], raw.ToString(), start));
+                continue;
+            }
+
             if (c is '\'' or '"')
             {
                 var builder = new StringBuilder();

@@ -3,15 +3,18 @@
   "id": "MyRPA.Http",
   "name": "MyRPA HTTP/REST",
   "version": "0.1.0",
-  "description": "Http.Request: REST calls with JSON, headers and Bearer/Basic/API-key authentication from secret properties; allowed hosts, size and redirect limits.",
+  "description": "Http.Request, Http.Download, Http.Upload and Chat.Post: REST calls with JSON, retries, file transfer under a file root, chat webhooks; Bearer/Basic/API-key authentication from secret properties; allowed hosts, size and redirect limits.",
   "sdkVersion": "1.2",
   "targetFramework": "net10.0",
   "entryPoint": {
     "assembly": "MyRPA.Http.dll",
     "type": "MyRPA.Http.HttpPlugin"
   },
-  "capabilities": [ "Network" ],
+  "capabilities": [ "Network", "FileSystem" ],
   "activities": [
-    "Http.Request"
+    "Http.Request",
+    "Http.Download",
+    "Http.Upload",
+    "Chat.Post"
   ]
 }

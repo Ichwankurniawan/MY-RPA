@@ -14,6 +14,8 @@
   "activities": [
     "Excel.GetSheets",
     "Excel.ReadRange",
-    "Excel.WriteRange"
+    "Excel.WriteRange",
+    "Excel.AppendRows",
+    "Excel.ClearRange"
   ]
 }

@@ -1,0 +1,18 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Documents",
+  "name": "MyRPA Documents",
+  "version": "0.1.0",
+  "description": "Pdf.ReadText and Pdf.GetInfo: text and properties of PDF files (PdfPig), confined to one configured folder (fileRoot), with page and size limits.",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Documents.dll",
+    "type": "MyRPA.Documents.DocumentsPlugin"
+  },
+  "capabilities": [ "FileSystem" ],
+  "activities": [
+    "Pdf.ReadText",
+    "Pdf.GetInfo"
+  ]
+}

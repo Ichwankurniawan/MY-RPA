@@ -89,10 +89,13 @@ dotnet run --project src/MyRPA.Cli -- run samples/hello-world.json --arg userNam
 
 ```text
 myrpa validate <workflow.json>
-myrpa run <workflow.json> [--arg name=value]... [--timeout seconds] [--correlation-id id]
+myrpa run <workflow.json> [--arg name=value]... [--arg-env name=VARIABLE]... [--arg-file name=path]... [--timeout seconds] [--correlation-id id]
 myrpa plugins | catalog | info | help | version
 global options (anywhere): --verbose, --plugin <directory> (repeatable), --plugin-config <file>
 ```
+
+Give secrets (tokens, passwords) with `--arg-env` (from an environment variable) or `--arg-file` (from a file), so they
+are not visible in the process list as an `--arg` value would be.
 
 `run` prints the execution result (status, ids, outputs, error) as JSON on stdout; workflow `Core.Log` messages and
 other logs go to stderr. Exit codes: 0 success, 1 failed, 2 usage, 3 invalid workflow, 4 timed out,

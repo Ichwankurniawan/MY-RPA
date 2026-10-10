@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using MyRPA.Sdk.Files;
 using MyRPA.Sdk.Plugins;
 
 namespace MyRPA.Http;
@@ -12,6 +13,10 @@ namespace MyRPA.Http;
 /// <item><c>maxResponseBytes</c> — the largest response body read (default 10 MB).</item>
 /// <item><c>maxRedirects</c> — the most redirects followed (default 5; 0 follows none).</item>
 /// <item><c>defaultTimeoutMs</c> — the timeout when a node gives none (default 30000).</item>
+/// <item><c>fileRoot</c> — the only folder tree Http.Download writes to and Http.Upload reads from (ADR-0043). Not set (the
+/// default), those two activities refuse every path (FileAccessDenied).</item>
+/// <item><c>maxDownloadBytes</c> — the largest file Http.Download writes (default 100 MB).</item>
+/// <item><c>maxUploadBytes</c> — the most file bytes one Http.Upload sends (default 100 MB).</item>
 /// </list>
 /// </summary>
 public sealed class HttpPlugin : IPlugin
@@ -30,7 +35,12 @@ public sealed class HttpPlugin : IPlugin
             hosts,
             Number(settings, "maxResponseBytes", 10L * 1024 * 1024, 1, int.MaxValue),
             (int)Number(settings, "maxRedirects", 5, 0, 20),
-            (int)Number(settings, "defaultTimeoutMs", 30_000, 1, 3_600_000));
+            (int)Number(settings, "defaultTimeoutMs", 30_000, 1, 3_600_000))
+        {
+            Files = settings.TryGetValue("fileRoot", out var root) && root.Length > 0 ? new FileRootPolicy(root) : null,
+            MaxDownloadBytes = Number(settings, "maxDownloadBytes", 100L * 1024 * 1024, 1, long.MaxValue),
+            MaxUploadBytes = Number(settings, "maxUploadBytes", 100L * 1024 * 1024, 1, long.MaxValue),
+        };
     }
 
     /// <inheritdoc />
@@ -40,7 +50,10 @@ public sealed class HttpPlugin : IPlugin
         registrar
             .AddInstance(_options ?? throw new InvalidOperationException("Initialize must run before Register."))
             .AddService<HttpGateway, HttpGateway>(PluginServiceLifetime.Plugin)
-            .AddActivity<HttpRequestActivity>(HttpRequestActivity.Descriptor);
+            .AddActivity<HttpRequestActivity>(HttpRequestActivity.Descriptor)
+            .AddActivity<HttpDownloadActivity>(HttpDownloadActivity.Descriptor)
+            .AddActivity<HttpUploadActivity>(HttpUploadActivity.Descriptor)
+            .AddActivity<ChatPostActivity>(ChatPostActivity.Descriptor);
     }
 
     private static long Number(IReadOnlyDictionary<string, string> settings, string name, long defaultValue, long min, long max)
@@ -63,6 +76,21 @@ public sealed class HttpPlugin : IPlugin
 /// <param name="DefaultTimeoutMs">The timeout when a node gives none.</param>
 public sealed record HttpOptions(IReadOnlyList<string> AllowedHosts, long MaxResponseBytes, int MaxRedirects, int DefaultTimeoutMs)
 {
+    /// <summary>The folder tree downloads and uploads may use; null when the fileRoot setting is not given.</summary>
+    public FileRootPolicy? Files { get; init; }
+
+    /// <summary>The largest file a download writes.</summary>
+    public long MaxDownloadBytes { get; init; } = 100L * 1024 * 1024;
+
+    /// <summary>The most file bytes one upload sends.</summary>
+    public long MaxUploadBytes { get; init; } = 100L * 1024 * 1024;
+
+    /// <summary>The file policy, or a FileAccessDenied failure when the plugin has no fileRoot.</summary>
+    /// <param name="activity">The activity type, for the message.</param>
+    /// <returns>The policy.</returns>
+    public FileRootPolicy RequireFiles(string activity) =>
+        Files ?? throw new MyRPA.Workflow.Execution.ActivityFailedException(FileErrorTypes.FileAccessDenied, $"{activity} needs the HTTP plugin's fileRoot setting (the only folder it may use); it is not set.");
+
     /// <summary>Whether requests may reach <paramref name="host"/>.</summary>
     /// <param name="host">The URL's host.</param>
     /// <returns>True when allowed.</returns>

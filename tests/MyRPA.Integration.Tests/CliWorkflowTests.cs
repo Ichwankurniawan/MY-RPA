@@ -95,6 +95,38 @@ public sealed class CliWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task Run_ArgumentsFromAnEnvironmentVariableAndAFile_AreNotOnTheCommandLine()
+    {
+        const string variable = "MYRPA_IT_TIMES_ARG";
+        Environment.SetEnvironmentVariable(variable, "2");
+        try
+        {
+            var file = _workspace.Write("name.txt", "Bob\r\n");
+
+            var result = await Cli.RunAsync("run", Greeter(), "--arg-file", $"name={file}", "--arg-env", $"times={variable}");
+
+            Assert.Equal(CliExitCodes.Success, result.ExitCode);
+            Assert.Equal("Hello, Bob x2", Json(result.Out).GetProperty("outputs").GetProperty("greeting").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
+    }
+
+    [Theory]
+    [InlineData("--arg-env", "name=MYRPA_IT_NOT_SET", "the environment variable 'MYRPA_IT_NOT_SET' is not set")]
+    [InlineData("--arg-file", "name=missing-file.txt", "--arg-file: cannot read 'missing-file.txt'")]
+    [InlineData("--arg-env", "name", "--arg-env expects name=VARIABLE")]
+    public async Task Run_ArgumentSourceMissing_ExitCode2(string option, string value, string expected)
+    {
+        var result = await Cli.RunAsync("run", Greeter(), option, value, "--arg", "times=1");
+
+        Assert.Equal(CliExitCodes.Usage, result.ExitCode);
+        Assert.Contains(expected, result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Run_InvalidWorkflow_IsNotExecuted_ExitCode3()
     {
         var path = _workspace.Write("bad.json", TempWorkspace.Workflow("""{ "id": "x", "type": "Core.Throw" }"""));
