@@ -211,6 +211,10 @@ export interface StudioState {
   readonly panes: Panes;
   /** The page shown in the main area (ADR-0044): the Studio itself, or the Home page. */
   readonly page: StudioPage;
+  /** The Workflows page starts at the projects; choosing one (or opening a workflow) shows its workspace. */
+  readonly workflowsView: WorkflowsView;
+  /** What each project holds, for the Projects view (loaded on connect and whenever it is shown). */
+  readonly projectSummaries: ReadonlyMap<string, ProjectSummary>;
   /** The left panel's tab: the activity catalog or the project's files (remembered per browser). */
   readonly sidebarTab: SidebarTab;
   /** Containers whose children are hidden in the designer (UX-3; never an ancestor of the selection). */
@@ -271,6 +275,25 @@ export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution' | '
 
 /** The pages of the navigation rail (ADR-0044); only pages that work are listed. */
 export type StudioPage = 'workflows' | 'home';
+
+/** What the Workflows page shows: the projects to choose from, or the workspace of the chosen project. */
+export type WorkflowsView = 'projects' | 'workspace';
+
+/** A project on the Projects view, from its listing: how many workflows and folders, and the latest change. */
+export interface ProjectSummary {
+  readonly workflows: number;
+  readonly folders: number;
+  /** The newest file's modification time (ISO 8601); undefined without files. */
+  readonly modified?: string;
+  /** Why the project could not be listed. */
+  readonly error?: string;
+}
+
+const summaryOf = (files: readonly WorkflowFile[], folders: readonly string[]): ProjectSummary => ({
+  workflows: files.length,
+  folders: folders.length,
+  modified: files.reduce<string | undefined>((latest, f) => (latest === undefined || Date.parse(f.modified) > Date.parse(latest) ? f.modified : latest), undefined),
+});
 
 /** The tabs of the left panel. */
 export type SidebarTab = 'activities' | 'files';
@@ -811,6 +834,8 @@ export class Studio {
       outputTab: 'problems',
       panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
       page: 'workflows',
+      workflowsView: 'projects',
+      projectSummaries: new Map(),
       sidebarTab: this.preferences.read(preferenceKeys.sidebarTab, isSidebarTab) ?? 'activities',
       collapsed: new Set(),
       graphLists: new Set(),
@@ -943,6 +968,8 @@ export class Studio {
       } else if (info.projects.length > 0) {
         await this.selectProject(info.projects[0]);
       }
+
+      await this.loadProjectSummaries();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         this.store.set({ connection: 'signed-out', message: error.message });
@@ -955,7 +982,7 @@ export class Studio {
   async selectProject(project: string): Promise<void> {
     try {
       const { workflows: files, folders } = await this.api.workflows(project);
-      this.store.set({ project, files, folders });
+      this.store.set({ project, files, folders, projectSummaries: new Map(this.state.projectSummaries).set(project, summaryOf(files, folders)) });
     } catch (error) {
       this.say(`Cannot list the project's workflows: ${(error as Error).message}`);
     }
@@ -1001,6 +1028,8 @@ export class Studio {
         transitionFocus: undefined,
         dialog: draft ? { kind: 'recover', path, savedAt: draft.savedAt, stale: draft.etag !== etag } : undefined,
         message: opened.readOnlyReason ? `Opened ${path} read-only: ${opened.readOnlyReason}` : `Opened ${path}.`,
+        page: 'workflows',
+        workflowsView: 'workspace',
       });
       this.store.set(treeView);
     } catch (error) {
@@ -1399,6 +1428,35 @@ export class Studio {
   /** Shows a page of the navigation rail. */
   showPage(page: StudioPage): void {
     this.store.set({ page });
+  }
+
+  /** Shows the Projects view of the Workflows page, with what each project holds now. */
+  async showProjects(): Promise<void> {
+    this.store.set({ page: 'workflows', workflowsView: 'projects' });
+    await this.loadProjectSummaries();
+  }
+
+  /** Chooses a project and shows its workspace (Files panel, designer). An open workflow stays open. */
+  async enterProject(project: string): Promise<void> {
+    await this.selectProject(project);
+    if (this.state.project === project) {
+      this.store.set({ page: 'workflows', workflowsView: 'workspace', sidebarTab: this.state.file?.project === project ? this.state.sidebarTab : 'files' });
+    }
+  }
+
+  /** Lists every project for the Projects view; a project that cannot be listed says why. */
+  private async loadProjectSummaries(): Promise<void> {
+    const entries = await Promise.all(
+      this.state.projects.map(async (project): Promise<[string, ProjectSummary]> => {
+        try {
+          const { workflows, folders } = await this.api.workflows(project);
+          return [project, summaryOf(workflows, folders)];
+        } catch (error) {
+          return [project, { workflows: 0, folders: 0, error: (error as Error).message }];
+        }
+      }),
+    );
+    this.store.set({ projectSummaries: new Map(entries) });
   }
 
   /** Shows a tab of the bottom panel. */
