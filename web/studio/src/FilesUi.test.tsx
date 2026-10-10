@@ -15,10 +15,8 @@ async function renderStudio(api = new FakeApi(), drafts: DraftStore = memoryDraf
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { drafts, draftDelayMs: 60_000 });
   render(<App studio={studio} />);
   await act(settle);
-  // The Workflows page starts at the projects; choosing one shows its workspace with the Files tab.
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open project demo' })));
-  await act(settle);
-  expect(screen.getByRole('tab', { name: 'Files' }).getAttribute('aria-selected')).toBe('true');
+  // One project: the Studio opens its workspace. The files are the left panel's second tab.
+  await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Files' })));
   return { studio, api };
 }
 

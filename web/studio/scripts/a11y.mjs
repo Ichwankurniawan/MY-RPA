@@ -51,7 +51,8 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   };
 
   const filesTree = page.getByRole('tree', { name: 'Workflow files' });
-  // The Workflows page starts at the projects.
+  // One project opens its workspace; the title bar's Projects link shows the Projects view.
+  await page.getByRole('navigation', { name: 'Location' }).getByRole('button', { name: 'Projects' }).click();
   await page.locator('.project-card').first().waitFor();
   await scan('Projects view');
   await showTab(page, 'Files');
