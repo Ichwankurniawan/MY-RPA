@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0",
+  "id": "script-demo",
+  "name": "JavaScript tour",
+  "version": "1.0.0",
+  "description": "ADR-0045: sandboxed JavaScript reshapes data that would be awkward in activities. It parses invoice lines, totals them per customer and builds a summary text. A script error is caught as ScriptError. Needs MyRPA.Scripting (see samples/plugins/README.md, all-plugins.json); for Python, set the plugin's pythonPath and use Code.Python the same way.",
+  "arguments": [
+    { "name": "byCustomer", "direction": "Out", "type": "Object" },
+    { "name": "summary", "direction": "Out", "type": "String" },
+    { "name": "caught", "direction": "Out", "type": "String" }
+  ],
+  "variables": [
+    { "name": "lines", "type": "List", "default": [ "INV-1;ACME Ltd;1234.50", "note: call Bob", "INV-2;Bolt & Co;99", "INV-3;ACME Ltd;10" ] },
+    { "name": "report", "type": "Object" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      {
+        "id": "group",
+        "type": "Code.JavaScript",
+        "properties": {
+          "code": "const totals = {};\nfor (const line of inputs.lines) {\n  if (!line.startsWith('INV')) continue;\n  const [number, customer, amount] = line.split(';');\n  totals[customer] = (totals[customer] ?? 0) + Number(amount);\n}\nconst customers = Object.keys(totals).sort();\nreturn {\n  totals,\n  summary: customers.map(c => `${c}: ${totals[c].toFixed(2)}`).join(', ')\n};",
+          "inputs": "{ 'lines': lines }",
+          "result": "report"
+        }
+      },
+      { "id": "keep-totals", "type": "Core.Assign", "properties": { "to": "byCustomer", "value": "report['totals']" } },
+      { "id": "keep-summary", "type": "Core.Assign", "properties": { "to": "summary", "value": "report['summary']" } },
+      {
+        "id": "try-bad",
+        "type": "Core.TryCatch",
+        "properties": { "exceptionVariable": "err" },
+        "slots": {
+          "try": { "id": "bad-script", "type": "Code.JavaScript", "properties": { "code": "throw new Error('invoice total is negative');" } },
+          "catch": { "id": "note-error", "type": "Core.Assign", "properties": { "to": "caught", "value": "err.errorType + ': ' + err.message" } }
+        }
+      }
+    ]
+  }
+}

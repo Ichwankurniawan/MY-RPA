@@ -140,7 +140,7 @@ internal static class Db
     public static IEnumerable<ActivityPropertyDefinition> Common() =>
     [
         new("connection", ActivityPropertyKind.Text, isRequired: true, "The name of a connection in the database plugin's configuration.") { ValueType = ActivityValueType.String },
-        new("sql", ActivityPropertyKind.Text, isRequired: true, "The SQL, written as fixed text (never built from data). Refer to values as @name and give them in parameters.") { ValueType = ActivityValueType.String },
+        new("sql", ActivityPropertyKind.Text, isRequired: true, "The SQL, written as fixed text (never built from data). Refer to values as @name and give them in parameters.") { ValueType = ActivityValueType.String, IsMultiline = true },
         new("parameters", ActivityPropertyKind.Expression, isRequired: false, "The values for the SQL's @names: a Dictionary of name → value (text, number, true/false, date or null).") { ValueType = ActivityValueType.Dictionary },
         new("username", ActivityPropertyKind.Expression, isRequired: false, "The database user (default: the connection string's).") { ValueType = ActivityValueType.String },
         new("password", ActivityPropertyKind.Expression, isRequired: false, "The database password: an argument or variable, never a value written here.") { ValueType = ActivityValueType.String, IsSecret = true },

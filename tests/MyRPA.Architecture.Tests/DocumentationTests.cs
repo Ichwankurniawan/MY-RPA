@@ -27,6 +27,7 @@ public sealed class DocumentationTests
         "plugins/MyRPA.Email/README.md",
         "plugins/MyRPA.Database/README.md",
         "plugins/MyRPA.Sftp/README.md",
+        "plugins/MyRPA.Scripting/README.md",
     ];
 
     public static TheoryData<string> PluginDocuments() => [.. _pluginDocuments];

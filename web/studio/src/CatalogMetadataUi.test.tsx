@@ -19,6 +19,7 @@ const request: ActivityDescriptor = {
     { name: 'url', kind: 'Expression', required: true, allowedValues: [], scopeSlots: [], valueType: 'String' },
     { name: 'token', kind: 'Expression', required: false, allowedValues: [], scopeSlots: [], valueType: 'String', secret: true },
     { name: 'timeoutMs', kind: 'Expression', required: false, allowedValues: [], scopeSlots: [], valueType: 'Int', default: 30000 },
+    { name: 'script', kind: 'Text', required: false, allowedValues: [], scopeSlots: [], valueType: 'String', multiline: true },
   ],
   slots: [],
 };
@@ -60,5 +61,19 @@ describe('Catalog 1.2 metadata', () => {
     expect(token.getAttribute('placeholder')).toBe('an argument or variable, e.g. apiToken');
     expect(token.closest('.field')!.textContent).toContain('never type the secret itself here');
     expect(panel.getByRole('combobox', { name: /^timeoutMs/ }).getAttribute('placeholder')).toBe('default: 30000');
+  });
+
+  it('edits a multiline text property (code, SQL) in a monospace box that keeps its lines (ADR-0045)', async () => {
+    const studio = await renderStudio();
+    await act(async () => fireEvent.click(document.querySelector('[role="treeitem"][data-node-id="get"] > .node')!));
+    const panel = within(screen.getByRole('complementary', { name: 'Properties' }));
+
+    const script = panel.getByRole('textbox', { name: /^script/ });
+    expect(script.tagName).toBe('TEXTAREA');
+    expect(script.classList.contains('multiline-text')).toBe(true);
+    fireEvent.change(script, { target: { value: 'const a = 1;\nreturn a;' } });
+
+    const node = (studio.store.get().document!.root as { children: { properties: Record<string, unknown> }[] }).children[0];
+    expect(node.properties.script).toBe('const a = 1;\nreturn a;');
   });
 });

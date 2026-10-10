@@ -16,6 +16,7 @@ secret properties, side effects), so the Studio builds its editors from the cata
 | `plugins/MyRPA.Documents` (7.1) | `Pdf.ReadText`, `Pdf.GetInfo` | FileSystem | `PdfPig` 0.1.16 (this plugin only) |
 | `plugins/MyRPA.Database` (7.1) | `Db.Query`, `Db.Execute`, `Db.Scalar` | Network | `Microsoft.Data.Sqlite` 10.0.12, `Microsoft.Data.SqlClient` 7.1.1, `Npgsql` 10.0.3 (this plugin only) |
 | `plugins/MyRPA.Sftp` (7.1) | `Sftp.List`, `Sftp.Download`, `Sftp.Upload`, `Sftp.Delete`, `Sftp.Move`, `Sftp.CreateFolder` | Network (Download/Upload also FileSystem) | `SSH.NET` 2026.0.0 (this plugin only) |
+| `plugins/MyRPA.Scripting` (ADR-0045) | `Code.JavaScript` (confined, no files or network), `Code.Python` (opt-in, not sandboxed) | JavaScript: none; Python: FileSystem, Network | `Jint` 4.17.0 (this plugin only) |
 | `plugins/MyRPA.Email` (7.1) | `Email.Send`, `Email.Read`, `Email.SaveAttachments`, `Email.MarkRead`, `Email.Move` | Network (Send and SaveAttachments also FileSystem) | `MailKit` 4.18.1 with `MimeKit` (this plugin only) |
 
 The plugins are loaded like any plugin: `--plugin <directory>` (repeatable) or a plugin configuration file with their
@@ -183,6 +184,22 @@ Servers are named in the plugin configuration (`server.NAME.host`, `.port`, `.ho
 Offline checks always run; transfers run against a real server when `MYRPA_TEST_SFTP` is set (the CI
 `Integration services` job), otherwise they are reported as skipped.
 
+## 5e. Scripting (`MyRPA.Scripting`, ADR-0045)
+
+`Code.JavaScript` and `Code.Python` run a function body that reads `inputs` (a Dictionary) and returns a value. Values
+cross as JSON both ways. The code is a literal, multiline text property and never an expression, so data never becomes
+code. Details: [plugins/MyRPA.Scripting/README.md](../../plugins/MyRPA.Scripting/README.md).
+
+- **JavaScript is a sandbox (Jint):**
+  - no .NET, files, network, processes, `eval` or `new Function`;
+  - limits on time, statements, memory and recursion.
+- **Python is opt-in and not a sandbox:**
+  - it runs only when the operator sets `pythonPath`;
+  - it uses the installed interpreter in a separate process (`python -I`), with a timeout that kills it;
+  - the script has the robot account's rights.
+
+The catalog's `multiline` flag (ADR-0045) also marks the database `sql` property.
+
 ## 6. Error types
 
 | errorType | Raised by |
@@ -192,6 +209,7 @@ Offline checks always run; transfers run against a real server when `MYRPA_TEST_
 | `InvalidCsv`, `InvalidJson`, `InvalidXml`, `InvalidArchive` | Files plugin (`InvalidJson` also `Core.Json.Parse` and `Http.Request`) |
 | `InvalidWorkbook`, `SheetNotFound` | Excel plugin |
 | `InvalidDocument`, `EncryptedDocument` | Documents plugin |
+| `ScriptSyntax`, `ScriptError`, `ScriptLimit`, `InvalidResult`, `PythonNotConfigured` | Scripting plugin (with `Timeout`) |
 | `ServerNotFound`, `HostKeyMismatch`, `SftpConnection`, `SftpAuthentication`, `RemotePathDenied`, `RemoteFileNotFound`, `RemoteFileExists`, `RemotePermissionDenied` | SFTP plugin (with `Timeout`) |
 | `ConnectionNotFound`, `DatabaseConnection`, `DatabaseError`, `ReadOnlyConnection` | Database plugin (with `Timeout`, `TooManyItems`) |
 | `HostNotConfigured`, `EmailConnection`, `EmailAuthentication`, `EmailRejected`, `FolderNotFound`, `MessageNotFound`, `MessageTooLarge` | Email plugin (with `Timeout`) |

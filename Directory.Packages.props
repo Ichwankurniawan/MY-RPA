@@ -22,6 +22,8 @@
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <!-- ADR-0043: the SFTP plugin (SSH.NET, MIT, with BouncyCastle). -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
+    <!-- ADR-0045: sandboxed JavaScript in the scripting plugin (Jint, BSD-2-Clause, with its parser Acornima). -->
+    <PackageVersion Include="Jint" Version="4.17.0" />
   </ItemGroup>
   <ItemGroup Label="Composition roots only">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />

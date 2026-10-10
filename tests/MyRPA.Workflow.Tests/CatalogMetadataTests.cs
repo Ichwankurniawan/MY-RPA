@@ -53,6 +53,24 @@ public sealed class CatalogMetadataTests
         Assert.Equal((ActivitySideEffects.None, ActivityValueType.Any, false), (older.SideEffects, older.Properties[0].ValueType, older.Properties[0].IsSecret));
     }
 
+    [Fact]
+    public void Multiline_RoundTrips_AndIsOnlyForTextProperties()
+    {
+        var script = new ActivityDescriptor(
+            new ActivityTypeName("Test.Script"),
+            "Script",
+            "Test",
+            "Runs code.",
+            [new ActivityPropertyDefinition("code", ActivityPropertyKind.Text, isRequired: true) { IsMultiline = true }, new ActivityPropertyDefinition("name", ActivityPropertyKind.Text)]);
+
+        var json = ActivityCatalogJson.Write([script]);
+        var read = Assert.Single(ActivityCatalogJson.Read(json).Descriptors);
+
+        Assert.Equal(1, json.Split("\"multiline\": true").Length - 1);
+        Assert.Equal([true, false], read.Properties.Select(p => p.IsMultiline));
+        Assert.Throws<ArgumentException>(() => new ActivityPropertyDefinition("p", ActivityPropertyKind.Expression) { IsMultiline = true });
+    }
+
     [Theory]
     [InlineData("\"valueType\": \"String\"", "\"valueType\": \"Number\"", "valueType")]
     [InlineData("\"secret\": true", "\"secret\": \"yes\"", "secret")]

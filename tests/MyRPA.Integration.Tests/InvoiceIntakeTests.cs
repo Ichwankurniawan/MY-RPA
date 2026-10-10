@@ -88,6 +88,21 @@ public sealed class InvoiceIntakeTests
     }
 
     [Fact]
+    public async Task ScriptSample_TotalsWithSandboxedJavaScript_AndCatchesAScriptError_ThroughTheCli()
+    {
+        using var workspace = new TempWorkspace();
+        var config = workspace.Write("scripting.json", $$"""{ "pluginConfigVersion": "1.0", "plugins": [ { "directory": {{JsonSerializer.Serialize(PluginDirectory("ScriptingPluginDirectory"))}} } ] }""");
+
+        var result = await Cli.RunAsync("--plugin-config", config, "run", Path.Combine(RepositoryPaths.Samples, "plugins", "script-demo.json"));
+
+        Assert.True(result.ExitCode == CliExitCodes.Success, result.Out + result.Error);
+        var outputs = JsonDocument.Parse(result.Out).RootElement.GetProperty("outputs");
+        Assert.Equal("ACME Ltd: 1244.50, Bolt & Co: 99.00", outputs.GetProperty("summary").GetString());
+        Assert.Equal(1244.5m, outputs.GetProperty("byCustomer").GetProperty("ACME Ltd").GetDecimal());
+        Assert.StartsWith("ScriptError: ", outputs.GetProperty("caught").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task InvoiceIntake_IsValid_WithItsPlugins()
     {
         using var workspace = new TempWorkspace();

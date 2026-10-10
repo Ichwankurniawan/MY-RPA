@@ -122,6 +122,7 @@ public static class ArchitectureRules
         ["Microsoft.Data.SqlClient"] = "MyRPA.Database",
         ["Npgsql"] = "MyRPA.Database",
         ["SSH.NET"] = "MyRPA.Sftp",
+        ["Jint"] = "MyRPA.Scripting",
     };
 
     /// <summary>
@@ -224,6 +225,7 @@ public static class ArchitectureRules
         ["MyRPA.Email.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Database.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Sftp.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        ["MyRPA.Scripting.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
         ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Server", "MyRPA.Cli"],
         // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.

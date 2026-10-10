@@ -136,6 +136,11 @@ public static class ActivityCatalogJson
                 writer.WriteBoolean("secret", true);
             }
 
+            if (property.IsMultiline)
+            {
+                writer.WriteBoolean("multiline", true);
+            }
+
             writer.WriteEndObject();
         }
 
@@ -202,6 +207,7 @@ public static class ActivityCatalogJson
                 ValueType = ValueType(property, propertyPath),
                 DefaultValue = property.TryGetProperty("default", out var defaultValue) ? defaultValue.GetRawText() : null,
                 IsSecret = property.TryGetProperty("secret", out _) && Boolean(property, "secret", propertyPath),
+                IsMultiline = property.TryGetProperty("multiline", out _) && Boolean(property, "multiline", propertyPath),
             });
         }
 

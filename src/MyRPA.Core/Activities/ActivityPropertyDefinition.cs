@@ -98,4 +98,16 @@ public sealed record ActivityPropertyDefinition
             ? value
             : throw new ArgumentException($"Property '{Name}' is not an expression and cannot be a secret.", nameof(value));
     }
+
+    /// <summary>
+    /// Whether a text property holds several lines, such as code or SQL (ADR-0045): editors show a larger, monospace box.
+    /// Only for text properties.
+    /// </summary>
+    public bool IsMultiline
+    {
+        get;
+        init => field = !value || Kind == ActivityPropertyKind.Text
+            ? value
+            : throw new ArgumentException($"Property '{Name}' is not a text property and cannot be multiline.", nameof(value));
+    }
 }
