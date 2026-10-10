@@ -5,7 +5,7 @@ import { Icon, iconNames } from './icons';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, immediately, settle } from './test-support';
 
-/** The Properties panel (UX-3: the selected card has the same editors inline). */
+/** The Properties panel (the only place properties are edited). */
 const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
 
 
@@ -54,9 +54,9 @@ describe('Icons', () => {
   });
 
   it('is an image with a name when given a label', () => {
-    render(<Icon name="logo" label="MyRPA" />);
+    render(<Icon name="logo" label="Laconi" />);
 
-    expect(screen.getByRole('img', { name: 'MyRPA' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Laconi' })).toBeTruthy();
   });
 });
 

@@ -166,7 +166,7 @@ describe('Panels', () => {
     fireEvent.keyDown(splitter, { key: 'Home' });
     expect(state().panes.toolbox).toBe(paneLimits.toolbox.min);
 
-    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe(`min(${paneLimits.toolbox.min}px, 35vw) minmax(0, 1fr) min(340px, 32vw)`);
+    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe(`var(--rail) min(${paneLimits.toolbox.min}px, 35vw) minmax(0, 1fr) min(340px, 32vw)`);
     expect(JSON.parse(preferences.values.get(preferenceKeys.panes)!)).toMatchObject({ toolbox: paneLimits.toolbox.min });
   });
 
@@ -179,7 +179,7 @@ describe('Panels', () => {
     fireEvent.click(properties);
     expect(properties.getAttribute('aria-pressed')).toBe('false');
     expect(screen.queryByRole('complementary', { name: 'Properties' })).toBeNull();
-    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe('min(260px, 30vw) minmax(0, 1fr) 0px');
+    expect(document.querySelector<HTMLElement>('.studio')!.style.gridTemplateColumns).toBe('var(--rail) min(260px, 30vw) minmax(0, 1fr) 0px');
 
     fireEvent.click(within(view).getByRole('button', { name: 'Activities' }));
     expect(document.querySelector<HTMLElement>('.sidebar')!.hidden).toBe(true);

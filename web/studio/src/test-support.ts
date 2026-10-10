@@ -206,8 +206,28 @@ export class FakeApi implements StudioApi {
     return this.pluginReport;
   }
 
+  /** Folders created with createFolder (folders holding files are listed from the file paths). */
+  folders = new Set<string>();
+
   async workflows() {
-    return [...this.files.keys()].map((path) => ({ path, size: 1, modified: '2026-09-25T00:00:00Z' }));
+    const folders = new Set(this.folders);
+    for (const path of this.files.keys()) {
+      const segments = path.split('/').slice(0, -1);
+      segments.forEach((_, i) => folders.add(segments.slice(0, i + 1).join('/')));
+    }
+
+    return {
+      workflows: [...this.files.keys()].map((path) => ({ path, size: 1, modified: '2026-09-25T00:00:00Z' })),
+      folders: [...folders].sort(),
+    };
+  }
+
+  async createFolder(_project: string, path: string) {
+    if (this.folders.has(path) || this.files.has(path) || (await this.workflows()).folders.includes(path)) {
+      throw new ApiError(409, `'${path}' already exists.`);
+    }
+
+    this.folders.add(path);
   }
 
   async readWorkflow(_project: string, path: string) {

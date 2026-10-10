@@ -6,7 +6,7 @@ import { Icon, type IconName } from './icons';
 import { childSteps, indexDocument, isObject, keyOf, nodeAt, nodeLabel, type Step } from './document';
 import { arrowShape, arrowText, canvasPositions, canvasSize, isGraphActivity, isGraphNode, lastTaken, stepEntries, stepSize, transitionsOf, type Point } from './graph';
 import type { Position } from './placement';
-import { InlineProperties, PropertiesPanel } from './PropertyEditors';
+import { PropertiesPanel } from './PropertyEditors';
 import { RecordingPanel } from './RecordingPanel';
 import {
   collapseAllRefusalOf,
@@ -29,6 +29,8 @@ import {
   type StudioDialog,
   type StudioState,
   type PaneName,
+  type StudioPage,
+  type NewWorkflowKind,
   type SidebarTab,
   paneLimits,
   workflowKey,
@@ -56,7 +58,7 @@ function Shell() {
   const path = useStudioState((s) => s.file?.path);
 
   useEffect(() => {
-    document.title = `${path ? `${dirty ? '• ' : ''}${path} — ` : ''}MyRPA Studio`;
+    document.title = `${path ? `${dirty ? '• ' : ''}${path} — ` : ''}Laconi Studio`;
   }, [path, dirty]);
 
   useEffect(() => {
@@ -159,6 +161,7 @@ function Shell() {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => (root.current ? installDragAndDrop(root.current, studio) : undefined), [studio]);
   const panes = useStudioState((s) => s.panes);
+  const page = useStudioState((s) => s.page);
 
   // Panel sizes (UX-2) go to the grid through the CSSOM (CSP-safe); until a panel is resized, the stylesheet decides.
   useEffect(() => {
@@ -171,27 +174,34 @@ function Shell() {
     const custom = panes.hidden.length > 0 || panes.toolbox !== undefined || panes.properties !== undefined || panes.bottom !== undefined;
     // A remembered size is capped by the window (min()), so shrinking the window never squeezes the designer away.
     const capped = (name: PaneName, fallback: string, share: string) => (hidden(name) ? '0px' : panes[name] !== undefined ? `min(${panes[name]}px, ${share})` : fallback);
-    element.style.gridTemplateColumns = custom ? `${capped('toolbox', 'min(260px, 30vw)', '35vw')} minmax(0, 1fr) ${capped('properties', 'min(340px, 32vw)', '40vw')}` : '';
+    element.style.gridTemplateColumns = custom ? `var(--rail) ${capped('toolbox', 'min(260px, 30vw)', '35vw')} minmax(0, 1fr) ${capped('properties', 'min(340px, 32vw)', '40vw')}` : '';
     element.style.gridTemplateRows = custom ? `auto minmax(0, 1fr) ${capped('bottom', 'minmax(140px, 28vh)', '55vh')} auto` : '';
   }, [panes]);
 
   return (
-    <div className="studio" ref={root}>
+    <div className={page === 'home' ? 'studio page-home' : 'studio'} ref={root}>
       <Toolbar />
       {connection === 'ready' ? (
         <>
-          <section className="sidebar" aria-label="Side panel" hidden={panes.hidden.includes('toolbox')}>
-            <SidebarTabs />
-          </section>
-          <WorkflowTree />
-          {!panes.hidden.includes('properties') && <PropertiesPanel />}
-          {!panes.hidden.includes('bottom') && <OutputPanel />}
-          {/* A landmark for the splitters (display: contents keeps them grid items on the panel edges). */}
-          <section className="splitters" aria-label="Panel sizes">
-            {!panes.hidden.includes('toolbox') && <Splitter pane="toolbox" label="Resize the activities panel" />}
-            {!panes.hidden.includes('properties') && <Splitter pane="properties" label="Resize the properties panel" />}
-            {!panes.hidden.includes('bottom') && <Splitter pane="bottom" label="Resize the bottom panel" />}
-          </section>
+          <NavRail />
+          {page === 'home' ? (
+            <HomePage />
+          ) : (
+            <>
+              <section className="sidebar" aria-label="Side panel" hidden={panes.hidden.includes('toolbox')}>
+                <SidebarTabs />
+              </section>
+              <WorkflowTree />
+              {!panes.hidden.includes('properties') && <PropertiesPanel />}
+              {!panes.hidden.includes('bottom') && <OutputPanel />}
+              {/* A landmark for the splitters (display: contents keeps them grid items on the panel edges). */}
+              <section className="splitters" aria-label="Panel sizes">
+                {!panes.hidden.includes('toolbox') && <Splitter pane="toolbox" label="Resize the activities panel" />}
+                {!panes.hidden.includes('properties') && <Splitter pane="properties" label="Resize the properties panel" />}
+                {!panes.hidden.includes('bottom') && <Splitter pane="bottom" label="Resize the bottom panel" />}
+              </section>
+            </>
+          )}
           <RunDialogHost />
           <StudioDialogHost />
         </>
@@ -303,6 +313,128 @@ export function statusLabel(run: RunView): string {
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
 
+const pages: readonly { readonly id: StudioPage; readonly label: string; readonly icon: IconName }[] = [
+  { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'workflows', label: 'Workflows', icon: 'flowchart' },
+];
+
+/**
+ * The navigation rail (ADR-0044): the pages that work today. Runners, schedules and other modules get a place here
+ * when they exist; nothing is shown for them before.
+ */
+function NavRail() {
+  const studio = useStudio();
+  const page = useStudioState((s) => s.page);
+  return (
+    <nav className="rail" aria-label="Main">
+      {pages.map((p) => (
+        <button key={p.id} type="button" className="rail-item" aria-current={page === p.id ? 'page' : undefined} title={p.label} onClick={() => studio.showPage(p.id)}>
+          <Icon name={p.icon} size={20} />
+          <span>{p.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** The Home page (ADR-0044): what this Studio can do now, from real data only (no invented statistics). */
+function HomePage() {
+  const studio = useStudio();
+  const project = useStudioState((s) => s.project);
+  const files = useStudioState((s) => s.files);
+  const activities = useStudioState((s) => s.activities);
+  const plugins = useStudioState((s) => s.plugins?.plugins);
+  const runs = useStudioState((s) => s.runs);
+  const openFile = (path: string) => {
+    studio.showPage('workflows');
+    void studio.requestOpen(path);
+  };
+  const builtIn = activities.filter((a) => a.type.startsWith('Core.')).length;
+  return (
+    <main className="home" aria-labelledby="home-heading">
+      <section className="home-hero">
+        <Icon name="logo" size={56} />
+        <div>
+          <h2 id="home-heading">Laconi Studio</h2>
+          <p className="tagline">
+            Design it. Run it. <strong>Lakoni.</strong>
+          </p>
+          <div className="home-actions">
+            <button
+              type="button"
+              className="primary with-icon"
+              disabled={project === undefined}
+              onClick={() => {
+                studio.showPage('workflows');
+                studio.startName('new');
+              }}
+            >
+              <Icon name="file-new" size={16} /> New workflow
+            </button>
+            <button type="button" className="with-icon" onClick={() => studio.showPage('workflows')}>
+              <Icon name="flowchart" size={16} /> Open the designer
+            </button>
+          </div>
+        </div>
+      </section>
+      <div className="home-grid">
+        <section className="home-card" aria-labelledby="home-workflows">
+          <h3 id="home-workflows">Workflows{project ? ` in ${project}` : ''}</h3>
+          {files.length === 0 ? (
+            <p className="hint">No workflows in this project yet.</p>
+          ) : (
+            <ul className="home-list">
+              {files.map((f) => (
+                <li key={f.path}>
+                  <button type="button" className="link-row" onClick={() => openFile(f.path)} aria-label={`Open ${f.path}`}>
+                    <Icon name="file" size={16} />
+                    <span>{f.path}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="home-card" aria-labelledby="home-runs">
+          <h3 id="home-runs">Runs in this session</h3>
+          {runs.length === 0 ? (
+            <p className="hint">No runs yet. Open a workflow and press Run (F5).</p>
+          ) : (
+            <ul className="home-list">
+              {runs.map((r) => (
+                <li key={r.key} className="home-run">
+                  <span>{r.path}</span>
+                  <span className="home-run-status">{statusLabel(r)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="home-card" aria-labelledby="home-activities">
+          <h3 id="home-activities">Activities</h3>
+          <p className="home-figure">
+            <strong>{activities.length}</strong> activities: {builtIn} built-in, {activities.length - builtIn} from plugins.
+          </p>
+          {plugins && plugins.length > 0 ? (
+            <ul className="home-list">
+              {plugins.map((p) => (
+                <li key={p.id}>
+                  <Icon name="plugin" size={16} /> {p.name}{' '}
+                  <small>
+                    {p.version} · {p.activities.length} activities
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="hint">No plugins loaded. Start the server with --plugin or --plugin-config to add activities.</p>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
+
 function ConnectionPanel() {
   const connection = useStudioState((s) => s.connection);
   return (
@@ -394,7 +526,7 @@ export function validationSummary(state: StudioState): { state: string; text: st
 /** One command: our icon and its label; the label is the accessible name, the title says why it is disabled. */
 function Command({ icon, label, onClick, disabled, title }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean; title?: string }) {
   return (
-    <button type="button" className="command" onClick={onClick} disabled={disabled} title={title}>
+    <button type="button" className={`command command-${icon}`} onClick={onClick} disabled={disabled} title={title ?? label}>
       <Icon name={icon} />
       <span>{label}</span>
     </button>
@@ -479,9 +611,17 @@ function Toolbar() {
   return (
     <header className="commandbar">
       <div className="titlebar">
+        {/* ADR-0044: the Laconi mark with the wordmark; the heading's accessible name is the product name. */}
         <span className="brand">
-          <Icon name="logo" size={22} />
-          <h1>MyRPA Studio</h1>
+          <Icon name="logo" size={26} />
+          <h1 aria-label="Laconi Studio">
+            <span className="wordmark" aria-hidden="true">
+              laconi
+            </span>
+            <span className="product" aria-hidden="true">
+              Studio
+            </span>
+          </h1>
         </span>
         <span className="document-title" data-testid="document-title">
           {file ? `${file.path}${dirty ? ' •' : ''}${file.readOnlyReason ? ' (read-only)' : ''}` : 'No workflow open'}
@@ -733,6 +873,7 @@ function Toolbox() {
                                     aria-describedby={a.description || sideEffectsText(a) ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
                                     {...insertProps(a)}
                                   >
+                                    <Icon name={activityIcon(a.type, a)} size={15} />
                                     <span>{a.displayName}</span>
                                   </button>
                                   <button
@@ -778,12 +919,12 @@ interface FolderNode {
   readonly files: WorkflowFile[];
 }
 
-/** The project's files as folders (sorted by name) with their files. */
-function fileTree(files: readonly WorkflowFile[]): FolderNode {
+/** The project's folders (empty ones too) and files as a tree; folders and files sorted by name. */
+function fileTree(files: readonly WorkflowFile[], folders: readonly string[]): FolderNode {
   const root: FolderNode = { name: '', path: '', folders: [], files: [] };
-  for (const file of files) {
+  const folderAt = (path: string): FolderNode => {
     let folder = root;
-    for (const segment of file.path.split('/').slice(0, -1)) {
+    for (const segment of path.split('/').filter((s) => s !== '')) {
       let next = folder.folders.find((f) => f.name === segment);
       if (!next) {
         next = { name: segment, path: folder.path ? `${folder.path}/${segment}` : segment, folders: [], files: [] };
@@ -794,37 +935,70 @@ function fileTree(files: readonly WorkflowFile[]): FolderNode {
       folder = next;
     }
 
-    folder.files.push(file);
+    return folder;
+  };
+  folders.forEach(folderAt);
+  for (const file of files) {
+    folderAt(file.path.split('/').slice(0, -1).join('/')).files.push(file);
   }
 
   return root;
 }
 
-/** The files in display order (each folder's subfolders first, then its files). */
-function displayOrder(folder: FolderNode): string[] {
-  return [...folder.folders.flatMap(displayOrder), ...folder.files.map((f) => f.path)];
+/** Tree items are files (their path) and folders (their path and a '/'). */
+const folderItem = (path: string) => `${path}/`;
+const isFolderItem = (item: string) => item.endsWith('/');
+
+/** The visible items in display order: a closed folder hides what it holds. */
+function visibleItems(folder: FolderNode, closed: ReadonlySet<string>): string[] {
+  return [
+    ...folder.folders.flatMap((sub) => [folderItem(sub.path), ...(closed.has(sub.path) ? [] : visibleItems(sub, closed))]),
+    ...folder.files.map((f) => f.path),
+  ];
 }
 
-/** The project's workflow files as a tree. Click selects, double-click or Enter opens, F2 renames, Delete deletes. */
+/**
+ * The project's folders and workflow files as a tree. A click on a folder opens or closes it; double-click or Enter
+ * opens a file; F2 renames and Delete deletes a file; Left and Right close and open folders. New and New folder create
+ * in the selected folder (or the selected file's folder).
+ */
 function FilesPanel() {
   const studio = useStudio();
   const files = useStudioState((s) => s.files);
+  const folders = useStudioState((s) => s.folders);
   const project = useStudioState((s) => s.project);
   const openPath = useStudioState((s) => s.file?.path);
   const [selected, setSelected] = useState<string>();
+  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const list = useRef<HTMLUListElement>(null);
-  const tree = useMemo(() => fileTree(files), [files]);
-  const order = useMemo(() => displayOrder(tree), [tree]);
-  const target = selected !== undefined && order.includes(selected) ? selected : openPath;
+  const tree = useMemo(() => fileTree(files, folders), [files, folders]);
+  const order = useMemo(() => visibleItems(tree, closed), [tree, closed]);
+  const current = selected !== undefined && order.includes(selected) ? selected : openPath;
+  const target = current !== undefined && !isFolderItem(current) ? current : undefined;
+  const folderOfTarget = target?.includes('/') ? target.slice(0, target.lastIndexOf('/')) : undefined;
+  const inFolder = current !== undefined && isFolderItem(current) ? current.slice(0, -1) : folderOfTarget;
 
-  const select = (path: string) => {
-    setSelected(path);
+  const select = (item: string) => {
+    setSelected(item);
     // Compared, not interpolated into a selector: paths may contain quotes or brackets.
-    [...(list.current?.querySelectorAll<HTMLElement>('[data-path]') ?? [])].find((item) => item.dataset.path === path)?.focus();
+    [...(list.current?.querySelectorAll<HTMLElement>('[data-path], [data-folder]') ?? [])]
+      .find((element) => element.dataset.path === item || (element.dataset.folder !== undefined && folderItem(element.dataset.folder) === item))
+      ?.focus();
   };
+  const setOpen = (path: string, open: boolean) =>
+    setClosed((current) => {
+      const next = new Set(current);
+      if (open) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+
+      return next;
+    });
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
-    const at = target === undefined ? -1 : order.indexOf(target);
+    const at = current === undefined ? -1 : order.indexOf(current);
     const next =
       event.key === 'ArrowDown' ? order[Math.min(at + 1, order.length - 1)]
       : event.key === 'ArrowUp' ? order[Math.max(at - 1, 0)]
@@ -834,6 +1008,19 @@ function FilesPanel() {
     if (next !== undefined) {
       event.preventDefault();
       select(next);
+      return;
+    }
+
+    if (current !== undefined && isFolderItem(current)) {
+      const path = current.slice(0, -1);
+      const open = !closed.has(path);
+      if ((event.key === 'ArrowRight' && !open) || (event.key === 'ArrowLeft' && open) || event.key === 'Enter') {
+        event.preventDefault();
+        setOpen(path, !open);
+      } else if (event.key === 'ArrowLeft' && path.includes('/')) {
+        event.preventDefault();
+        select(folderItem(path.slice(0, path.lastIndexOf('/'))));
+      }
     } else if (target !== undefined && event.key === 'Enter') {
       event.preventDefault();
       void studio.requestOpen(target);
@@ -843,17 +1030,44 @@ function FilesPanel() {
     } else if (target !== undefined && event.key === 'Delete') {
       event.preventDefault();
       studio.startDelete(target);
+    } else if (event.key === 'ArrowLeft' && folderOfTarget !== undefined) {
+      event.preventDefault();
+      select(folderItem(folderOfTarget));
     }
   };
 
+  const tabStop = (item: string) => (item === current || (current === undefined && item === order[0]) ? 0 : -1);
   const renderFolder = (folder: FolderNode, depth: number) => (
     <>
-      {folder.folders.map((sub) => (
-        <li key={`folder:${sub.path}`} role="treeitem" aria-level={depth} aria-expanded={true} aria-selected={false} className="folder">
-          <span className="folder-name">{sub.name}/</span>
-          <ul role="group">{renderFolder(sub, depth + 1)}</ul>
-        </li>
-      ))}
+      {folder.folders.map((sub) => {
+        const item = folderItem(sub.path);
+        const open = !closed.has(sub.path);
+        return (
+          <li
+            key={item}
+            role="treeitem"
+            aria-level={depth}
+            aria-expanded={open}
+            aria-selected={item === current}
+            tabIndex={tabStop(item)}
+            data-folder={sub.path}
+            className={`folder${item === current ? ' selected' : ''}`}
+          >
+            <span
+              className="tree-row"
+              onClick={() => {
+                select(item);
+                setOpen(sub.path, !open);
+              }}
+            >
+              <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
+              <Icon name={open ? 'folder-open' : 'folder'} size={16} />
+              <span className="tree-name">{sub.name}</span>
+            </span>
+            {open && <ul role="group">{renderFolder(sub, depth + 1)}</ul>}
+          </li>
+        );
+      })}
       {folder.files.map((file) => {
         const name = file.path.split('/').at(-1);
         return (
@@ -861,15 +1075,18 @@ function FilesPanel() {
             key={file.path}
             role="treeitem"
             aria-level={depth}
-            aria-selected={file.path === target}
+            aria-selected={file.path === current}
             aria-current={file.path === openPath ? 'true' : undefined}
-            tabIndex={file.path === target || (target === undefined && file.path === order[0]) ? 0 : -1}
+            tabIndex={tabStop(file.path)}
             data-path={file.path}
-            className={`file${file.path === target ? ' selected' : ''}${file.path === openPath ? ' open' : ''}`}
+            className={`file${file.path === current ? ' selected' : ''}${file.path === openPath ? ' open' : ''}`}
             onClick={() => select(file.path)}
             onDoubleClick={() => void studio.requestOpen(file.path)}
           >
-            {name}
+            <span className="tree-row">
+              <Icon name="file" size={15} />
+              <span className="tree-name">{name}</span>
+            </span>
           </li>
         );
       })}
@@ -881,8 +1098,11 @@ function FilesPanel() {
       <div className="files-header">
         <h2 id="files-heading">Files</h2>
         <div className="editbar" role="toolbar" aria-label="Files">
-          <button type="button" onClick={() => studio.startName('new')} disabled={project === undefined} title="Create a new workflow in the project">
+          <button type="button" onClick={() => studio.startName('new', inFolder)} disabled={project === undefined} title={inFolder ? `Create a new workflow in ${inFolder}` : 'Create a new workflow in the project'}>
             New…
+          </button>
+          <button type="button" onClick={() => studio.startName('folder', inFolder)} disabled={project === undefined} title={inFolder ? `Create a folder in ${inFolder}` : 'Create a folder in the project'}>
+            New folder…
           </button>
           <button type="button" onClick={() => target && studio.startName('rename', target)} disabled={target === undefined} title={target ? `Rename or move ${target} (F2)` : 'Select a file'}>
             Rename…
@@ -892,7 +1112,7 @@ function FilesPanel() {
           </button>
         </div>
       </div>
-      <p className="hint">Double-click or Enter opens a file.</p>
+      <p className="hint">Double-click or Enter opens a file; click a folder to open or close it.</p>
       <ul role="tree" aria-label="Workflow files" ref={list} onKeyDown={onKeyDown}>
         {renderFolder(tree, 1)}
       </ul>
@@ -1093,20 +1313,41 @@ function RenameNameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'r
   );
 }
 
+/** The roots New workflow offers (ADR-0037): the root cannot be changed later, so it is chosen here. */
+const workflowKinds: readonly (readonly [NewWorkflowKind, string, string])[] = [
+  ['sequence', 'Sequence', 'activities run top to bottom'],
+  ['flowchart', 'Flowchart', 'steps joined by arrows, with decisions'],
+  ['state-machine', 'State machine', 'states and transitions'],
+];
+
 function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }> }) {
   const studio = useStudio();
   const id = useId();
   const [path, setPath] = useState(dialog.initial);
-  const title = dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
-  const action = dialog.purpose === 'new' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
+  const [kind, setKind] = useState<NewWorkflowKind>('sequence');
+  const title = dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'folder' ? 'New folder' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
+  const action = dialog.purpose === 'new' || dialog.purpose === 'folder' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
   return (
     <Modal title={title} onCancel={() => studio.closeDialog()}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void studio.submitName(path);
+          void studio.submitName(path, kind);
         }}
       >
+        {dialog.purpose === 'new' && (
+          <fieldset className="field workflow-kind">
+            <legend className="field-label">Type</legend>
+            {workflowKinds.map(([value, label, hint]) => (
+              <label key={value} className="kind-option">
+                <input type="radio" name={`${id}-kind`} value={value} checked={kind === value} onChange={() => setKind(value)} />
+                <span>
+                  <strong>{label}</strong> <span className="muted">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
         <div className="field">
           <label className="field-label" htmlFor={id}>
             Path in the project
@@ -1431,11 +1672,37 @@ const typeIcons: Record<string, IconName> = {
   'Core.State': 'state',
 };
 
-const activityIcon = (type: string | undefined): IconName => (type === undefined ? 'activity' : (typeIcons[type] ?? (type.startsWith('Browser.') ? 'browser' : 'activity')));
+const namespaceIcons: readonly (readonly [string, IconName])[] = [
+  ['Core.Text.', 'log'],
+  ['Core.Json.', 'data'],
+  ['Core.Date.', 'recent'],
+  ['Core.Collection.', 'sequence'],
+  ['Browser.', 'browser'],
+];
+
+/** An activity's icon (ADR-0044): built-ins by type or namespace; any other activity by its declared side effects. */
+const activityIcon = (type: string | undefined, activity?: ActivityDescriptor): IconName => {
+  if (type === undefined) {
+    return 'activity';
+  }
+
+  const effects = activity?.sideEffects ?? [];
+  return (
+    typeIcons[type] ??
+    namespaceIcons.find(([prefix]) => type.startsWith(prefix))?.[1] ??
+    (effects.includes('Browser') ? 'browser' : effects.includes('Network') ? 'globe' : effects.includes('FileSystem') ? 'file' : 'activity')
+  );
+};
 
 const summaries = new WeakMap<JsonObject, string>();
 
 /** One line of a card's key values (UX-3), e.g. `message: 'Hello' · level: Warning`; cached per node version. */
+/** A card's hover text: its type and id, then its values (the card itself shows only the icon and display name). */
+export function cardTooltip(type: string | undefined, id: string | undefined, summary: string): string {
+  const head = [type, id === undefined ? undefined : `#${id}`].filter((part) => part !== undefined).join(' ');
+  return summary === '' ? head : `${head}\n${summary}`;
+}
+
 export function propertySummary(node: JsonObject, activity: ActivityDescriptor | undefined): string {
   const cached = summaries.get(node);
   if (cached !== undefined) {
@@ -1495,7 +1762,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
   const collapsible = depth > 1 && children.length > 0;
   const collapsed = collapsible && collapsedFlag === '1';
   const label = nodeLabel(node, activity);
-  const summary = selected ? '' : propertySummary(node, activity);
+  const summary = propertySummary(node, activity);
   // A flowchart (G-2) shows its steps on a canvas, or as this list of cards (the keyboard-first view).
   const graph = isGraphActivity(activity);
   const listView = listFlag === '1';
@@ -1516,7 +1783,11 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
         studio.select(key);
       }}
     >
-      <div className={`node${container ? ' container' : ''}${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
+      <div
+        className={`node${container ? ' container' : ''}${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`}
+        data-run-status={status}
+        title={cardTooltip(type, id, summary)}
+      >
         <div className="card-header">
           {collapsible && (
             <button
@@ -1534,10 +1805,10 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
             </button>
           )}
           {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
-          <Icon name={activityIcon(type)} size={16} />
+          <Icon name={activityIcon(type, activity)} size={16} />
           <span className="title">
             {slot !== undefined && <span className="slot">{slot}:</span>}{slot !== undefined && ' '}
-            <span className="label">{label}</span> <span className="type">{type}</span> {id !== undefined && <span className="id">#{id}</span>}
+            <span className="label">{label}</span> <span className="type visually-hidden">{type}</span> {id !== undefined && <span className="id visually-hidden">#{id}</span>}
             {hasError && ' '}
             {hasError && <span className="badge error">error</span>}
             {status !== undefined && ' '}
@@ -1563,7 +1834,6 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
           )}
           {selected && <CardMenu label={label} />}
         </div>
-        {selected ? <InlineProperties nodeKey={key} /> : summary !== '' && <p className="summary">{summary}</p>}
         {transitions.length > 0 && (
           <p className="transitions-summary">
             {transitions.map((t, i) => (
@@ -1937,7 +2207,7 @@ const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { no
       <div className={`node step-card${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
         <div className="card-header">
           {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
-          <Icon name={activityIcon(type)} size={16} />
+          <Icon name={activityIcon(type, activity)} size={16} />
           <span className="title">
             <span className="label">{label}</span> {id !== undefined && <span className="id">#{id}</span>}
             {start && ' '}

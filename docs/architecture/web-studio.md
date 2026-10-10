@@ -65,9 +65,10 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   Activities / Properties / Bottom hides or shows them. Favorites, recent activities and panel sizes are remembered per
   browser (`src/preferences.ts`, best effort).
 - **Designer (UX-3):** activities are cards in a centred flow with connectors; each card has an icon header (type icon,
-  display name, slot, badges). The selected card edits its properties inline (the same editors as the Properties
-  panel) and has a ⋮ menu (Cut, Copy, Paste, Delete, Move up/down); other cards show a one-line summary of their
-  values. Containers collapse and expand (the card's toggle, ArrowLeft/ArrowRight, Expand all / Collapse all); a
+  display name, slot, badges); the type, id and a one-line summary of its values are its tooltip (the type and id
+  stay in its accessible name); properties are edited only in the Properties
+  panel (the inline card editors were removed, ADR-0044). The selected card has a ⋮ menu (Cut, Copy, Paste, Delete,
+  Move up/down). Containers collapse and expand (the card's toggle, ArrowLeft/ArrowRight, Expand all / Collapse all); a
   selection inside a collapsed container expands it. Zoom 50–200 % with Ctrl+= / Ctrl+- / Ctrl+0, the zoom buttons
   and fit to width (CSS `zoom` set through the CSSOM). While dragging, one transparent overlay carries the cursor.
 - **Recorder (Phase 6, ADR-0039):** **Record** (Run group) opens the **Recorder** tab: enter the first page's address
@@ -93,13 +94,31 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
   file named with the server's `--open` opens after connecting. The file is parsed into the document model.
+- **Brand and shell (ADR-0044):**
+  - **Brand:** the product is shown as **Laconi Studio**, with the Laconi mark (`logo` icon, favicon) and the tagline
+    "Design it. Run it. Lakoni.". The server program and code keep their `MyRPA` names.
+  - **Theme:** the tokens in `style.css` carry the brand palette (dark reference theme, light variant). `--primary`
+    marks the main action (Run).
+  - **Navigation rail:** shows only working pages: **Workflows** (the designer, the start page) and **Home**.
+  - **Home page:** shows only real data:
+    - the project's workflows (open one in the designer);
+    - New workflow;
+    - the runs of this session;
+    - the activity count and the loaded plugins.
+  - **Toolbar:** one row. The main commands show labels; editing and view commands are icons whose names stay the
+    accessible names and tooltips.
+  - **Activity list:** group chips (one per catalog namespace) and an icon per activity. Built-ins get theirs by
+    type; other activities by their declared side effects (browser, network, files), so new plugins need no Studio
+    change.
 - **Left panel:** two tabs, **Activities** (the catalog) and **Files** (the project), one shown at a time and
   remembered per browser (`myrpa.ui.sidebarTab`). An activity entry shows its title only; its type, description and
   side effects are the tooltip and the accessible description. A plugin namespace with one category lists its
   activities without a second header. Panel sizes are capped by the window, and below 980 px wide or 640 px high the
   command bar shows icons only (labels stay the accessible names), so a small window keeps the designer usable.
-- **Files** (W6, ADR-0031): the Files panel shows the project's `.json` files as folders and files (click selects).
-  - **New…** asks for a path (a free name is suggested) and creates a valid workflow with an empty root Sequence.
+- **Files** (W6, ADR-0031): the Files panel shows the project's folders (empty ones too) and `.json` files as a tree with folder and file icons. A click on a folder opens or closes it, and Left/Right do the same; a click on a file selects it. **New folder…** creates a folder, and New… and New folder… start in the selected folder.
+  - **New…** asks for a type and a path (a free name is suggested) and creates a valid workflow: Sequence (an empty
+    root Sequence, schema 1.0), Flowchart or State machine (schema 1.1, with one starter step, since a graph needs one;
+    the root cannot be changed later).
   - **Rename…** (F2) renames or moves the file in the project (server `move`, atomic, never overwrites); an open
     document follows it, unsaved edits included.
   - **Delete…** (Delete key) asks first, and says when the file is open with unsaved changes; deleting the open file
@@ -240,7 +259,7 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 | `src/drafts.ts` | Crash-recovery drafts in local storage (guarded; in memory for tests) |
 | `src/workflowData.ts` | Workflow-level edits (metadata, arguments, variables, node ids, property values) and diagnostic locations |
 | `src/context.ts` | The Studio context and slice-subscription hooks |
-| `src/PropertyEditors.tsx` | Properties: node and workflow editors, one per property kind, raw JSON; the selected card's inline editors |
+| `src/PropertyEditors.tsx` | Properties: node and workflow editors, one per property kind, raw JSON; (the only place properties are edited) |
 | `src/DataPanel.tsx` | Problems, Variables and Arguments tabs |
 | `src/placement.ts` | Targets (list index or slot), placing, moving across containers, insert/paste targets, the clipboard format and id renaming |
 | `src/dragdrop.ts` | Drag-and-drop by pointer hit-testing (no library), one indicator element and one cursor overlay; drops on a flowchart canvas get a position |
@@ -292,7 +311,7 @@ nothing about the client.
 - `FlowchartUi.test.tsx` (G-2): the canvas (positioned tree items, start step, arrows and labels), the Transitions
   editor and undo, Set as start step, deleting a step, moving a card and drawing an arrow by pointer, clicking an arrow,
   the list view and keyboard, opening a step, the arrow taken in a run, the schema raise on insert.
-- `DesignerUi.test.tsx` (UX-3): card summaries and inline editors (editing on a card does not move the selection),
+- `DesignerUi.test.tsx` (UX-3): card summaries (also on the selected card, which has no editors),
   card names, the card menu by keyboard, collapse with reveal of the selection, Expand all / Collapse all,
   ArrowLeft/ArrowRight, zoom state and limits.
 - `ShellUi.test.tsx` (UX-1): every icon is a decorative SVG without style attributes; the command groups and their

@@ -54,6 +54,12 @@ export interface ActivityDescriptor {
   slots: SlotDescriptor[];
 }
 
+/** `GET /api/projects/{project}/workflows`: the workflow files and every folder (empty ones too). */
+export interface ProjectListing {
+  workflows: WorkflowFile[];
+  folders: string[];
+}
+
 /** One file of `GET /api/projects/{project}/workflows`. */
 export interface WorkflowFile {
   path: string;

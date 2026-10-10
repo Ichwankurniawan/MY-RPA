@@ -61,7 +61,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
 
   const title = page.getByTestId('document-title');
   const runStatus = page.getByTestId('run-status');
-  // UX-3: the selected card has the same editors inline; the Properties panel is the one this script types into.
+  // Properties are edited only in the Properties panel (cards show summaries).
   const message = page.getByRole('complementary', { name: 'Properties' }).getByLabel(/^message/);
   const click = (name) => page.getByRole('button', { name, exact: true }).click();
   const edit = (name) => page.getByRole('toolbar', { name: 'Edit' }).getByRole('button', { name, exact: true });
@@ -541,9 +541,8 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   // UX-3: the card designer in Chromium: the selected card's own editor, collapse, and CSS zoom (jsdom has no zoom).
   await openHelloWorld();
   await row('log-greeting').click();
-  const inlineMessage = row('log-greeting').getByLabel(/^message/);
-  check((await inlineMessage.inputValue()) === (await message.inputValue()), 'the card and the Properties panel show the same value');
-  check((await row('build-greeting').locator('.summary').textContent()).startsWith('to: greeting'), 'unselected cards show a summary');
+  check((await row('log-greeting').locator('input, textarea').count()) === 0, 'the selected card has no editors (the Properties panel edits)');
+  check((await row('build-greeting').getAttribute('title')).includes('\nto: greeting'), 'a card shows its values in its tooltip');
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   const zoom = await page.getByRole('tree', { name: 'Workflow', exact: true }).evaluate((tree) => getComputedStyle(tree).zoom);
   check(zoom === '1.1', `computed zoom ${zoom}`);
@@ -563,7 +562,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const barBox = await page.getByRole('button', { name: 'Collapse all', exact: true }).boundingBox();
   const designerBox = await page.locator('main.designer').boundingBox();
   check(barBox !== null && barBox.y >= designerBox.y && barBox.y + barBox.height <= designerBox.y + designerBox.height, `the designer bar stays in view while scrolling: ${JSON.stringify(barBox)}`);
-  step('UX-3. Cards: the selected card edits inline (same value as Properties), summaries, CSS zoom 110% in Chromium; Collapse all disabled with nothing to collapse; collapse and expand all on a nested workflow, the bar staying in view while scrolling');
+  step('UX-3. Cards: icon and name only (no editors; values in the tooltip), CSS zoom 110% in Chromium; Collapse all disabled with nothing to collapse; collapse and expand all on a nested workflow, the bar staying in view while scrolling');
 
   // G-2: a flowchart built from scratch in Chromium, by pointer (toolbox drops on the canvas, a connection drawn from a
   // step's handle, a step moved) and by keyboard (Properties: transitions); saved as 1.1, run, the arrow taken shown.
@@ -745,7 +744,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await renameDialog.getByLabel('New name').fill('total');
   await renameDialog.getByRole('button', { name: 'Rename', exact: true }).click();
   await renameDialog.waitFor({ state: 'detached' });
-  const saySummary = await page.locator('[role=treeitem][data-node-id="say"] > .node .summary').textContent();
+  const saySummary = await page.locator('[role=treeitem][data-node-id="say"] > .node').getAttribute('title');
   check(saySummary.includes("'n is ' + total"), `say after the rename: ${saySummary}`);
   await page.getByTestId('status-validation').filter({ hasText: 'No problems' }).waitFor();
   await page.getByRole('toolbar', { name: 'Run' }).getByRole('button', { name: 'Run', exact: true }).click();

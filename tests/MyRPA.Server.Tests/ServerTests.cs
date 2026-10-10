@@ -305,6 +305,47 @@ public sealed class ProjectAndCatalogTests
         Assert.Equal(ServerHarness.Logs(1), File.ReadAllText(Path.Combine(h.ProjectRoot, "sub", "b.json")));
     }
 
+    [Fact]
+    public async Task Folders_AreCreatedInsideTheProject_ListedEvenWhenEmpty_AndNeverOverAnExistingName()
+    {
+        await using var h = await ServerHarness.StartAsync();
+        h.WriteWorkflow("a.json", ServerHarness.Logs(1));
+        var folders = $"/api/projects/{h.ProjectName}/folders";
+        Task<HttpResponseMessage> Create(string path) => h.SendAsync(h.Unsafe(HttpMethod.Post, folders, new { path }));
+
+        using var created = await Create("invoices/2026");
+        using var again = await Create("invoices/2026");
+        using var overFile = await Create("a.json");
+        using var outside = await Create("../escape");
+        using var hidden = await Create(".secret");
+        using var backslash = await Create("a\\b");
+        using var listing = await h.Client.GetAsync($"/api/projects/{h.ProjectName}/workflows", Token);
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.True(Directory.Exists(Path.Combine(h.ProjectRoot, "invoices", "2026")));
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, overFile.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, outside.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, hidden.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, backslash.StatusCode);
+        Assert.False(Directory.Exists(Path.Combine(Path.GetDirectoryName(h.ProjectRoot)!, "escape")));
+        var listed = (await ServerHarness.JsonAsync(listing)).GetProperty("folders").EnumerateArray().Select(f => f.GetString()).ToList();
+        Assert.Equal(["invoices", "invoices/2026"], listed);
+    }
+
+    [Fact]
+    public async Task Folders_NeedTheAntiForgeryHeader()
+    {
+        await using var h = await ServerHarness.StartAsync();
+        using var request = h.Unsafe(HttpMethod.Post, $"/api/projects/{h.ProjectName}/folders", new { path = "x" });
+        request.Headers.Remove("X-MyRPA-Request");
+
+        using var response = await h.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.False(Directory.Exists(Path.Combine(h.ProjectRoot, "x")));
+    }
+
     [Theory]
     [InlineData("""{ "to": "b.json" }""")]
     [InlineData("""{ "from": "a.json" }""")]
