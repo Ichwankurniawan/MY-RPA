@@ -15,8 +15,10 @@ async function renderStudio(api = new FakeApi(), drafts: DraftStore = memoryDraf
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { drafts, draftDelayMs: 60_000 });
   render(<App studio={studio} />);
   await act(settle);
-  // The files are the left panel's second tab.
-  await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Files' })));
+  // The Workflows page starts at the projects; choosing one shows its workspace with the Files tab.
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open project demo' })));
+  await act(settle);
+  expect(screen.getByRole('tab', { name: 'Files' }).getAttribute('aria-selected')).toBe('true');
   return { studio, api };
 }
 
@@ -40,7 +42,10 @@ describe('Files panel', () => {
   it('lists the project as folders and files; double-click and Enter open a file', async () => {
     await renderStudio();
 
-    expect([...files().querySelectorAll('.tree-name')].map((i) => i.textContent)).toEqual(['flows', 'nested.json', 'hello-world.json', 'other.json']);
+    // The project is the root of the tree.
+    expect([...files().querySelectorAll('.tree-name')].map((i) => i.textContent)).toEqual(['demo', 'flows', 'nested.json', 'hello-world.json', 'other.json']);
+    expect(files().querySelector('.project-root')!.getAttribute('aria-level')).toBe('1');
+    expect(files().querySelector('[data-folder="flows"]')!.getAttribute('aria-level')).toBe('2');
     expect(files().querySelector('[data-folder="flows"]')!.getAttribute('aria-expanded')).toBe('true');
     await act$(() => fireEvent.doubleClick(fileItem('other.json')));
     expect(title()).toBe('other.json');
@@ -108,6 +113,18 @@ describe('Files panel', () => {
     expect(folder().getAttribute('aria-expanded')).toBe('false');
     fireEvent.keyDown(folder(), { key: 'Enter' });
     expect(folder().getAttribute('aria-expanded')).toBe('true');
+
+    // The project is the root: Left from a top-level folder goes to it; closing it hides everything; New… goes there.
+    const root = () => files().querySelector<HTMLElement>('.project-root')!;
+    fireEvent.keyDown(folder(), { key: 'ArrowLeft' });
+    fireEvent.keyDown(folder(), { key: 'ArrowLeft' });
+    expect(root().getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'New…' }).title).toBe('Create a new workflow in the project');
+    fireEvent.keyDown(root(), { key: 'ArrowLeft' });
+    expect(root().getAttribute('aria-expanded')).toBe('false');
+    expect(fileItem('other.json')).toBeNull();
+    fireEvent.keyDown(root(), { key: 'Enter' });
+    expect(fileItem('other.json')).not.toBeNull();
   });
 
   it('creates a folder with New folder…, refuses a bad or taken name, and lists the empty folder', async () => {

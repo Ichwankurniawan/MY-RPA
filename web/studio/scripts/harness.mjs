@@ -22,8 +22,22 @@ export const check = (condition, message) => {
 };
 
 /** Runs `body({ project, page, startLink })` against a fresh server and browser; cleans up; exits 1 on failure. */
+/**
+ * Enters a project's workspace when the Workflows page shows the projects (where it starts after a page load); does
+ * nothing in the workspace.
+ */
+export async function enterProject(page, name = 'demo') {
+  const card = page.getByRole('button', { name: `Open project ${name}`, exact: true });
+  await page.locator('[role=tablist][aria-label="Side panel"], .project-card').first().waitFor();
+  if (await card.isVisible()) {
+    await card.click();
+    await page.getByRole('tablist', { name: 'Side panel' }).waitFor();
+  }
+}
+
 /** Shows a tab of the Studio's left panel ('Activities' or 'Files') unless it is already shown. */
 export async function showTab(page, name) {
+  await enterProject(page);
   const tab = page.getByRole('tablist', { name: 'Side panel' }).getByRole('tab', { name, exact: true });
   if ((await tab.getAttribute('aria-selected')) !== 'true') {
     await tab.click();

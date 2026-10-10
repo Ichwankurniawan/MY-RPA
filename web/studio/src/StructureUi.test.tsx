@@ -104,6 +104,8 @@ describe('structural editing UI', () => {
     const studio = new Studio(new FakeApi(), (url) => new FakeEventSource(url));
     render(<App studio={studio} />);
     await act(settle);
+    await act(async () => studio.enterProject('demo'));
+    await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Activities' })));
 
     expect((screen.getByRole('button', { name: 'Insert Log (Core.Log)' }) as HTMLButtonElement).disabled).toBe(true);
   });

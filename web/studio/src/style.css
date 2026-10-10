@@ -630,3 +630,20 @@ h2 { text-transform: none; font-size: 14px; font-weight: 650; letter-spacing: 0;
 
 /* ADR-0045: multi-line text properties (code, SQL). */
 textarea.multiline-text { width: 100%; min-height: 10em; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.45; tab-size: 4; white-space: pre; overflow: auto; }
+
+/* The Workflows page starts at the projects: the Projects view, the title bar location and the project as the tree root. */
+.location { display: flex; align-items: center; gap: 4px; }
+.location .crumb { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid transparent; background: none; color: var(--muted); font-size: 13px; font-weight: 550; }
+.location .crumb:hover:not(:disabled) { color: var(--text); background: var(--panel-2); border-color: transparent; }
+.location .crumb[data-testid="current-project"] { color: var(--text); }
+.location .crumb-separator { color: var(--muted); }
+.page-title { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 22px; font-weight: 700; }
+.page-title .icon, .project-card .icon, .project-root > .tree-row .icon-project { color: var(--accent); }
+.project-grid { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.project-card { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); min-width: 0; }
+.project-card:hover, .project-card:focus-within { border-color: var(--accent); background: var(--accent-soft); }
+.project-open { display: flex; align-items: center; gap: 12px; width: 100%; padding: 2px 0; text-align: left; border: none; background: none; }
+.project-open:hover:not(:disabled) { border-color: transparent; }
+.project-open .project-name { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-card small { color: var(--muted); overflow-wrap: anywhere; padding-left: 36px; }
+.project-root > .tree-row .tree-name { font-weight: 650; }

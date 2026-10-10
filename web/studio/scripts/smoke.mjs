@@ -757,7 +757,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const singleLink = await startServer(['--open', join(project, 'hello-world.json')]);
   await page.goto(singleLink);
   await titleIs('hello-world.json');
-  check((await page.getByRole('combobox', { name: 'Project' }).inputValue()) === 'demo', 'the file’s folder is the project');
+  check((await page.getByTestId('current-project').textContent()) === 'demo', 'the file’s folder is the project');
   step('W6-8. Single command (MyRPA.Server --open <file>): bundled Studio served, the file’s folder became the project, the file opened');
 
   // Phase 6 (ADR-0039), the definition of done: record a simple website interaction and insert it into the Studio. The

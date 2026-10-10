@@ -162,6 +162,8 @@ function Shell() {
   useEffect(() => (root.current ? installDragAndDrop(root.current, studio) : undefined), [studio]);
   const panes = useStudioState((s) => s.panes);
   const page = useStudioState((s) => s.page);
+  const workflowsView = useStudioState((s) => s.workflowsView);
+  const fullPage = page === 'home' || workflowsView === 'projects';
 
   // Panel sizes (UX-2) go to the grid through the CSSOM (CSP-safe); until a panel is resized, the stylesheet decides.
   useEffect(() => {
@@ -179,13 +181,15 @@ function Shell() {
   }, [panes]);
 
   return (
-    <div className={page === 'home' ? 'studio page-home' : 'studio'} ref={root}>
+    <div className={fullPage ? 'studio page-home' : 'studio'} ref={root}>
       <Toolbar />
       {connection === 'ready' ? (
         <>
           <NavRail />
           {page === 'home' ? (
             <HomePage />
+          ) : workflowsView === 'projects' ? (
+            <ProjectsPage />
           ) : (
             <>
               <section className="sidebar" aria-label="Side panel" hidden={panes.hidden.includes('toolbox')}>
@@ -435,6 +439,54 @@ function HomePage() {
   );
 }
 
+const counted = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * The Projects view, where the Workflows page starts: the projects this server was started with (--project), with what
+ * each holds. Choosing one shows its workspace; the title bar's Projects link comes back here.
+ */
+function ProjectsPage() {
+  const studio = useStudio();
+  const projects = useStudioState((s) => s.projects);
+  const file = useStudioState((s) => s.file);
+  const summaries = useStudioState((s) => s.projectSummaries);
+  const id = useId();
+  return (
+    <main className="home projects-page" aria-labelledby="projects-heading">
+      <h2 id="projects-heading" className="page-title">
+        <Icon name="project" size={22} /> Projects
+      </h2>
+      <p className="hint">Choose a project to work on its workflows. The projects are the folders this server was started with (--project).</p>
+      {projects.length === 0 ? (
+        <p className="hint">This server has no projects. Start it with --project and a folder.</p>
+      ) : (
+        <ul className="project-grid" aria-label="Projects">
+          {projects.map((name, index) => {
+            const summary = summaries.get(name);
+            const details =
+              summary === undefined ? 'Loading…'
+              : summary.error !== undefined ? `Cannot list it: ${summary.error}`
+              : [counted(summary.workflows, 'workflow'), counted(summary.folders, 'folder'), summary.modified && `changed ${new Date(summary.modified).toLocaleDateString()}`].filter(Boolean).join(' · ');
+            return (
+              <li key={name} className="project-card">
+                {/* The button holds only the name (its accessible name contains the visible text); the details describe it. */}
+                <button type="button" className="project-open" aria-label={`Open project ${name}`} aria-describedby={`${id}-${index}`} onClick={() => void studio.enterProject(name)}>
+                  <Icon name="project" size={24} />
+                  <span className="project-name">{name}</span>
+                </button>
+                <small id={`${id}-${index}`}>
+                  {details}
+                  {file?.project === name && ` · open: ${file.path}`}
+                </small>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </main>
+  );
+}
+
 function ConnectionPanel() {
   const connection = useStudioState((s) => s.connection);
   return (
@@ -578,7 +630,6 @@ function useTheme(): [Theme, (theme: Theme) => void] {
 function Toolbar() {
   const studio = useStudio();
   const connection = useStudioState((s) => s.connection);
-  const projects = useStudioState((s) => s.projects);
   const project = useStudioState((s) => s.project);
   const files = useStudioState((s) => s.files);
   const file = useStudioState((s) => s.file);
@@ -626,16 +677,22 @@ function Toolbar() {
         <span className="document-title" data-testid="document-title">
           {file ? `${file.path}${dirty ? ' •' : ''}${file.readOnlyReason ? ' (read-only)' : ''}` : 'No workflow open'}
         </span>
-        <label>
-          Project
-          <select value={project ?? ''} disabled={!ready} onChange={(e) => void studio.selectProject(e.target.value)}>
-            {projects.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <nav className="location" aria-label="Location">
+          <button type="button" className="crumb with-icon" disabled={!ready} onClick={() => void studio.showProjects()} title="Show all projects">
+            <Icon name="project" size={15} />
+            <span>Projects</span>
+          </button>
+          {project !== undefined && (
+            <>
+              <span className="crumb-separator" aria-hidden="true">
+                /
+              </span>
+              <button type="button" className="crumb" disabled={!ready} onClick={() => void studio.enterProject(project)} title={`Show the workspace of ${project}`} data-testid="current-project">
+                {project}
+              </button>
+            </>
+          )}
+        </nav>
         <label>
           Workflow
           <select value={choice} disabled={!ready} onChange={(e) => setChoice(e.target.value)}>
@@ -949,6 +1006,9 @@ function fileTree(files: readonly WorkflowFile[], folders: readonly string[]): F
 const folderItem = (path: string) => `${path}/`;
 const isFolderItem = (item: string) => item.endsWith('/');
 
+/** The tree's root item: the project itself (a folder item with the empty path). */
+const rootItem = folderItem('');
+
 /** The visible items in display order: a closed folder hides what it holds. */
 function visibleItems(folder: FolderNode, closed: ReadonlySet<string>): string[] {
   return [
@@ -972,11 +1032,12 @@ function FilesPanel() {
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const list = useRef<HTMLUListElement>(null);
   const tree = useMemo(() => fileTree(files, folders), [files, folders]);
-  const order = useMemo(() => visibleItems(tree, closed), [tree, closed]);
+  const order = useMemo(() => [rootItem, ...(closed.has('') ? [] : visibleItems(tree, closed))], [tree, closed]);
   const current = selected !== undefined && order.includes(selected) ? selected : openPath;
   const target = current !== undefined && !isFolderItem(current) ? current : undefined;
   const folderOfTarget = target?.includes('/') ? target.slice(0, target.lastIndexOf('/')) : undefined;
-  const inFolder = current !== undefined && isFolderItem(current) ? current.slice(0, -1) : folderOfTarget;
+  const inFolder = (current !== undefined && isFolderItem(current) ? current.slice(0, -1) : folderOfTarget) || undefined;
+  const parentItem = (path: string) => folderItem(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
 
   const select = (item: string) => {
     setSelected(item);
@@ -1017,9 +1078,9 @@ function FilesPanel() {
       if ((event.key === 'ArrowRight' && !open) || (event.key === 'ArrowLeft' && open) || event.key === 'Enter') {
         event.preventDefault();
         setOpen(path, !open);
-      } else if (event.key === 'ArrowLeft' && path.includes('/')) {
+      } else if (event.key === 'ArrowLeft' && path !== '') {
         event.preventDefault();
-        select(folderItem(path.slice(0, path.lastIndexOf('/'))));
+        select(parentItem(path));
       }
     } else if (target !== undefined && event.key === 'Enter') {
       event.preventDefault();
@@ -1030,9 +1091,9 @@ function FilesPanel() {
     } else if (target !== undefined && event.key === 'Delete') {
       event.preventDefault();
       studio.startDelete(target);
-    } else if (event.key === 'ArrowLeft' && folderOfTarget !== undefined) {
+    } else if (event.key === 'ArrowLeft' && target !== undefined) {
       event.preventDefault();
-      select(folderItem(folderOfTarget));
+      select(parentItem(target));
     }
   };
 
@@ -1114,7 +1175,31 @@ function FilesPanel() {
       </div>
       <p className="hint">Double-click or Enter opens a file; click a folder to open or close it.</p>
       <ul role="tree" aria-label="Workflow files" ref={list} onKeyDown={onKeyDown}>
-        {renderFolder(tree, 1)}
+        {project !== undefined && (
+          <li
+            role="treeitem"
+            aria-level={1}
+            aria-expanded={!closed.has('')}
+            aria-selected={current === rootItem}
+            tabIndex={tabStop(rootItem)}
+            data-folder=""
+            className={`folder project-root${current === rootItem ? ' selected' : ''}`}
+          >
+            <span
+              className="tree-row"
+              title={`The project ${project}`}
+              onClick={() => {
+                select(rootItem);
+                setOpen('', closed.has(''));
+              }}
+            >
+              <Icon name={closed.has('') ? 'chevron-right' : 'chevron-down'} size={14} />
+              <Icon name="project" size={16} />
+              <span className="tree-name">{project}</span>
+            </span>
+            {!closed.has('') && <ul role="group">{renderFolder(tree, 2)}</ul>}
+          </li>
+        )}
       </ul>
     </section>
   );

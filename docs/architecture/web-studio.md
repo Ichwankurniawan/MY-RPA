@@ -92,14 +92,19 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   the file is shown, the arrow taken last is highlighted (from consecutive step events; there is no transition event).
   In a state machine the steps are states: a final state is marked, and Open shows a state's `entry` and `exit`.
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
-- **Open:** choose a project and a workflow file, then Open; or double-click a file (or Enter) in the Files panel. A
-  file named with the server's `--open` opens after connecting. The file is parsed into the document model.
+- **Projects:** the Workflows page starts at the **Projects** view: every project the server was started with
+  (`--project`), with its number of workflows and folders and its latest change (a project that cannot be listed says
+  why). Choosing one shows its workspace, where the Files tree has the project as its root. The title bar shows
+  **Projects / project**: Projects comes back to the view, the project name to its workspace. Projects are not created
+  from the browser.
+- **Open:** choose a workflow file in the title bar, then Open; or double-click a file (or Enter) in the Files panel.
+  Opening a workflow always shows the workspace. A file named with the server's `--open` opens after connecting. The file is parsed into the document model.
 - **Brand and shell (ADR-0044):**
   - **Brand:** the product is shown as **Laconi Studio**, with the Laconi mark (`logo` icon, favicon) and the tagline
     "Design it. Run it. Lakoni.". The server program and code keep their `MyRPA` names.
   - **Theme:** the tokens in `style.css` carry the brand palette (dark reference theme, light variant). `--primary`
     marks the main action (Run).
-  - **Navigation rail:** shows only working pages: **Workflows** (the designer, the start page) and **Home**.
+  - **Navigation rail:** shows only working pages: **Workflows** (the start page: the Projects view, then a project's workspace with the designer) and **Home**.
   - **Home page:** shows only real data:
     - the project's workflows (open one in the designer);
     - New workflow;

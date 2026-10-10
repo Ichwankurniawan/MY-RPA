@@ -47,20 +47,38 @@ describe('Laconi shell', () => {
     expect(document.title).toBe('Laconi Studio');
   });
 
-  it('opens on the designer; the rail switches to Home and back', async () => {
+  it('starts the Workflows page at the projects; a project opens its workspace; the rail switches to Home and back', async () => {
     await renderStudio();
     const rail = within(screen.getByRole('navigation', { name: 'Main' }));
 
     expect(rail.getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
+    const projects = within(screen.getByRole('main', { name: 'Projects' }));
+    expect(screen.queryByRole('list', { name: 'Activity catalog' })).toBeNull();
+    const card = projects.getByRole('button', { name: 'Open project demo' });
+    expect(document.getElementById(card.getAttribute('aria-describedby')!)!.textContent).toMatch(/^2 workflows · 1 folder · changed /);
+
+    // A project without an open workflow shows its files first.
+    await act(async () => fireEvent.click(card));
+    expect(screen.getByRole('tab', { name: 'Files' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tree', { name: 'Workflow files' }).querySelector('.project-root .tree-name')!.textContent).toBe('demo');
+    await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Activities' })));
     expect(screen.getByRole('list', { name: 'Activity catalog' })).toBeTruthy();
+    const location = within(screen.getByRole('navigation', { name: 'Location' }));
+    expect(location.getByTestId('current-project').textContent).toBe('demo');
+
+    // The title bar's Projects link comes back to the projects.
+    await act(async () => fireEvent.click(location.getByRole('button', { name: 'Projects' })));
+    expect(screen.getByRole('main', { name: 'Projects' })).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open project demo' })));
 
     fireEvent.click(rail.getByRole('button', { name: 'Home' }));
     expect(rail.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('main', { name: 'Laconi Studio' })).toBeTruthy();
-    expect(screen.queryByRole('list', { name: 'Activity catalog' })).toBeNull();
+    expect(screen.queryByRole('tree', { name: 'Workflow files' })).toBeNull();
 
+    // Back on Workflows, the chosen project's workspace is where it was.
     fireEvent.click(rail.getByRole('button', { name: 'Workflows' }));
-    expect(screen.getByRole('list', { name: 'Activity catalog' })).toBeTruthy();
+    expect(screen.getByRole('tree', { name: 'Workflow files' })).toBeTruthy();
   });
 
   it('lists the real project workflows and activities on Home, and opens a workflow in the designer', async () => {
@@ -78,8 +96,36 @@ describe('Laconi shell', () => {
     expect(screen.getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
   });
 
+  it('lists every project with what it holds, says why one cannot be listed, and opens the one chosen', async () => {
+    const api = new FakeApi();
+    const info = api.info.bind(api);
+    const listing = api.workflows.bind(api);
+    api.info = async () => ({ ...(await info()), projects: ['demo', 'empty', 'broken'] });
+    // The Studio passes the project's name; the fake ignores it, this override does not.
+    api.workflows = (async (project: string) => {
+      if (project === 'broken') {
+        throw new Error('the folder is gone');
+      }
+
+      return project === 'empty' ? { workflows: [], folders: [] } : listing();
+    }) as unknown as typeof api.workflows;
+    await renderStudio(api);
+    const projects = within(screen.getByRole('list', { name: 'Projects' }));
+    const details = (name: string) => document.getElementById(projects.getByRole('button', { name: `Open project ${name}` }).getAttribute('aria-describedby')!)!.textContent;
+
+    expect(projects.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Open project demo', 'Open project empty', 'Open project broken']);
+    expect(details('empty')).toBe('0 workflows · 0 folders');
+    expect(details('broken')).toBe('Cannot list it: the folder is gone');
+
+    await act(async () => fireEvent.click(projects.getByRole('button', { name: 'Open project empty' })));
+    expect(screen.getByTestId('current-project').textContent).toBe('empty');
+    expect([...screen.getByRole('tree', { name: 'Workflow files' }).querySelectorAll('.tree-name')].map((n) => n.textContent)).toEqual(['empty']);
+  });
+
   it('gives a plugin activity the icon of its side effect, with no Studio change', async () => {
-    await renderStudio(withPlugin());
+    const { studio } = await renderStudio(withPlugin());
+    await act(async () => studio.enterProject('demo'));
+    await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Activities' })));
 
     const insert = screen.getByRole('button', { name: 'Insert HTTP Request (Http.Request)' });
     expect(insert.querySelector('.icon-globe')).not.toBeNull();

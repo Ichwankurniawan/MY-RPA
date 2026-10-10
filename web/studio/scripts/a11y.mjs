@@ -51,6 +51,9 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   };
 
   const filesTree = page.getByRole('tree', { name: 'Workflow files' });
+  // The Workflows page starts at the projects.
+  await page.locator('.project-card').first().waitFor();
+  await scan('Projects view');
   await showTab(page, 'Files');
   await filesTree.locator('[data-path="a11y.json"]').dblclick();
   await page.getByTestId('document-title').filter({ hasText: /^a11y\.json$/ }).waitFor();
