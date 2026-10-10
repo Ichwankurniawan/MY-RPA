@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Security.Cryptography;
 using MyRPA.Core.Activities;
 using MyRPA.Sdk.Files;
 using MyRPA.Workflow.Execution;
@@ -282,5 +284,142 @@ public sealed class FolderCreateActivity(FilesOptions options) : IActivity
             return ValueTask.CompletedTask;
         }).ConfigureAwait(false);
         return ActivityResult.Completed;
+    }
+}
+
+/// <summary><c>File.Hash</c>: the SHA-256 or SHA-512 hash of a file (ADR-0043).</summary>
+public sealed class FileHashActivity(FilesOptions options) : IActivity
+{
+    /// <summary>Descriptor.</summary>
+    public static ActivityDescriptor Descriptor { get; } = new(
+        new ActivityTypeName("File.Hash"),
+        "Hash File",
+        FilesCategory,
+        "The SHA-256 (or SHA-512) hash of a file as lower-case hex, for example to detect a file already processed or to check a download. The file is read in chunks, so its size is not limited.",
+        [
+            PathInput("path", "The file."),
+            new("algorithm", ActivityPropertyKind.Text, isRequired: false, "The hash.", ["SHA256", "SHA512"]) { ValueType = ActivityValueType.String, DefaultValue = "\"SHA256\"" },
+            Output(ActivityValueType.String, "Receives the hash as lower-case hex."),
+        ])
+    { SideEffects = ActivitySideEffects.FileSystem };
+
+    /// <inheritdoc />
+    public async ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var path = Text(context, "path");
+        var full = options.Files.ResolveExistingFile(path);
+        var sha512 = context.GetTextOrDefault("algorithm", "SHA256") == "SHA512";
+        var hash = await Io("read", path, async () =>
+        {
+            var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            await using (stream.ConfigureAwait(false))
+            {
+                return sha512
+                    ? await SHA512.HashDataAsync(stream, context.CancellationToken).ConfigureAwait(false)
+                    : await SHA256.HashDataAsync(stream, context.CancellationToken).ConfigureAwait(false);
+            }
+        }).ConfigureAwait(false);
+        SetResult(context, Convert.ToHexStringLower(hash));
+        return ActivityResult.Completed;
+    }
+}
+
+/// <summary>
+/// <c>File.WaitFor</c>: waits until a file exists, optionally until its size and time stop changing (ADR-0043). It polls
+/// on the run's clock and never waits past the run's deadline.
+/// </summary>
+public sealed class FileWaitForActivity(FilesOptions options) : IActivity
+{
+    /// <summary>The error type when the file did not arrive in time.</summary>
+    public const string Timeout = "Timeout";
+
+    /// <summary>Descriptor.</summary>
+    public static ActivityDescriptor Descriptor { get; } = new(
+        new ActivityTypeName("File.WaitFor"),
+        "Wait for File",
+        FilesCategory,
+        "Waits until a file exists inside the file root, and with stableMs until its size and last-write time have not changed for that long (a file still being written is not taken). Fails with Timeout when the time is up, unless failOnTimeout is false.",
+        [
+            PathInput("path", "The file to wait for."),
+            Input("timeoutMs", ActivityValueType.Int, "How long to wait at most, in milliseconds (1 to 3600000; also capped by the run's deadline).", defaultJson: "30000"),
+            Input("stableMs", ActivityValueType.Int, "How long the file must stay unchanged, in milliseconds (0: as soon as it exists).", defaultJson: "0"),
+            Input("pollMs", ActivityValueType.Int, "How often to look, in milliseconds (50 to 60000).", defaultJson: "500"),
+            Input("failOnTimeout", ActivityValueType.Boolean, "Fail (Timeout) when the time is up; false sets result to false instead.", defaultJson: "true"),
+            new("result", ActivityPropertyKind.AssignmentTarget, isRequired: false, "Receives true when the file is there, false after a timeout without failOnTimeout.") { ValueType = ActivityValueType.Boolean },
+        ])
+    { SideEffects = ActivitySideEffects.FileSystem };
+
+    /// <inheritdoc />
+    public async ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var path = Text(context, "path");
+        var full = options.Files.Resolve(path);
+        var clock = context.TimeProvider;
+        var timeout = TimeSpan.FromMilliseconds(Whole(context, "timeoutMs", 30_000, 1, 3_600_000));
+        var stable = TimeSpan.FromMilliseconds(Whole(context, "stableMs", 0, 0, 3_600_000));
+        var poll = TimeSpan.FromMilliseconds(Whole(context, "pollMs", 500, 50, 60_000));
+        var failOnTimeout = Flag(context, "failOnTimeout", true);
+        var end = clock.GetUtcNow() + timeout;
+        if (context.Deadline is { } deadline && deadline < end)
+        {
+            end = deadline;
+        }
+
+        (long Length, DateTime Written)? seen = null;
+        var since = clock.GetUtcNow();
+        while (true)
+        {
+            var now = clock.GetUtcNow();
+            var info = new FileInfo(full);
+            if (info.Exists)
+            {
+                (long, DateTime) current = (info.Length, info.LastWriteTimeUtc);
+                if (seen != current)
+                {
+                    seen = current;
+                    since = now;
+                }
+
+                if (now - since >= stable)
+                {
+                    Set(context, true);
+                    return ActivityResult.Completed;
+                }
+            }
+            else
+            {
+                seen = null;
+            }
+
+            if (now >= end)
+            {
+                if (failOnTimeout)
+                {
+                    var settle = stable > TimeSpan.Zero ? " and settle" : string.Empty;
+                    throw new ActivityFailedException(Timeout, $"'{path}' did not arrive{settle} within {timeout.TotalMilliseconds.ToString(CultureInfo.InvariantCulture)} ms.");
+                }
+
+                Set(context, false);
+                return ActivityResult.Completed;
+            }
+
+            var wait = end - now < poll ? end - now : poll;
+            await Task.Delay(wait, clock, context.CancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static long Whole(IActivityContext context, string name, long defaultValue, long min, long max) =>
+        !context.HasProperty(name) ? defaultValue
+        : context.Evaluate(name) is long value && value >= min && value <= max ? value
+        : throw Invalid(context, name, $"a whole number from {min.ToString(CultureInfo.InvariantCulture)} to {max.ToString(CultureInfo.InvariantCulture)}");
+
+    private static void Set(IActivityContext context, bool value)
+    {
+        if (context.HasProperty("result"))
+        {
+            context.SetValue(context.GetName("result"), value);
+        }
     }
 }

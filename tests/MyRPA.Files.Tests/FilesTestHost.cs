@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using MyRPA.Activities;
 using MyRPA.Core.Execution;
 using MyRPA.Plugins;
@@ -14,13 +15,15 @@ namespace MyRPA.Files.Tests;
 /// The files plugin loaded through the real plugin host, with the real runtime and built-in activities, over a temporary
 /// file root (with an "outside" folder next to it). Small limits so the limit tests stay fast.
 /// </summary>
-public sealed class FilesHost : IAsyncLifetime
+public class FilesHost : IAsyncLifetime
 {
     public const int MaxFileBytes = 4096;
 
     public const int MaxItems = 20;
 
     public const int MaxRows = 50;
+
+    public const int MaxExtractBytes = 64 * 1024;
 
     private static int _counter;
 
@@ -44,6 +47,9 @@ public sealed class FilesHost : IAsyncLifetime
 
     public IServiceProvider Services => _services!;
 
+    /// <summary>The runtime's clock when a test drives it (null: the system clock).</summary>
+    public virtual FakeTimeProvider? Clock => null;
+
     public async ValueTask InitializeAsync()
     {
         var options = new PluginHostOptions();
@@ -52,11 +58,18 @@ public sealed class FilesHost : IAsyncLifetime
         source.Settings["maxFileBytes"] = $"{MaxFileBytes}";
         source.Settings["maxItems"] = $"{MaxItems}";
         source.Settings["maxRows"] = $"{MaxRows}";
+        source.Settings["maxExtractBytes"] = $"{MaxExtractBytes}";
         options.Sources.Add(source);
         Plugins = await PluginLoader.LoadAsync(options, TestContext.Current.CancellationToken);
         Assert.False(Plugins.HasRequiredFailures, string.Join(Environment.NewLine, Plugins.Diagnostics));
 
-        _services = new ServiceCollection().AddLogging().AddMyRpaRuntime().AddMyRpaActivities().AddMyRpaPlugins(Plugins)
+        var services = new ServiceCollection();
+        if (Clock is not null)
+        {
+            services.AddSingleton<TimeProvider>(Clock);
+        }
+
+        _services = services.AddLogging().AddMyRpaRuntime().AddMyRpaActivities().AddMyRpaPlugins(Plugins)
             .BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 
@@ -69,6 +82,7 @@ public sealed class FilesHost : IAsyncLifetime
 
         await Plugins.DisposeAsync();
         Links.DeleteTree(_parent);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>A path under the root.</summary>
@@ -77,15 +91,16 @@ public sealed class FilesHost : IAsyncLifetime
     /// <summary>Runs a workflow whose root is a Sequence of <paramref name="nodes"/>, with Out arguments <paramref name="outputs"/>.</summary>
     public Task<WorkflowExecutionResult> RunAsync(string nodes, params string[] outputs)
     {
+        var services = Services;
         var arguments = string.Join(", ", outputs.Select(o => $$"""{ "name": "{{o}}", "direction": "Out", "type": "Object" }"""));
         var json = $$"""
             { "schemaVersion": "1.0", "id": "files-test", "name": "Files test", "version": "1.0.0",
               "arguments": [ {{arguments}} ],
               "root": { "id": "main", "type": "Core.Sequence", "children": [ {{nodes}} ] } }
             """;
-        var load = Services.GetRequiredService<WorkflowLoader>().Load(json);
+        var load = services.GetRequiredService<WorkflowLoader>().Load(json);
         Assert.True(load.IsValid, string.Join(Environment.NewLine, load.Diagnostics));
-        return Services.GetRequiredService<IWorkflowRunner>().RunAsync(load.Workflow!, new WorkflowRunRequest(), TestContext.Current.CancellationToken);
+        return services.GetRequiredService<IWorkflowRunner>().RunAsync(load.Workflow!, new WorkflowRunRequest(), TestContext.Current.CancellationToken);
     }
 
     /// <summary>A node; <paramref name="properties"/> is the inside of its properties object.</summary>
@@ -102,6 +117,14 @@ public sealed class FilesHost : IAsyncLifetime
         Assert.Equal(errorType, result.Error!.ErrorType);
         Assert.DoesNotContain(FileRoot, result.Error.Message, StringComparison.OrdinalIgnoreCase);
     }
+}
+
+/// <summary>The files host on a fake clock that tests advance while a run waits.</summary>
+public sealed class ClockedFilesHost : FilesHost
+{
+    private readonly FakeTimeProvider _clock = new();
+
+    public override FakeTimeProvider Clock => _clock;
 }
 
 public static class FilesPaths
@@ -184,4 +207,6 @@ public static class ErrorTypes
     public const string InvalidCsv = "InvalidCsv";
     public const string InvalidJson = "InvalidJson";
     public const string InvalidXml = "InvalidXml";
+    public const string InvalidArchive = "InvalidArchive";
+    public const string Timeout = "Timeout";
 }

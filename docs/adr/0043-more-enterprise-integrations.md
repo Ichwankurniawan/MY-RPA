@@ -1,7 +1,8 @@
 # ADR-0043: More enterprise integrations (Phase 7.1): mail, databases, SFTP, documents, HTTP extras
 
 - Status: **Accepted** (owner, 2026-10-09: "Go with your recommendations, and write ADR" for the Phase 7.1 plan and
-  its decisions).
+  its decisions). Implemented 2026-10-10. The plan's §8 records the refinements: servers named in the plugin
+  configuration, pinned SFTP host keys, fail-closed file roots, and the PdfPig package id.
 - Phase: 7.1 (an extension of Phase 7). Plan: [enterprise-activities-7-1-plan.md](../architecture/enterprise-activities-7-1-plan.md).
 - Builds on: ADR-0042 (plugins for side effects, catalog 1.2, secret properties, `FileRootPolicy`), ADR-0009
   (expressions), ADR-0040 (debugger), ADR-0014/0015/0019 (plugins, trust, configuration).
@@ -41,7 +42,7 @@ Each plugin owns its package (`TechnologyPackageOwners`), declares capabilities 
 | `MyRPA.Http` (extended) | `Http.Request` retry; `Http.Download`, `Http.Upload`, `Chat.Post` | none | Network, FileSystem |
 | `MyRPA.Files` (extended) | `Zip.Create`, `Zip.Extract`, `File.Hash`, `File.WaitFor` | none (BCL) | FileSystem |
 | `MyRPA.Spreadsheet` (extended) | `Excel.AppendRows`, `Excel.ClearRange` | DocumentFormat.OpenXml | FileSystem |
-| `MyRPA.Documents` (new) | `Pdf.ReadText`, `Pdf.GetInfo` | UglyToad.PdfPig | FileSystem |
+| `MyRPA.Documents` (new) | `Pdf.ReadText`, `Pdf.GetInfo` | PdfPig (by UglyToad; the NuGet id is `PdfPig`, not the unofficial `UglyToad.PdfPig`) | FileSystem |
 | `MyRPA.Email` (new) | `Email.Send`, `Email.Read`, `Email.SaveAttachments`, `Email.MarkRead`, `Email.Move` | MailKit | Network, FileSystem |
 | `MyRPA.Database` (new) | `Db.Query`, `Db.Execute`, `Db.Scalar` | Microsoft.Data.Sqlite, Microsoft.Data.SqlClient, Npgsql | Network, FileSystem |
 | `MyRPA.Sftp` (new) | `Sftp.List`, `Sftp.Download`, `Sftp.Upload`, `Sftp.Delete`, `Sftp.Move`, `Sftp.CreateFolder` | SSH.NET | Network, FileSystem |

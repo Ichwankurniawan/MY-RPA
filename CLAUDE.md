@@ -9,7 +9,9 @@ Guidance for AI agents and contributors working in this repository.
   ADR-0042; slices P7-1 → P7-6 done (2026-10-09; catalog reference
   `docs/architecture/enterprise-activities.md`), merged. Phase 7.1 (more enterprise integrations) authorized by the
   owner on 2026-10-09 ("Go with your recommendations, and write ADR"); plan
-  `docs/architecture/enterprise-activities-7-1-plan.md`, ADR-0043; slices 1–4 first, then 5–9.** Phase 6 (Selectors & Recorder, ADR-0038/0039) is complete, as are Phase 5, the
+  `docs/architecture/enterprise-activities-7-1-plan.md`, ADR-0043; slices 1–9 done (2026-10-10): HTTP extras, ZIP and
+  file extras, Excel append/clear, and the `MyRPA.Documents`, `MyRPA.Email`, `MyRPA.Database` and `MyRPA.Sftp` plugins;
+  their server tests run in the CI `Integration services` job.** Phase 6 (Selectors & Recorder, ADR-0038/0039) is complete, as are Phase 5, the
   Studio UX slice and graph workflows (ADR-0037). **Debugger slice authorized by the owner on
   2026-10-08 ("merge and D-1"); plan `docs/architecture/debugger-plan.md`, ADR-0040; slices D-1 → D-3 done.** **Expression assist authorized by the owner on 2026-10-09 ("continue E-1"); plan
   `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 done.**
@@ -65,7 +67,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   with `ReferenceOutputAssembly="false"` and load them through the plugin host.
 - Technology packages live only in their provider plugin (`ArchitectureRules.TechnologyPackageOwners`):
   `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`, `DocumentFormat.OpenXml` only in
-  `plugins/MyRPA.Spreadsheet`. Never in src, tests or other plugins.
+  `plugins/MyRPA.Spreadsheet`, `PdfPig` only in `plugins/MyRPA.Documents`, `MailKit`/`MimeKit` only in `plugins/MyRPA.Email`, the database drivers (`Microsoft.Data.Sqlite`, `Microsoft.Data.SqlClient`, `Npgsql`) only in `plugins/MyRPA.Database`, `SSH.NET` only in `plugins/MyRPA.Sftp`. Never in src, tests or other plugins.
 - Product plugins with side effects (ADR-0042): file paths only through `MyRPA.Sdk.Files.FileRootPolicy` (no silent
   overwrite, no folder delete, links refused); HTTP only in `plugins/MyRPA.Http` (allowedHosts per redirect hop, no
   credentials to another origin, TLS validation never off); secrets only through secret properties (MYRPA1066).

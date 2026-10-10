@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "1.0",
+  "id": "invoice-intake",
+  "name": "Invoice intake",
+  "version": "1.0.0",
+  "description": "Phase 7.1 end-to-end sample (ADR-0043): reads unread invoice mails (IMAP), saves their PDF attachments, reads each PDF's text and extracts the invoice number and amount, stores the invoice in a database (parameters only) and an Excel register, marks the mail read, zips the day's PDFs, uploads the archive by SFTP and posts a summary to a chat webhook. Needs the MyRPA.Email, MyRPA.Documents, MyRPA.Database, MyRPA.Spreadsheet, MyRPA.Files, MyRPA.Sftp and MyRPA.Http plugins (see samples/plugins/README.md).",
+  "arguments": [
+    { "name": "mailUser", "direction": "In", "type": "String", "required": true },
+    { "name": "mailPassword", "direction": "In", "type": "String", "required": true },
+    { "name": "sftpPassword", "direction": "In", "type": "String", "required": true },
+    { "name": "chatWebhook", "direction": "In", "type": "String", "required": true },
+    { "name": "subjectFilter", "direction": "In", "type": "String", "default": "Invoice" },
+    { "name": "processed", "direction": "Out", "type": "Int" },
+    { "name": "stored", "direction": "Out", "type": "Int" },
+    { "name": "registered", "direction": "Out", "type": "Int" },
+    { "name": "archive", "direction": "Out", "type": "String" }
+  ],
+  "variables": [
+    { "name": "messages", "type": "List" },
+    { "name": "saved", "type": "List" },
+    { "name": "text", "type": "String" },
+    { "name": "number", "type": "Object" },
+    { "name": "amount", "type": "Object" },
+    { "name": "register", "type": "List" },
+    { "name": "stamp", "type": "String" },
+    { "name": "zipped", "type": "Int" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "start-count", "type": "Core.Assign", "properties": { "to": "processed", "value": "0" } },
+      { "id": "read-mail", "type": "Email.Read", "properties": { "subjectContains": "subjectFilter", "maxMessages": "50", "username": "mailUser", "password": "mailPassword", "result": "messages" } },
+      { "id": "prepare-table", "type": "Db.Execute", "properties": { "connection": "invoices", "sql": "CREATE TABLE IF NOT EXISTS invoices (number TEXT PRIMARY KEY, amount NUMERIC NOT NULL, sender TEXT, received TEXT)" } },
+      {
+        "id": "each-mail",
+        "type": "Core.ForEach",
+        "properties": { "items": "messages", "itemVariable": "mail", "indexVariable": "m" },
+        "slots": {
+          "body": {
+            "id": "mail-steps",
+            "type": "Core.Sequence",
+            "children": [
+              { "id": "save-pdfs", "type": "Email.SaveAttachments", "properties": { "id": "mail['id']", "folder": "'inbox/mail-' + toString(m)", "pattern": "'*.pdf'", "username": "mailUser", "password": "mailPassword", "result": "saved" } },
+              {
+                "id": "each-pdf",
+                "type": "Core.ForEach",
+                "properties": { "items": "saved", "itemVariable": "pdf" },
+                "slots": {
+                  "body": {
+                    "id": "pdf-steps",
+                    "type": "Core.Sequence",
+                    "children": [
+                      { "id": "read-pdf", "type": "Pdf.ReadText", "properties": { "path": "pdf", "result": "text" } },
+                      { "id": "find-number", "type": "Core.Text.Match", "properties": { "text": "text", "pattern": "r'INV-\\d{4}-\\d+'", "result": "number" } },
+                      { "id": "find-amount", "type": "Core.Text.Match", "properties": { "text": "text", "pattern": "r'Total:\\s*(?<amount>[\\d,]+\\.\\d{2})'", "result": "amount" } },
+                      { "id": "store", "type": "Db.Execute", "properties": { "connection": "invoices", "sql": "INSERT INTO invoices (number, amount, sender, received) VALUES (@number, @amount, @sender, @received)", "parameters": "{ 'number': number['value'], 'amount': toDecimal(replace(amount['groups']['amount'], ',', '')), 'sender': mail['fromAddress'], 'received': mail['date'] }" } },
+                      { "id": "register-row", "type": "Excel.AppendRows", "properties": { "path": "'register.xlsx'", "sheet": "'Invoices'", "rows": "[{ 'Invoice': number['value'], 'Amount': toDecimal(replace(amount['groups']['amount'], ',', '')), 'From': mail['fromAddress'] }]" } },
+                      { "id": "count-one", "type": "Core.Assign", "properties": { "to": "processed", "value": "processed + 1" } }
+                    ]
+                  }
+                }
+              },
+              { "id": "mark-read", "type": "Email.MarkRead", "properties": { "ids": "mail['id']", "username": "mailUser", "password": "mailPassword" } }
+            ]
+          }
+        }
+      },
+      { "id": "count-stored", "type": "Db.Scalar", "properties": { "connection": "invoices", "sql": "SELECT COUNT(*) FROM invoices", "result": "stored" } },
+      { "id": "read-register", "type": "Excel.ReadRange", "properties": { "path": "'register.xlsx'", "sheet": "'Invoices'", "result": "register" } },
+      { "id": "count-registered", "type": "Core.Assign", "properties": { "to": "registered", "value": "len(register)" } },
+      { "id": "stamp", "type": "Core.Date.Format", "properties": { "value": "now()", "format": "'yyyyMMdd-HHmmss'", "result": "stamp" } },
+      { "id": "zip-pdfs", "type": "Zip.Create", "properties": { "source": "'inbox'", "pattern": "'*.pdf'", "destination": "'archive/invoices-' + stamp + '.zip'", "result": "zipped" } },
+      { "id": "upload", "type": "Sftp.Upload", "properties": { "server": "bank", "localPath": "'archive/invoices-' + stamp + '.zip'", "remotePath": "'invoices-' + stamp + '.zip'", "password": "sftpPassword", "result": "archive" } },
+      { "id": "notify", "type": "Chat.Post", "properties": { "platform": "Generic", "webhookUrl": "chatWebhook", "title": "'Invoice intake'", "message": "toString(processed) + ' invoices processed (' + toString(zipped) + ' PDFs archived as ' + archive + ')'" } }
+    ]
+  }
+}

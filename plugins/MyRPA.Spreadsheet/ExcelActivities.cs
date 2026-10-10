@@ -136,11 +136,7 @@ public sealed class ExcelWriteRangeActivity(SpreadsheetOptions options) : IActiv
     {
         ArgumentNullException.ThrowIfNull(context);
         var path = ExcelProperties.Text(context, "path");
-        var sheet = ExcelProperties.OptionalText(context, "sheet") ?? "Sheet1";
-        if (sheet.Length is 0 or > 31 || sheet.IndexOfAny(['[', ']', ':', '*', '?', '/', '\\']) >= 0 || sheet.StartsWith('\'') || sheet.EndsWith('\''))
-        {
-            throw new ActivityFailedException(SpreadsheetErrorTypes.InvalidInput, $"'sheet' of {context.Node.Type} '{context.Node.Id}' must be 1 to 31 characters without [ ] : * ? / \\.");
-        }
+        var sheet = ExcelProperties.SheetName(context);
 
         var startText = (ExcelProperties.OptionalText(context, "startCell") ?? "A1").Trim();
         if (!CellAddress.TryParse(startText, out var startColumn, out var startRow))
@@ -159,53 +155,15 @@ public sealed class ExcelWriteRangeActivity(SpreadsheetOptions options) : IActiv
             throw new ActivityFailedException(SpreadsheetErrorTypes.InvalidInput, "The rows do not fit in a worksheet from that start cell.");
         }
 
-        var resolved = options.Files.Resolve(path);
-        var exists = File.Exists(resolved);
-        Workbooks.CheckExtension(path, allowMacroEnabled: exists);
-        string full;
-        if (exists)
-        {
-            full = Workbooks.ExistingWorkbook(options, path);
-        }
-        else if (ExcelProperties.Flag(context, "createFile", true))
-        {
-            full = options.Files.ResolveFileToWrite(path, overwrite: false);
-        }
-        else
-        {
-            throw new ActivityFailedException(FileErrorTypes.FileNotFound, $"The workbook '{path}' does not exist (createFile is false).");
-        }
+        var (full, exists) = ExcelProperties.WorkbookToWrite(context, options, path);
 
-        Workbooks.Use(path, () =>
+        // Built in memory and then moved over the file in one step: a failure never leaves a half-written workbook.
+        Workbooks.Use(path, () => Workbooks.Rewrite(full, exists, options, workbook =>
         {
-            // Built in memory and then moved over the file in one step: a failure never leaves a half-written workbook.
-            using var memory = new MemoryStream();
-            if (exists)
-            {
-                using var file = File.OpenRead(full);
-                file.CopyTo(memory);
-            }
-
-            using (var document = exists ? SpreadsheetDocument.Open(memory, true, Workbooks.Settings(options)) : SpreadsheetDocument.Create(memory, SpreadsheetDocumentType.Workbook))
-            {
-                var workbook = document.WorkbookPart ?? document.AddWorkbookPart();
-                context.CancellationToken.ThrowIfCancellationRequested();
-                Workbooks.WriteCells(workbook, sheet, startRow, startColumn, table);
-            }
-
-            var temporary = Path.Combine(Path.GetDirectoryName(full)!, "." + Path.GetFileName(full) + "." + Path.GetRandomFileName() + ".tmp");
-            try
-            {
-                File.WriteAllBytes(temporary, memory.ToArray());
-                File.Move(temporary, full, overwrite: true);
-            }
-            finally
-            {
-                File.Delete(temporary);
-            }
-
+            context.CancellationToken.ThrowIfCancellationRequested();
+            Workbooks.WriteCells(workbook, sheet, startRow, startColumn, table);
             return true;
-        });
+        }));
         return ActivityResult.CompletedTask;
     }
 }
@@ -231,6 +189,30 @@ internal static class ExcelProperties
         !context.HasProperty(name) ? defaultValue : context.Evaluate(name) is bool b ? b : throw Invalid(context, name, "true or false");
 
     public static void SetResult(IActivityContext context, object? value) => context.SetValue(context.GetName("result"), value);
+
+    /// <summary>The <c>sheet</c> property as a valid worksheet name (default Sheet1).</summary>
+    public static string SheetName(IActivityContext context)
+    {
+        var sheet = OptionalText(context, "sheet") ?? "Sheet1";
+        return sheet.Length is 0 or > 31 || sheet.IndexOfAny(['[', ']', ':', '*', '?', '/', '\\']) >= 0 || sheet.StartsWith('\'') || sheet.EndsWith('\'')
+            ? throw new ActivityFailedException(SpreadsheetErrorTypes.InvalidInput, $"'sheet' of {context.Node.Type} '{context.Node.Id}' must be 1 to 31 characters without [ ] : * ? / \\.")
+            : sheet;
+    }
+
+    /// <summary>The workbook to change: an existing one, or a new one when <c>createFile</c> (default true) allows it.</summary>
+    public static (string Full, bool Exists) WorkbookToWrite(IActivityContext context, SpreadsheetOptions options, string path)
+    {
+        var exists = File.Exists(options.Files.Resolve(path));
+        Workbooks.CheckExtension(path, allowMacroEnabled: exists);
+        if (exists)
+        {
+            return (Workbooks.ExistingWorkbook(options, path), true);
+        }
+
+        return Flag(context, "createFile", true)
+            ? (options.Files.ResolveFileToWrite(path, overwrite: false), false)
+            : throw new ActivityFailedException(FileErrorTypes.FileNotFound, $"The workbook '{path}' does not exist (createFile is false).");
+    }
 
     public static ActivityFailedException Invalid(IActivityContext context, string name, string expected) =>
         new(SpreadsheetErrorTypes.InvalidInput, $"'{name}' of {context.Node.Type} '{context.Node.Id}' must be {expected}.");
@@ -291,5 +273,154 @@ internal static class ExcelProperties
         }
 
         return grid;
+    }
+}
+
+/// <summary>
+/// <c>Excel.AppendRows</c>: adds rows after the last used row of a worksheet (ADR-0043). Rows that are Dictionaries are
+/// matched to the sheet's existing header row by name; on an empty sheet the header is written first.
+/// </summary>
+public sealed class ExcelAppendRowsActivity(SpreadsheetOptions options) : IActivity
+{
+    /// <summary>Descriptor.</summary>
+    public static ActivityDescriptor Descriptor { get; } = new(
+        new ActivityTypeName("Excel.AppendRows"),
+        "Append Rows",
+        "Excel",
+        "Adds rows below the last used row of a worksheet, creating the workbook (with createFile) or the sheet when missing. Rows that are Dictionaries go under the sheet's header row by column name (a name the header lacks fails); on an empty sheet the header is written first. Text is never a formula; the file is replaced in one step.",
+        [
+            ExcelProperties.PathInput(),
+            ExcelProperties.Input("sheet", ActivityValueType.String, "The worksheet's name (created when missing).", defaultJson: "\"Sheet1\""),
+            ExcelProperties.Input("rows", ActivityValueType.List, "The rows: a List of Dictionaries (by column name) or of Lists (by position).", required: true),
+            ExcelProperties.Input("startColumn", ActivityValueType.String, "The first column of the table (its header row starts there).", defaultJson: "\"A\""),
+            ExcelProperties.Input("createFile", ActivityValueType.Boolean, "Create the workbook when it does not exist (otherwise that fails with FileNotFound).", defaultJson: "true"),
+            new("result", ActivityPropertyKind.AssignmentTarget, isRequired: false, "Receives the row number of the first row added.") { ValueType = ActivityValueType.Int },
+        ])
+    { SideEffects = ActivitySideEffects.FileSystem };
+
+    /// <inheritdoc />
+    public ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var path = ExcelProperties.Text(context, "path");
+        var sheet = ExcelProperties.SheetName(context);
+        var columnText = (ExcelProperties.OptionalText(context, "startColumn") ?? "A").Trim();
+        if (!CellAddress.TryParse(columnText + "1", out var startColumn, out _))
+        {
+            throw ExcelProperties.Invalid(context, "startColumn", "a column such as A");
+        }
+
+        var rows = context.Evaluate("rows") is IReadOnlyList<object?> list and not IReadOnlyDictionary<string, object?> ? list : throw ExcelProperties.Invalid(context, "rows", "a list of rows");
+        var dictionaries = rows.All(r => r is IReadOnlyDictionary<string, object?>);
+        if (!dictionaries && !rows.All(r => r is IReadOnlyList<object?> and not IReadOnlyDictionary<string, object?>))
+        {
+            throw ExcelProperties.Invalid(context, "rows", "a list of Dictionaries or a list of Lists");
+        }
+
+        if (rows.Count > options.MaxRows)
+        {
+            throw new ActivityFailedException(FileErrorTypes.TooManyItems, $"More than {options.MaxRows} rows to write (setting maxRows).");
+        }
+
+        var (full, exists) = ExcelProperties.WorkbookToWrite(context, options, path);
+        var first = Workbooks.Use(path, () => Workbooks.Rewrite(full, exists, options, workbook =>
+        {
+            var part = Workbooks.SheetForWriting(workbook, sheet);
+            var (firstUsed, lastUsed) = Workbooks.UsedRows(part);
+            var table = new List<List<object?>>();
+            if (dictionaries)
+            {
+                List<string> columns = firstUsed == 0
+                    ? [.. rows.Cast<IReadOnlyDictionary<string, object?>>().SelectMany(r => r.Keys).Distinct(StringComparer.Ordinal)]
+                    : Header(workbook, part, firstUsed, startColumn, path, context.CancellationToken);
+                if (firstUsed == 0)
+                {
+                    table.Add([.. columns]);
+                }
+
+                foreach (var row in rows.Cast<IReadOnlyDictionary<string, object?>>())
+                {
+                    if (row.Keys.FirstOrDefault(k => !columns.Contains(k, StringComparer.Ordinal)) is { } unknown)
+                    {
+                        throw new ActivityFailedException(SpreadsheetErrorTypes.InvalidInput, $"A row has the column '{unknown}', which the header of '{sheet}' does not have.");
+                    }
+
+                    table.Add([.. columns.Select(c => row.TryGetValue(c, out var v) ? v : null)]);
+                }
+            }
+            else
+            {
+                table.AddRange(rows.Select(r => ((IReadOnlyList<object?>)r!).ToList()));
+            }
+
+            var startRow = lastUsed + 1;
+            if (startRow + table.Count - 1 > CellAddress.MaxRow || startColumn + table.Select(r => r.Count).DefaultIfEmpty(0).Max() - 1 > CellAddress.MaxColumn)
+            {
+                throw new ActivityFailedException(SpreadsheetErrorTypes.InvalidInput, "The rows do not fit in the worksheet.");
+            }
+
+            context.CancellationToken.ThrowIfCancellationRequested();
+            Workbooks.WriteCells(workbook, part, startRow, startColumn, table);
+            return firstUsed == 0 && dictionaries ? startRow + 1 : startRow;
+        }));
+        if (context.HasProperty("result"))
+        {
+            context.SetValue(context.GetName("result"), (long)first);
+        }
+
+        return ActivityResult.CompletedTask;
+    }
+
+    /// <summary>The names in the header row (the first used row), from the start column to the last named column.</summary>
+    private List<string> Header(WorkbookPart workbook, WorksheetPart part, int row, int startColumn, string path, CancellationToken cancellationToken)
+    {
+        var cells = Workbooks.ReadCells(part, Workbooks.SharedStrings(workbook, options, cancellationToken), Workbooks.DateStyles(workbook), new CellRange(row, startColumn, row, CellAddress.MaxColumn), options, path, cancellationToken);
+        var values = cells.TryGetValue(row, out var found) ? found : [];
+        var last = values.Count == 0 ? startColumn - 1 : values.Keys.Max();
+        return ExcelProperties.Header([.. Enumerable.Range(startColumn, last - startColumn + 1).Select(c => values.TryGetValue(c, out var v) && v is not null ? WorkflowValues.ToDisplayString(v) : string.Empty)]);
+    }
+}
+
+/// <summary><c>Excel.ClearRange</c>: clears the values and formulas of a range; formatting stays (ADR-0043).</summary>
+public sealed class ExcelClearRangeActivity(SpreadsheetOptions options) : IActivity
+{
+    /// <summary>Descriptor.</summary>
+    public static ActivityDescriptor Descriptor { get; } = new(
+        new ActivityTypeName("Excel.ClearRange"),
+        "Clear Range",
+        "Excel",
+        "Clears the values and formulas of the cells in a range of an existing worksheet; their formatting stays. The file is replaced in one step.",
+        [
+            ExcelProperties.PathInput(),
+            ExcelProperties.Input("sheet", ActivityValueType.String, "The worksheet's name (default: the first sheet)."),
+            ExcelProperties.Input("range", ActivityValueType.String, "A range such as 'A2:D100'.", required: true),
+            new("result", ActivityPropertyKind.AssignmentTarget, isRequired: false, "Receives the number of cells cleared.") { ValueType = ActivityValueType.Int },
+        ])
+    { SideEffects = ActivitySideEffects.FileSystem };
+
+    /// <inheritdoc />
+    public ValueTask<ActivityResult> ExecuteAsync(IActivityContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var path = ExcelProperties.Text(context, "path");
+        var sheet = ExcelProperties.OptionalText(context, "sheet");
+        var rangeText = ExcelProperties.Text(context, "range").Trim();
+        if (!CellAddress.TryParseRange(rangeText, out var range))
+        {
+            throw ExcelProperties.Invalid(context, "range", "a range such as A1:D100");
+        }
+
+        var full = Workbooks.ExistingWorkbook(options, path);
+        var cleared = Workbooks.Use(path, () => Workbooks.Rewrite(full, exists: true, options, workbook =>
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            return Workbooks.ClearCells(workbook, Workbooks.Worksheet(workbook, sheet, path), range);
+        }));
+        if (context.HasProperty("result"))
+        {
+            context.SetValue(context.GetName("result"), (long)cleared);
+        }
+
+        return ActivityResult.CompletedTask;
     }
 }

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0",
+  "id": "local-71-demo",
+  "name": "Phase 7.1 local tour",
+  "version": "1.0.0",
+  "description": "Phase 7.1 activities without network (ADR-0043): a file hashed and waited for, a folder zipped and extracted, invoices stored and queried in SQLite with parameters only, and an Excel register appended to and partly cleared. Needs MyRPA.Files, MyRPA.Database and MyRPA.Spreadsheet (see samples/plugins/README.md, all-plugins.json).",
+  "arguments": [
+    { "name": "hash", "direction": "Out", "type": "String" },
+    { "name": "zipped", "direction": "Out", "type": "Int" },
+    { "name": "extracted", "direction": "Out", "type": "List" },
+    { "name": "invoices", "direction": "Out", "type": "List" },
+    { "name": "total", "direction": "Out", "type": "Object" },
+    { "name": "firstNewRow", "direction": "Out", "type": "Int" },
+    { "name": "cleared", "direction": "Out", "type": "Int" }
+  ],
+  "variables": [
+    { "name": "there", "type": "Boolean" }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      { "id": "write-notes", "type": "File.WriteText", "properties": { "path": "'demo71/notes.txt'", "text": "'Invoices for October'", "overwrite": "true" } },
+      { "id": "wait-notes", "type": "File.WaitFor", "properties": { "path": "'demo71/notes.txt'", "timeoutMs": "5000", "result": "there" } },
+      { "id": "hash-notes", "type": "File.Hash", "properties": { "path": "'demo71/notes.txt'", "result": "hash" } },
+      { "id": "zip-folder", "type": "Zip.Create", "properties": { "source": "'demo71'", "destination": "'demo71.zip'", "overwrite": "true", "result": "zipped" } },
+      { "id": "unzip", "type": "Zip.Extract", "properties": { "source": "'demo71.zip'", "destination": "'demo71-unzipped'", "overwrite": "true", "result": "extracted" } },
+      { "id": "create-table", "type": "Db.Execute", "properties": { "connection": "demo", "sql": "CREATE TABLE IF NOT EXISTS invoices (number TEXT PRIMARY KEY, customer TEXT, amount NUMERIC)" } },
+      { "id": "clear-table", "type": "Db.Execute", "properties": { "connection": "demo", "sql": "DELETE FROM invoices" } },
+      { "id": "insert-one", "type": "Db.Execute", "properties": { "connection": "demo", "sql": "INSERT INTO invoices (number, customer, amount) VALUES (@number, @customer, @amount)", "parameters": "{ 'number': 'INV-1', 'customer': 'ACME Ltd', 'amount': 1234.50 }" } },
+      { "id": "insert-two", "type": "Db.Execute", "properties": { "connection": "demo", "sql": "INSERT INTO invoices (number, customer, amount) VALUES (@number, @customer, @amount)", "parameters": "{ 'number': 'INV-2', 'customer': 'Bolt & Co', 'amount': 99 }" } },
+      { "id": "query", "type": "Db.Query", "properties": { "connection": "demo", "sql": "SELECT number, customer, amount FROM invoices ORDER BY number", "result": "invoices" } },
+      { "id": "sum", "type": "Db.Scalar", "properties": { "connection": "demo", "sql": "SELECT SUM(amount) FROM invoices", "result": "total" } },
+      { "id": "append", "type": "Excel.AppendRows", "properties": { "path": "'demo71-register.xlsx'", "sheet": "'Invoices'", "rows": "invoices", "result": "firstNewRow" } },
+      { "id": "clear-first", "type": "Excel.ClearRange", "properties": { "path": "'demo71-register.xlsx'", "sheet": "'Invoices'", "range": "'C2:C2'", "result": "cleared" } }
+    ]
+  }
+}

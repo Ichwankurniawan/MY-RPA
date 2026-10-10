@@ -1,0 +1,22 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Sftp",
+  "name": "MyRPA SFTP",
+  "version": "0.1.0",
+  "description": "Sftp.List, Sftp.Download, Sftp.Upload, Sftp.Delete, Sftp.Move and Sftp.CreateFolder with SSH.NET: servers named in the plugin settings with a pinned host key, remote paths confined to a remoteRoot, local files under one configured folder (fileRoot), the password from a secret property.",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Sftp.dll",
+    "type": "MyRPA.Sftp.SftpPlugin"
+  },
+  "capabilities": [ "Network", "FileSystem" ],
+  "activities": [
+    "Sftp.List",
+    "Sftp.Download",
+    "Sftp.Upload",
+    "Sftp.Delete",
+    "Sftp.Move",
+    "Sftp.CreateFolder"
+  ]
+}

@@ -22,6 +22,8 @@ load context is not a sandbox.
 | `Excel.GetSheets` | `path` | `result`: the sheet names in order | `FileNotFound`, `InvalidWorkbook` |
 | `Excel.ReadRange` | `path`, `sheet` (default the first), `range` (e.g. `A1:D100`, default the used cells), `hasHeader` (default true) | `result`: a List of Dictionaries (header) or of Lists | `SheetNotFound`, `InvalidInput` for a bad range, `TooManyItems` |
 | `Excel.WriteRange` | `path`, `sheet` (default `Sheet1`, created when missing), `startCell` (default `A1`), `rows`, `columns`, `writeHeader` (default true), `createFile` (default true) | — | `FileNotFound` (createFile false), `InvalidInput`, `TooManyItems` |
+| `Excel.AppendRows` (7.1) | `path`, `sheet` (default `Sheet1`, created when missing), `rows`, `startColumn` (default `A`), `createFile` (default true) | `result`: the row number of the first row added | `InvalidInput` for a column the header lacks, `FileNotFound`, `TooManyItems` |
+| `Excel.ClearRange` (7.1) | `path`, `sheet` (default the first), `range` | `result`: the number of cells cleared | `SheetNotFound`, `InvalidInput` for a bad range, `FileNotFound` |
 
 **Reading:** the sheet is streamed row by row and stops after the requested range. Whole numbers become Int and other
 numbers Decimal. Booleans become Boolean, and cells with a date or time number format become DateTime (UTC). Errors

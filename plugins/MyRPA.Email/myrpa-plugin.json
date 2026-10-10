@@ -1,0 +1,21 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Email",
+  "name": "MyRPA Email",
+  "version": "0.1.0",
+  "description": "Email.Send (SMTP) and Email.Read, Email.SaveAttachments, Email.MarkRead, Email.Move (IMAP) with MailKit: servers named only in the plugin settings, TLS by default, the password from a secret property, attachments under one configured folder (fileRoot).",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Email.dll",
+    "type": "MyRPA.Email.EmailPlugin"
+  },
+  "capabilities": [ "Network", "FileSystem" ],
+  "activities": [
+    "Email.Send",
+    "Email.Read",
+    "Email.SaveAttachments",
+    "Email.MarkRead",
+    "Email.Move"
+  ]
+}

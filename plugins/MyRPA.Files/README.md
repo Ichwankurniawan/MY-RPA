@@ -12,6 +12,7 @@ other plugin. It runs in-process and is fully trusted (ADR-0015); its load conte
 | `maxFileBytes` | 52428800 (50 MB) | The largest file `File.ReadText`, `Csv.Read`, `Json.ReadFile` and `Xml.ReadFile` read |
 | `maxItems` | 10000 | The most entries `File.List` returns |
 | `maxRows` | 100000 | The most rows `Csv.Read` returns |
+| `maxExtractBytes` | 524288000 (500 MB) | The most bytes `Zip.Extract` writes from one archive (7.1) |
 
 ## File policy (`MyRPA.Sdk.Files.FileRootPolicy`)
 
@@ -41,6 +42,10 @@ robot's account can write to. The plugin is not a security boundary against a ho
 | `Csv.Write` | A table to CSV; text starting with `= + - @` gets a leading `'` unless `protectFormulas` is false | `FileAlreadyExists`, `InvalidInput` |
 | `Json.ReadFile` / `Json.WriteFile` | JSON files as workflow values; nesting deeper than 64 is refused | `InvalidJson` |
 | `Xml.ReadFile` | XML into `{ name, attributes, text, children }`; DTDs and external entities refused, depth 64 | `InvalidXml` |
+| `Zip.Create` (7.1) | A ZIP of a file, a folder (`pattern`, `recursive`; paths kept) or a List of files (stored by name); written beside the destination and moved into place when complete; links skipped; at most `maxItems` files | `FileAlreadyExists`, `TooManyItems`, `InvalidInput` for two list files with one name |
+| `Zip.Extract` (7.1) | Extracts into a folder; every entry is checked first: one leaving the folder (zip slip: `..`, absolute, drive) is refused, as are more than `maxItems` files or `maxExtractBytes` in total (zip bombs; the bytes written are counted too) and existing files without `overwrite`; files created by a failed extraction are removed | `FileAccessDenied`, `TooManyItems`, `FileTooLarge`, `FileAlreadyExists`, `InvalidArchive` |
+| `File.Hash` (7.1) | SHA-256 (default) or SHA-512 of a file as lower-case hex, read in chunks | `FileNotFound` |
+| `File.WaitFor` (7.1) | Waits until a file exists, with `stableMs` until its size and time stop changing; polls every `pollMs` on the run's clock, never past `timeoutMs` or the run's deadline | `Timeout` (or `result` false with `failOnTimeout` false) |
 
 All activities declare the `FileSystem` side effect in the catalog (1.2). Operating-system failures become
 `FileIoError` with a message that does not repeat the system's text (which can contain absolute paths).

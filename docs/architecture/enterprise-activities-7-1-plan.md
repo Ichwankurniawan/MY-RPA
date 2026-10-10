@@ -1,7 +1,8 @@
 # Phase 7.1 — More enterprise integrations: plan
 
 Status: **approved** by the owner on 2026-10-09 ("Go with your recommendations, and write ADR"); decision record
-[ADR-0043](../adr/0043-more-enterprise-integrations.md). Builds on Phase 7
+[ADR-0043](../adr/0043-more-enterprise-integrations.md). **Delivered 2026-10-10: slices 1–9 done** (catalog reference:
+[enterprise-activities.md](enterprise-activities.md); §8 records where the implementation refined this plan). Builds on Phase 7
 ([ADR-0042](../adr/0042-enterprise-automation-activities.md), [enterprise-activities.md](enterprise-activities.md)). Not in scope: AI (Phase 8), MCP and agents (Phase 9), queues and
 triggers (Phase 10), OAuth sign-in and a credential store (Phase 11).
 
@@ -140,7 +141,7 @@ The questions as they were asked:
 1. **New packages** (each owned by one plugin, MIT/Apache/PostgreSQL licences):
    - MailKit for SMTP/IMAP;
    - SSH.NET for SFTP;
-   - UglyToad.PdfPig for PDF;
+   - PdfPig (by UglyToad; NuGet id `PdfPig`) for PDF;
    - Microsoft.Data.SqlClient, Npgsql and Microsoft.Data.Sqlite for databases.
 2. **Database providers in 7.1:** SQLite, SQL Server and PostgreSQL. Add MySQL?
 3. **CI service containers** for IMAP, SFTP, SQL Server and PostgreSQL (Linux job only).
@@ -153,3 +154,22 @@ The questions as they were asked:
   mainframe terminals and SAP RFC.
 - **API automation after Phase 11:** Microsoft 365/Google/Salesforce via OAuth, and the OpenAPI connector.
 - **Phase 10:** queues and triggers.
+
+## 8. As delivered (2026-10-10)
+
+Where the implementation refined the plan:
+- **Servers are named in the plugin configuration** (`server.NAME.*` for SFTP, `connection.NAME.*` for databases,
+  `smtpHost`/`imapHost` for mail). A workflow refers to them by name and never chooses a host, so no `allowedHosts`
+  setting is needed for these plugins.
+- **SFTP host keys** are pinned per server (`server.NAME.hostKey`, required).
+- **Database connection strings** with a password are refused when the plugin loads.
+- **PdfPig's NuGet id** is `PdfPig`; `UglyToad.PdfPig` is an unofficial upload.
+- **Fail-closed defaults:**
+  - `Http.Download`/`Http.Upload`, email attachments and SFTP transfers refuse every local path until the operator sets
+    a `fileRoot`;
+  - SMTP requires STARTTLS unless the operator chooses `None`.
+- **`Chat.Post`** repeats only a 429, so a message is never posted twice. Its webhook URL is never named beyond its host.
+- **Server-backed tests:** `MYRPA_TEST_REQUIRE_SERVERS` makes a missing server fail the CI job instead of skipping the
+  tests. Locally they skip.
+- **Samples:** `samples/plugins/invoice-intake.json` (the definition of done) and `samples/plugins/local-71-demo.json`
+  (no network).
