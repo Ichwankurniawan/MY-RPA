@@ -211,10 +211,12 @@ export interface StudioState {
   readonly panes: Panes;
   /** The page shown in the main area (ADR-0044): the Studio itself, or the Home page. */
   readonly page: StudioPage;
-  /** The Workflows page starts at the projects; choosing one (or opening a workflow) shows its workspace. */
-  readonly workflowsView: WorkflowsView;
-  /** What each project holds, for the Projects view (loaded on connect and whenever it is shown). */
+  /** What each project holds, for the Projects page (loaded on connect and whenever it is shown). */
   readonly projectSummaries: ReadonlyMap<string, ProjectSummary>;
+  /** The projects folder new projects go to (ADR-0046); undefined when the server has none, so none are created. */
+  readonly projectsRoot?: string;
+  /** The projects the Studio may delete: those of the projects folder, never a --project. */
+  readonly removableProjects: ReadonlySet<string>;
   /** The left panel's tab: the activity catalog or the project's files (remembered per browser). */
   readonly sidebarTab: SidebarTab;
   /** Containers whose children are hidden in the designer (UX-3; never an ancestor of the selection). */
@@ -273,13 +275,10 @@ const isPanes = (value: unknown): value is Panes => {
 /** The tabs of the bottom panel. */
 export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution' | 'recording';
 
-/** The pages of the navigation rail (ADR-0044); only pages that work are listed. */
-export type StudioPage = 'workflows' | 'home';
+/** The pages of the navigation rail (ADR-0044); only pages that work are listed. Workflows is the chosen project's workspace. */
+export type StudioPage = 'workflows' | 'home' | 'projects';
 
-/** What the Workflows page shows: the projects to choose from, or the workspace of the chosen project. */
-export type WorkflowsView = 'projects' | 'workspace';
-
-/** A project on the Projects view, from its listing: how many workflows and folders, and the latest change. */
+/** A project on the Projects page, from its listing: how many workflows and folders, and the latest change. */
 export interface ProjectSummary {
   readonly workflows: number;
   readonly folders: number;
@@ -360,6 +359,8 @@ export type StudioDialog =
   | { readonly kind: 'unsaved'; readonly path: string; readonly next: string }
   | { readonly kind: 'name'; readonly purpose: NamePurpose; readonly from?: string; readonly initial: string; readonly error?: string }
   | { readonly kind: 'delete'; readonly path: string; readonly dirty: boolean }
+  | { readonly kind: 'new-project'; readonly error?: string }
+  | { readonly kind: 'delete-project'; readonly name: string; readonly dirty: boolean }
   | { readonly kind: 'conflict'; readonly path: string }
   | { readonly kind: 'recover'; readonly path: string; readonly savedAt: string; readonly stale: boolean }
   | {
@@ -835,8 +836,8 @@ export class Studio {
       outputTab: 'problems',
       panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
       page: 'workflows',
-      workflowsView: 'projects',
       projectSummaries: new Map(),
+      removableProjects: new Set(),
       sidebarTab: this.preferences.read(preferenceKeys.sidebarTab, isSidebarTab) ?? 'activities',
       collapsed: new Set(),
       graphLists: new Set(),
@@ -966,17 +967,18 @@ export class Studio {
         // Named on the server's command line (--open): open it right away.
         await this.selectProject(info.open.project);
         await this.open(info.open.path);
-      } else if (info.projects.length > 0) {
-        // The Projects view only when there is a choice: one project, or the last one used here, opens its workspace.
+      } else {
+        // The Projects page only when there is a choice: one project, or the last one used here, opens its workspace.
         const last = this.preferences.read(preferenceKeys.lastProject, isText);
         const chosen = last !== undefined && info.projects.includes(last) ? last : info.projects.length === 1 ? info.projects[0] : undefined;
-        await this.selectProject(chosen ?? info.projects[0]);
-        if (chosen !== undefined && this.state.project === chosen) {
-          this.store.set({ workflowsView: 'workspace' });
+        if (info.projects.length > 0) {
+          await this.selectProject(chosen ?? info.projects[0]);
         }
+
+        this.store.set({ page: chosen !== undefined && this.state.project === chosen ? 'workflows' : 'projects' });
       }
 
-      await this.loadProjectSummaries();
+      await this.loadProjects();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         this.store.set({ connection: 'signed-out', message: error.message });
@@ -1036,7 +1038,6 @@ export class Studio {
         dialog: draft ? { kind: 'recover', path, savedAt: draft.savedAt, stale: draft.etag !== etag } : undefined,
         message: opened.readOnlyReason ? `Opened ${path} read-only: ${opened.readOnlyReason}` : `Opened ${path}.`,
         page: 'workflows',
-        workflowsView: 'workspace',
       });
       this.preferences.write(preferenceKeys.lastProject, project);
       this.store.set(treeView);
@@ -1438,10 +1439,10 @@ export class Studio {
     this.store.set({ page });
   }
 
-  /** Shows the Projects view of the Workflows page, with what each project holds now. */
+  /** Shows the Projects page with what each project holds now. */
   async showProjects(): Promise<void> {
-    this.store.set({ page: 'workflows', workflowsView: 'projects' });
-    await this.loadProjectSummaries();
+    this.store.set({ page: 'projects' });
+    await this.loadProjects();
   }
 
   /** Chooses a project and shows its workspace (Files panel, designer). An open workflow stays open. */
@@ -1449,12 +1450,87 @@ export class Studio {
     await this.selectProject(project);
     if (this.state.project === project) {
       this.preferences.write(preferenceKeys.lastProject, project);
-      this.store.set({ page: 'workflows', workflowsView: 'workspace', sidebarTab: this.state.file?.project === project ? this.state.sidebarTab : 'files' });
+      this.store.set({ page: 'workflows', sidebarTab: this.state.file?.project === project ? this.state.sidebarTab : 'files' });
     }
   }
 
-  /** Lists every project for the Projects view; a project that cannot be listed says why. */
-  private async loadProjectSummaries(): Promise<void> {
+  /** Starts New project (ADR-0046): a folder in the server's projects folder. */
+  startNewProject(): void {
+    this.store.set({ dialog: { kind: 'new-project' } });
+  }
+
+  /** Creates the project and shows its workspace; a refused name stays in the dialog with the server's reason. */
+  async confirmNewProject(name: string): Promise<void> {
+    if (this.state.dialog?.kind !== 'new-project') {
+      return;
+    }
+
+    try {
+      await this.api.createProject(name.trim());
+    } catch (error) {
+      this.store.set({ dialog: { kind: 'new-project', error: (error as Error).message.replace(/^'name': /, '') } });
+      return;
+    }
+
+    this.closeDialog();
+    await this.loadProjects();
+    await this.enterProject(name.trim());
+    this.say(`Created the project ${name.trim()}.`);
+  }
+
+  /** Asks before deleting a project of the projects folder (its name is typed to confirm). */
+  startDeleteProject(name: string): void {
+    this.store.set({ dialog: { kind: 'delete-project', name, dirty: this.state.file?.project === name && isDirty(this.state) } });
+  }
+
+  /** Moves the project to the projects folder's trash; an open workflow of it is closed. */
+  async confirmDeleteProject(): Promise<void> {
+    const dialog = this.state.dialog;
+    if (dialog?.kind !== 'delete-project') {
+      return;
+    }
+
+    this.closeDialog();
+    let trash: string;
+    try {
+      trash = await this.api.deleteProject(dialog.name);
+    } catch (error) {
+      this.say(`Not deleted: ${(error as Error).message}`);
+      return;
+    }
+
+    if (this.state.file?.project === dialog.name) {
+      this.mergeKey = undefined;
+      this.store.set({ file: undefined, document: undefined, saved: undefined, selectedKey: undefined, undo: [], redo: [], diagnostics: undefined, validated: undefined, errorNodeKeys: new Set() });
+      this.store.set(treeView);
+    }
+
+    await this.loadProjects();
+    if (this.state.project === dialog.name) {
+      const next = this.state.projects[0];
+      if (next !== undefined) {
+        await this.selectProject(next);
+      } else {
+        this.store.set({ project: undefined, files: [], folders: [] });
+      }
+    }
+
+    this.say(`Deleted the project ${dialog.name}: its folder is now ${trash} in the projects folder.`);
+  }
+
+  /** The projects, the projects folder, and what each project holds; a project that cannot be listed says why. */
+  private async loadProjects(): Promise<void> {
+    try {
+      const { projects, projectsRoot } = await this.api.projects();
+      this.store.set({
+        projects: projects.map((p) => p.name),
+        projectsRoot: projectsRoot ?? undefined,
+        removableProjects: new Set(projects.filter((p) => p.removable).map((p) => p.name)),
+      });
+    } catch (error) {
+      this.say(`Cannot list the projects: ${(error as Error).message}`);
+    }
+
     const entries = await Promise.all(
       this.state.projects.map(async (project): Promise<[string, ProjectSummary]> => {
         try {

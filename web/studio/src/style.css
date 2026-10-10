@@ -647,3 +647,10 @@ textarea.multiline-text { width: 100%; min-height: 10em; resize: vertical; font-
 .project-open .project-name { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-card small { color: var(--muted); overflow-wrap: anywhere; padding-left: 36px; }
 .project-root > .tree-row .tree-name { font-weight: 650; }
+/* ADR-0046: the Projects page header, New project and Delete. */
+.page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-header .page-title { margin: 0; }
+.page-header button { padding: 8px 14px; }
+.project-card .project-delete { justify-self: start; margin-left: 36px; padding: 3px 8px; font-size: 12px; color: var(--muted); background: none; }
+.project-card .project-delete:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
+button.danger:not(:disabled) { background: var(--error); color: var(--primary-text); border-color: transparent; font-weight: 650; }

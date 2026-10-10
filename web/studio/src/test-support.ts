@@ -153,7 +153,50 @@ export class FakeApi implements StudioApi {
       throw new ApiError(401, 'Open the server with the start link it printed.');
     }
 
-    return { name: 'MyRPA.Server', mode: 'local', workflowSchemaVersions: ['1.0'], projects: ['demo'], open: this.openOnStart };
+    return { name: 'MyRPA.Server', mode: 'local', workflowSchemaVersions: ['1.0'], projects: ['demo', ...this.createdProjects], open: this.openOnStart };
+  }
+
+  // Projects (ADR-0046): the projects folder (null: none), the projects created in it, and which may be deleted.
+  projectsRoot: string | null = null;
+  createdProjects: string[] = [];
+  removableProjects = new Set<string>();
+  deletedProjects: string[] = [];
+
+  async projects() {
+    const names = (await this.info()).projects;
+    return { projects: names.map((name) => ({ name, removable: this.removableProjects.has(name) })), projectsRoot: this.projectsRoot };
+  }
+
+  async createProject(name: string) {
+    if (this.projectsRoot === null) {
+      throw new ApiError(409, 'This server has no projects folder: start it with --projects-root to create projects.');
+    }
+
+    if (name.startsWith('.') || /[<>:"/\\|?*]/.test(name)) {
+      throw new ApiError(400, "'name': A project name cannot start or end with '.', or contain < > : \" / \\ | ? * or control characters.");
+    }
+
+    if ((await this.info()).projects.some((p) => p.toLowerCase() === name.toLowerCase())) {
+      throw new ApiError(409, `A project or folder named '${name}' already exists.`);
+    }
+
+    this.createdProjects.push(name);
+    this.removableProjects.add(name);
+  }
+
+  async deleteProject(name: string) {
+    if (!(await this.info()).projects.includes(name)) {
+      throw new ApiError(404, `Unknown project '${name}'.`);
+    }
+
+    if (!this.removableProjects.has(name)) {
+      throw new ApiError(409, `'${name}' was named with --project; remove it from the server's command line instead.`);
+    }
+
+    this.createdProjects = this.createdProjects.filter((p) => p !== name);
+    this.removableProjects.delete(name);
+    this.deletedProjects.push(name);
+    return `.trash/${name}-20261011-120000`;
   }
 
   async activities() {

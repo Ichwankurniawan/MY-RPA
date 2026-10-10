@@ -51,7 +51,10 @@ internal static class ServerApplication
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        if (ServerCommandLine.Parse(args, out var usageError, Path.Combine(AppContext.BaseDirectory, "wwwroot")) is not { } options)
+        // ADR-0046: with no project named at all, the projects folder is Documents/Laconi Projects.
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var defaultProjectsRoot = documents.Length > 0 ? Path.Combine(documents, "Laconi Projects") : null;
+        if (ServerCommandLine.Parse(args, out var usageError, Path.Combine(AppContext.BaseDirectory, "wwwroot"), defaultProjectsRoot) is not { } options)
         {
             await error.WriteLineAsync($"Error: {usageError}\nUsage: {ServerCommandLine.Usage}").ConfigureAwait(false);
             return 2;
@@ -195,13 +198,13 @@ internal static class ServerApplication
 
         var api = app.MapGroup("/api");
 
-        api.MapGet("/info", (ServerOptions options) => Results.Json(new
+        api.MapGet("/info", (ServerOptions options, ProjectStore store) => Results.Json(new
         {
             name = "MyRPA.Server",
             version = typeof(ServerApplication).Assembly.GetName().Version?.ToString(),
             mode = "local",
             workflowSchemaVersions = new[] { MyRPA.Workflow.WorkflowSchemaVersion.Initial.ToString(), MyRPA.Workflow.WorkflowSchemaVersion.Graphs.ToString() },
-            projects = options.Projects.Select(p => p.Name),
+            projects = store.Projects.Select(p => p.Name),
             // The workflow named on the command line (--open), which the Studio opens after connecting (W6).
             open = options.Open is { } open ? new { project = open.Project, path = open.Path } : null,
         }));
@@ -234,11 +237,50 @@ internal static class ServerApplication
 
     private static void MapProjects(RouteGroupBuilder api)
     {
-        api.MapGet("/projects", (ProjectStore store) => Results.Json(new { projects = store.Projects.Select(p => new { name = p.Name }) }));
+        // ADR-0046: the projects, which ones the Studio may delete (those of the projects folder), and where new ones go.
+        api.MapGet("/projects", (ProjectStore store, ServerOptions options) => Results.Json(new
+        {
+            projects = store.Projects.Select(p => new { name = p.Name, removable = p.InRoot }),
+            projectsRoot = options.ProjectsRoot,
+        }));
+
+        api.MapPost("/projects", async (ProjectRequest request, ProjectStore store, ServerOptions options, HttpContext context) =>
+        {
+            if (options.ProjectsRoot is null)
+            {
+                return Problem(StatusCodes.Status409Conflict, "This server has no projects folder: start it with --projects-root to create projects.");
+            }
+
+            if (!ProjectStore.IsValidProjectName(request.Name, out var error))
+            {
+                return BadRequest($"'name': {error}");
+            }
+
+            return await store.CreateProjectAsync(request.Name!, context.RequestAborted).ConfigureAwait(false) == FileWriteOutcome.Created
+                ? Results.Json(new { name = request.Name }, statusCode: StatusCodes.Status201Created)
+                : Problem(StatusCodes.Status409Conflict, $"A project or folder named '{request.Name}' already exists.");
+        });
+
+        // Delete moves the folder to the projects folder's .trash; a --project is never deleted from the Studio.
+        api.MapDelete("/projects/{project}", async (string project, ProjectStore store, HttpContext context) =>
+        {
+            if (store.Find(project) is not { } root)
+            {
+                return NotFound($"Unknown project '{project}'.");
+            }
+
+            if (!root.InRoot)
+            {
+                return Problem(StatusCodes.Status409Conflict, $"'{root.Name}' was named with --project; remove it from the server's command line instead.");
+            }
+
+            var (trashed, error) = await store.TrashProjectAsync(root, context.RequestAborted).ConfigureAwait(false);
+            return trashed is not null ? Results.Json(new { name = root.Name, trash = trashed }) : Problem(StatusCodes.Status409Conflict, error!);
+        });
 
         api.MapGet("/projects/{project}/workflows", (string project, ProjectStore store) =>
         {
-            var root = store.Projects.FirstOrDefault(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+            var root = store.Find(project);
             return root is null ? NotFound($"Unknown project '{project}'.") : Results.Json(new { workflows = ProjectStore.List(root), folders = ProjectStore.ListFolders(root) });
         });
 
@@ -895,6 +937,9 @@ internal static class ServerApplication
 internal sealed record MoveRequest(string? From, string? To);
 
 internal sealed record FolderRequest(string? Path);
+
+/// <summary>Body of <c>POST /api/projects</c> (ADR-0046): the new project's folder name.</summary>
+internal sealed record ProjectRequest(string? Name);
 
 /// <summary>Body of <c>POST /api/validate</c>.</summary>
 internal sealed record ValidateRequest(JsonElement? Document);

@@ -92,13 +92,14 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   the file is shown, the arrow taken last is highlighted (from consecutive step events; there is no transition event).
   In a state machine the steps are states: a final state is marked, and Open shows a state's `entry` and `exit`.
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
-- **Projects:** the Workflows page starts at the **Projects** view: every project the server was started with
-  (`--project`), with its number of workflows and folders and its latest change (a project that cannot be listed says
-  why). It is shown only when there is a choice: with one project, or with the one used last in this browser, the
-  Studio opens that project's workspace. Choosing one shows its workspace, where the Files tree has the project as its
-  root. The title bar shows
-  **Projects / project**: Projects comes back to the view, the project name to its workspace. Projects are not created
-  from the browser.
+- **Projects** ([ADR-0046](../adr/0046-projects-folder-create-and-delete.md)): its own rail page, without the editing
+  toolbar. It lists every project (the `--project` folders, then those of the server's projects folder) with its number
+  of workflows and folders and its latest change (a project that cannot be listed says why). **New project…** creates a
+  folder in the projects folder (disabled, with the reason, without one); **Delete…** (only for those) asks for the
+  project's name and moves its folder to the projects folder's `.trash`. The Studio starts on it only when there is a
+  choice: with one project, or with the one used last in this browser, it opens that project's workspace (the
+  Workflows page, where the Files tree has the project as its root). The title bar shows **Projects / project**:
+  Projects comes back to this page, the project name to its workspace.
 - **Open:** choose a workflow file in the title bar, then Open; or double-click a file (or Enter) in the Files panel.
   Opening a workflow always shows the workspace. A file named with the server's `--open` opens after connecting. The file is parsed into the document model.
 - **Brand and shell (ADR-0044):**
