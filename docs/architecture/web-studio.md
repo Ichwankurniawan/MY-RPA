@@ -94,7 +94,9 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
 - **Projects:** the Workflows page starts at the **Projects** view: every project the server was started with
   (`--project`), with its number of workflows and folders and its latest change (a project that cannot be listed says
-  why). Choosing one shows its workspace, where the Files tree has the project as its root. The title bar shows
+  why). It is shown only when there is a choice: with one project, or with the one used last in this browser, the
+  Studio opens that project's workspace. Choosing one shows its workspace, where the Files tree has the project as its
+  root. The title bar shows
   **Projects / project**: Projects comes back to the view, the project name to its workspace. Projects are not created
   from the browser.
 - **Open:** choose a workflow file in the title bar, then Open; or double-click a file (or Enter) in the Files panel.
