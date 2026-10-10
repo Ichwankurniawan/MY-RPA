@@ -4,6 +4,18 @@ export type Json = null | boolean | number | string | Json[] | JsonObject;
 export type JsonObject = { readonly [key: string]: Json };
 
 /** `GET /api/info`. */
+/** A project of `GET /api/projects` (ADR-0046): `removable` for a folder of the projects folder, never a `--project`. */
+export interface ProjectInfo {
+  name: string;
+  removable: boolean;
+}
+
+/** `GET /api/projects` (ADR-0046): the projects and the projects folder new ones go to (null: none, so none created). */
+export interface ProjectsInfo {
+  projects: ProjectInfo[];
+  projectsRoot: string | null;
+}
+
 export interface ServerInfo {
   name: string;
   version?: string;

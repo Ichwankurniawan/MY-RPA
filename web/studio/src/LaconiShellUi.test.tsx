@@ -127,8 +127,8 @@ describe('Laconi shell', () => {
     const details = (name: string) => document.getElementById(projects.getByRole('button', { name: `Open project ${name}` }).getAttribute('aria-describedby')!)!.textContent;
 
     expect(projects.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Open project demo', 'Open project empty', 'Open project broken']);
-    expect(details('empty')).toBe('0 workflows · 0 folders');
-    expect(details('broken')).toBe('Cannot list it: the folder is gone');
+    expect(details('empty')).toBe('0 workflows · 0 folders · named with --project');
+    expect(details('broken')).toBe('Cannot list it: the folder is gone · named with --project');
 
     await act(async () => fireEvent.click(projects.getByRole('button', { name: 'Open project empty' })));
     expect(screen.getByTestId('current-project').textContent).toBe('empty');
