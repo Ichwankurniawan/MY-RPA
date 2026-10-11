@@ -27,18 +27,120 @@ internal enum FileWriteOutcome
 /// by relative paths that are normalized and confined like ADR-0012. Writes are conditional on the file's ETag, so a
 /// stale editor cannot overwrite newer content.
 /// </summary>
-internal sealed class ProjectStore(ServerOptions options) : IDisposable
+internal sealed class ProjectStore(ServerOptions options, TimeProvider time) : IDisposable
 {
+    /// <summary>Where deleted projects go, inside the projects folder (ADR-0046); hidden, so never a project itself.</summary>
+    public const string TrashFolder = ".trash";
+
     private static readonly string[] _skippedFolders = ["bin", "obj", "node_modules"];
+    private static readonly string[] _reservedNames = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"];
     private readonly SemaphoreSlim _writes = new(1, 1);
 
-    public IReadOnlyList<ProjectRoot> Projects => options.Projects;
+    /// <summary>The projects: the <c>--project</c> folders, then the folders of the projects folder by name (ADR-0046).</summary>
+    public IReadOnlyList<ProjectRoot> Projects
+    {
+        get
+        {
+            if (options.ProjectsRoot is not { } root || !Directory.Exists(root))
+            {
+                return options.Projects;
+            }
+
+            // A folder of the projects folder whose name a --project already uses is left out (the --project wins).
+            var inRoot = Directory.EnumerateDirectories(root)
+                .Select(d => new DirectoryInfo(d))
+                .Where(d => !d.Name.StartsWith('.') && !_skippedFolders.Contains(d.Name, StringComparer.OrdinalIgnoreCase) && (d.Attributes & FileAttributes.ReparsePoint) == 0)
+                .Where(d => !options.Projects.Any(p => string.Equals(p.Name, d.Name, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(d => new ProjectRoot(d.Name, Path.TrimEndingDirectorySeparator(d.FullName), InRoot: true));
+            return [.. options.Projects, .. inRoot];
+        }
+    }
+
+    /// <summary>A project by name (case-insensitive); null when there is none.</summary>
+    public ProjectRoot? Find(string project) => Projects.FirstOrDefault(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Whether <paramref name="name"/> can name a new project folder on every platform: one segment, not hidden, no
+    /// characters Windows refuses, no trailing dot or space, no device name, at most 100 characters.
+    /// </summary>
+    public static bool IsValidProjectName(string? name, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrWhiteSpace(name) || name.Trim() != name || name.Length > 100)
+        {
+            error = "A project name needs 1 to 100 characters, without leading or trailing spaces.";
+        }
+        else if (name.StartsWith('.') || name.EndsWith('.') || name.IndexOfAny(['<', '>', ':', '"', '/', '\\', '|', '?', '*']) >= 0 || name.Any(char.IsControl))
+        {
+            error = "A project name cannot start or end with '.', or contain < > : \" / \\ | ? * or control characters.";
+        }
+        else if (_reservedNames.Contains(name.Split('.')[0], StringComparer.OrdinalIgnoreCase))
+        {
+            error = $"'{name}' is a name Windows reserves for devices.";
+        }
+
+        return error.Length == 0;
+    }
+
+    /// <summary>Creates an empty project folder in the projects folder; never over an existing project, file or folder.</summary>
+    public async Task<FileWriteOutcome> CreateProjectAsync(string name, CancellationToken cancellationToken)
+    {
+        await _writes.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var full = Path.Combine(options.ProjectsRoot!, name);
+            if (Find(name) is not null || Directory.Exists(full) || File.Exists(full))
+            {
+                return FileWriteOutcome.TargetExists;
+            }
+
+            Directory.CreateDirectory(full);
+            return FileWriteOutcome.Created;
+        }
+        finally
+        {
+            _writes.Release();
+        }
+    }
+
+    /// <summary>
+    /// Moves a project of the projects folder to its <c>.trash</c> (as <c>name-yyyyMMdd-HHmmss</c>), so it can be
+    /// restored by hand. Returns the trash path relative to the projects folder, or why it was not moved.
+    /// </summary>
+    public async Task<(string? Trashed, string? Error)> TrashProjectAsync(ProjectRoot project, CancellationToken cancellationToken)
+    {
+        await _writes.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var trash = Path.Combine(options.ProjectsRoot!, TrashFolder);
+            Directory.CreateDirectory(trash);
+            var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            var target = Path.Combine(trash, $"{project.Name}-{stamp}");
+            for (var i = 2; Directory.Exists(target) || File.Exists(target); i++)
+            {
+                target = Path.Combine(trash, $"{project.Name}-{stamp}-{i}");
+            }
+
+            Directory.Move(project.Root, target);
+            return (Path.GetRelativePath(options.ProjectsRoot!, target).Replace('\\', '/'), null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A file of the project is open elsewhere (Windows locks it), or the folder cannot be moved.
+            return (null, $"The project folder cannot be moved to the trash: {ex.Message}");
+        }
+        finally
+        {
+            _writes.Release();
+        }
+    }
 
     /// <summary>Resolves a project-relative workflow path (or, with <paramref name="folder"/>, a folder path) to a confined full path.</summary>
     public bool TryResolve(string project, string? relativePath, out string fullPath, out string error, bool folder = false)
     {
         fullPath = string.Empty;
-        var root = options.Projects.FirstOrDefault(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+        var root = Find(project);
         if (root is null)
         {
             error = $"Unknown project '{project}'.";

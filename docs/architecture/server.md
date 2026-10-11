@@ -23,7 +23,9 @@ dotnet run --project src/MyRPA.Server -c Release --no-build -- --project samples
 dotnet run --project src/MyRPA.Server -c Release --no-build -- --open samples/hello-world.json   # project = its folder
 ```
 
-Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]`.
+Command line: `MyRPA.Server [--projects-root <dir>] [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]`.
+
+- **Projects folder** (`--projects-root`, [ADR-0046](../adr/0046-projects-folder-create-and-delete.md)): every folder in it is a project, after the `--project` folders. The Studio creates projects there and deletes them to its `.trash`. With no project named at all, it is `Documents/Laconi Projects`.
 - **Port:** the default is 5310; `0` picks a free port.
 - **Web Studio:** the server serves the Studio its build bundled (`wwwroot` next to it, copied from `web/studio/dist`
   when that was built first). `--web <dir>` serves another build instead (must contain `index.html`). Without either,
@@ -66,7 +68,9 @@ Command line: `MyRPA.Server --project <dir> [--project <dir>]... [--open <workfl
 | `GET /api/info` | Server name, version, `mode: "local"`, supported workflow schema versions (`["1.0", "1.1"]`), project names, and `open` (`{ project, path }` from `--open`, else null) |
 | `GET /api/activities` | The activity catalog snapshot (ADR-0020 format, catalog version 1.2: `childLayout`, and per ADR-0042 `valueType`, `default`, `secret` and `sideEffects`), built-in and plugin activities |
 | `GET /api/plugins` | Loaded plugins (id, name, version, SHA-256, activities) and their load diagnostics |
-| `GET /api/projects` | Registered projects |
+| `GET /api/projects` | `{ projects: [{ name, removable }], projectsRoot }`: the `--project` folders, then the projects folder's (`removable`); `projectsRoot` null when there is none (ADR-0046) |
+| `POST /api/projects` | `{ name }`: creates an empty project folder in the projects folder → 201 `{ name }`; 400 for a refused name; 409 when taken or without a projects folder |
+| `DELETE /api/projects/{project}` | Moves a project of the projects folder to `.trash/<name>-<yyyyMMdd-HHmmss>` → 200 `{ name, trash }`; 404 unknown; 409 for a `--project` or a folder in use |
 | `GET /api/projects/{project}/workflows` | `{ workflows, folders }`: workflow files (path, size, modified) and every folder, empty ones too |
 | `POST /api/projects/{project}/folders` | `{ path }`: creates a folder (and its parents) inside the project with the file path rules (no `..`, hidden names, backslashes or links) → 201 `{ path }`; 409 when a file or folder of that name exists, 400 for a refused path |
 | `GET /api/projects/{project}/workflows/{path}` | The file's JSON; `ETag` header |

@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, ExpressionFunction, GeneratedActivities, JsonObject, NameReferences, PluginReport, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, ProjectListing, WorkflowFile } from './types';
+import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, ExpressionFunction, GeneratedActivities, JsonObject, NameReferences, PluginReport, ProjectListing, ProjectsInfo, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -35,6 +35,12 @@ export interface StudioApi {
   info(): Promise<ServerInfo>;
   activities(): Promise<ActivityDescriptor[]>;
   plugins(): Promise<PluginReport>;
+  /** The projects and the projects folder (ADR-0046). */
+  projects(): Promise<ProjectsInfo>;
+  /** Creates an empty project in the projects folder. 409 when the name is taken or there is no projects folder, 400 for a refused name. */
+  createProject(name: string): Promise<void>;
+  /** Moves a project of the projects folder to its trash; returns the trash path. 409 for a --project or a folder in use. */
+  deleteProject(name: string): Promise<string>;
   workflows(project: string): Promise<ProjectListing>;
   /** Creates a folder in the project. 409 when a file or folder of that name exists. */
   createFolder(project: string, path: string): Promise<void>;
@@ -124,6 +130,14 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
     info: () => get<ServerInfo>('/api/info'),
     activities: async () => (await get<{ activities: ActivityDescriptor[] }>('/api/activities')).activities,
     plugins: () => get<PluginReport>('/api/plugins'),
+    projects: () => get<ProjectsInfo>('/api/projects'),
+    async createProject(name) {
+      await send('POST', '/api/projects', JSON.stringify({ name }));
+    },
+    async deleteProject(name) {
+      const response = await send('DELETE', `/api/projects/${encodeURIComponent(name)}`);
+      return ((await response.json()) as { trash: string }).trash;
+    },
     workflows: async (project) => {
       const listing = await get<{ workflows: WorkflowFile[]; folders?: string[] }>(`/api/projects/${encodeURIComponent(project)}/workflows`);
       return { workflows: listing.workflows, folders: listing.folders ?? [] };

@@ -117,7 +117,7 @@ describe('Files panel', () => {
     fireEvent.keyDown(folder(), { key: 'ArrowLeft' });
     fireEvent.keyDown(folder(), { key: 'ArrowLeft' });
     expect(root().getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('button', { name: 'New…' }).title).toBe('Create a new workflow in the project');
+    expect(screen.getByRole('button', { name: 'New…' }).title).toBe('New workflow in the project');
     fireEvent.keyDown(root(), { key: 'ArrowLeft' });
     expect(root().getAttribute('aria-expanded')).toBe('false');
     expect(fileItem('other.json')).toBeNull();

@@ -3,13 +3,20 @@ namespace MyRPA.Server;
 /// <summary>A registered project: a folder whose workflow files the server exposes (ADR-0025).</summary>
 /// <param name="Name">Project name (the folder name).</param>
 /// <param name="Root">Full path of the folder.</param>
-internal sealed record ProjectRoot(string Name, string Root);
+/// <param name="InRoot">A folder of the projects folder (ADR-0046), which the Studio may delete; false for a <c>--project</c>.</param>
+internal sealed record ProjectRoot(string Name, string Root, bool InRoot = false);
 
 /// <summary>Server configuration, from the command line (local mode).</summary>
 internal sealed record ServerOptions
 {
-    /// <summary>Registered projects.</summary>
+    /// <summary>Registered projects (<c>--project</c>).</summary>
     public IReadOnlyList<ProjectRoot> Projects { get; init; } = [];
+
+    /// <summary>
+    /// The projects folder (<c>--projects-root</c>, ADR-0046): every folder in it is a project, New project creates one
+    /// there and Delete moves one to its <c>.trash</c>. Null: only the <c>--project</c> folders, and no project is created.
+    /// </summary>
+    public string? ProjectsRoot { get; init; }
 
     /// <summary>Plugin directories named on the command line (required plugins).</summary>
     public IReadOnlyList<string> PluginDirectories { get; init; } = [];
@@ -73,19 +80,24 @@ internal sealed record ServerOptions
 internal sealed record OpenWorkflow(string Project, string Path);
 
 /// <summary>
-/// <c>MyRPA.Server --project &lt;dir&gt;... [--open &lt;file&gt;] [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--web &lt;dir&gt;] [--port &lt;n&gt;]</c>.
+/// <c>MyRPA.Server [--projects-root &lt;dir&gt;] [--project &lt;dir&gt;]... [--open &lt;file&gt;] [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--web &lt;dir&gt;] [--port &lt;n&gt;]</c>.
 /// </summary>
 internal static class ServerCommandLine
 {
-    public const string Usage = "MyRPA.Server --project <dir> [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]";
+    public const string Usage = "MyRPA.Server [--projects-root <dir>] [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]";
 
     /// <summary>Parses the command line.</summary>
     /// <param name="args">Arguments.</param>
     /// <param name="error">The usage error, if any.</param>
     /// <param name="bundledWebRoot">The Web Studio copied next to the server by its build; used when there is no <c>--web</c>.</param>
-    public static ServerOptions? Parse(IReadOnlyList<string> args, out string? error, string? bundledWebRoot = null)
+    /// <param name="defaultProjectsRoot">
+    /// The projects folder used when no project is named at all (ADR-0046: <c>Documents/Laconi Projects</c>); created if
+    /// missing. Null: a project must be named.
+    /// </param>
+    public static ServerOptions? Parse(IReadOnlyList<string> args, out string? error, string? bundledWebRoot = null, string? defaultProjectsRoot = null)
     {
         var projects = new List<ProjectRoot>();
+        string? projectsRoot = null;
         var plugins = new List<string>();
         string? config = null;
         string? web = null;
@@ -103,7 +115,7 @@ internal static class ServerCommandLine
                 continue;
             }
 
-            if (name is not ("--project" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port" or "--recorder-debugging-port"))
+            if (name is not ("--project" or "--projects-root" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port" or "--recorder-debugging-port"))
             {
                 error = $"Unexpected argument '{name}'.";
                 return null;
@@ -135,6 +147,16 @@ internal static class ServerCommandLine
 
                     projects.Add(new ProjectRoot(projectName, root));
                     break;
+                case "--projects-root" when projectsRoot is null:
+                    if (!TryProjectsRoot(value, out projectsRoot, out error))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "--projects-root":
+                    error = "--projects-root may be given once.";
+                    return null;
                 case "--open" when open is null:
                     open = Path.GetFullPath(value);
                     if (!File.Exists(open) || !open.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
@@ -194,9 +216,15 @@ internal static class ServerCommandLine
             }
         }
 
-        if (projects.Count == 0)
+        // Nothing named at all: the default projects folder, so 'MyRPA.Server' alone starts a usable Studio.
+        if (projects.Count == 0 && projectsRoot is null && open is null && defaultProjectsRoot is not null && !TryProjectsRoot(defaultProjectsRoot, out projectsRoot, out error))
         {
-            error = "At least one --project folder (or an --open workflow) is required.";
+            return null;
+        }
+
+        if (projects.Count == 0 && projectsRoot is null)
+        {
+            error = "At least one --project folder, a --projects-root folder or an --open workflow is required.";
             return null;
         }
 
@@ -215,6 +243,24 @@ internal static class ServerCommandLine
 
         web ??= bundledWebRoot is not null && File.Exists(Path.Combine(bundledWebRoot, "index.html")) ? bundledWebRoot : null;
         error = null;
-        return new ServerOptions { Projects = projects, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow, RecorderHeadless = recorderHeadless, RecorderDebuggingPort = recorderDebuggingPort };
+        return new ServerOptions { Projects = projects, ProjectsRoot = projectsRoot, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow, RecorderHeadless = recorderHeadless, RecorderDebuggingPort = recorderDebuggingPort };
+    }
+
+    /// <summary>The projects folder as a full path, created if missing (ADR-0046).</summary>
+    private static bool TryProjectsRoot(string value, out string? root, out string? error)
+    {
+        root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(value));
+        try
+        {
+            Directory.CreateDirectory(root);
+            error = null;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = $"Projects folder '{root}' cannot be created: {ex.Message}";
+            root = null;
+            return false;
+        }
     }
 }

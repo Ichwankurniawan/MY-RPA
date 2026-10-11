@@ -3,12 +3,12 @@
 // browser (headless Chromium). It works on a throwaway copy of samples/hello-world.json, so it never edits the repository
 // and can run repeatedly. Checks use roles, labels and data attributes, never pixels. See harness.mjs for prerequisites.
 
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { check, repo, results, withStudio, showTab } from './harness.mjs';
+import { check, repo, results, studioDir, withStudio, showTab } from './harness.mjs';
 
 const step = (text) => console.log(`  ✓ ${text}`);
 
@@ -759,6 +759,30 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await titleIs('hello-world.json');
   check((await page.getByTestId('current-project').textContent()) === 'demo', 'the file’s folder is the project');
   step('W6-8. Single command (MyRPA.Server --open <file>): bundled Studio served, the file’s folder became the project, the file opened');
+
+  // ADR-0046: the Projects page against a server with a projects folder. New project creates a folder there; Delete
+  // (after typing the name) moves it to the folder's .trash.
+  const projectsRoot = join(project, '..', 'laconi-projects');
+  await page.goto(await startServer(['--project', project, '--projects-root', projectsRoot, '--web', join(studioDir, 'dist')]));
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  const railButton = (name) => page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name, exact: true });
+  await railButton('Projects').click();
+  await page.getByRole('button', { name: 'New project…' }).waitFor();
+  check((await page.getByRole('toolbar', { name: 'File' }).count()) === 0, 'no editing toolbar on the Projects page');
+  await page.getByRole('button', { name: 'New project…' }).click();
+  await page.getByRole('dialog').getByLabel('Project name').fill('Smoke Project');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click();
+  await page.getByTestId('current-project').filter({ hasText: /^Smoke Project$/ }).waitFor();
+  check(existsSync(join(projectsRoot, 'Smoke Project')), 'the project folder was created in the projects folder');
+  await railButton('Projects').click();
+  await page.getByRole('button', { name: 'Delete project Smoke Project' }).click();
+  await page.getByRole('dialog').getByLabel('Type Smoke Project to confirm').fill('Smoke Project');
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete project' }).click();
+  await page.getByRole('button', { name: 'Open project Smoke Project' }).waitFor({ state: 'detached' });
+  check(!existsSync(join(projectsRoot, 'Smoke Project')), 'the project folder left the projects folder');
+  check(readdirSync(join(projectsRoot, '.trash')).some((name) => name.startsWith('Smoke Project-')), 'the project folder is in .trash');
+  check((await page.getByRole('button', { name: 'Delete project demo' }).count()) === 0, 'a --project offers no Delete');
+  step('ADR-0046. Projects page (no editing toolbar): New project created a folder in --projects-root and opened it; Delete (name typed) moved it to .trash; the --project has no Delete');
 
   // Phase 6 (ADR-0039), the definition of done: record a simple website interaction and insert it into the Studio. The
   // server loads the browser plugin; the recording browser is headless with a DevTools port (test-only flags) so this

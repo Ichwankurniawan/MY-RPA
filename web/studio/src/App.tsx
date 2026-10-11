@@ -162,8 +162,7 @@ function Shell() {
   useEffect(() => (root.current ? installDragAndDrop(root.current, studio) : undefined), [studio]);
   const panes = useStudioState((s) => s.panes);
   const page = useStudioState((s) => s.page);
-  const workflowsView = useStudioState((s) => s.workflowsView);
-  const fullPage = page === 'home' || workflowsView === 'projects';
+  const fullPage = page !== 'workflows';
 
   // Panel sizes (UX-2) go to the grid through the CSSOM (CSP-safe); until a panel is resized, the stylesheet decides.
   useEffect(() => {
@@ -188,7 +187,7 @@ function Shell() {
           <NavRail />
           {page === 'home' ? (
             <HomePage />
-          ) : workflowsView === 'projects' ? (
+          ) : page === 'projects' ? (
             <ProjectsPage />
           ) : (
             <>
@@ -319,6 +318,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: fal
 
 const pages: readonly { readonly id: StudioPage; readonly label: string; readonly icon: IconName }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'projects', label: 'Projects', icon: 'project' },
   { id: 'workflows', label: 'Workflows', icon: 'flowchart' },
 ];
 
@@ -332,7 +332,7 @@ function NavRail() {
   return (
     <nav className="rail" aria-label="Main">
       {pages.map((p) => (
-        <button key={p.id} type="button" className="rail-item" aria-current={page === p.id ? 'page' : undefined} title={p.label} onClick={() => studio.showPage(p.id)}>
+        <button key={p.id} type="button" className="rail-item" aria-current={page === p.id ? 'page' : undefined} title={p.label} onClick={() => (p.id === 'projects' ? void studio.showProjects() : studio.showPage(p.id))}>
           <Icon name={p.icon} size={20} />
           <span>{p.label}</span>
         </button>
@@ -442,23 +442,40 @@ function HomePage() {
 const counted = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
- * The Projects view, where the Workflows page starts: the projects this server was started with (--project), with what
- * each holds. Choosing one shows its workspace; the title bar's Projects link comes back here.
+ * The Projects page (ADR-0046): every project with what it holds; choosing one shows its workspace (Workflows). New
+ * project creates a folder in the server's projects folder; Delete moves one of those to its trash. A --project folder
+ * is never deleted here. No editing toolbar: nothing here edits a workflow.
  */
 function ProjectsPage() {
   const studio = useStudio();
   const projects = useStudioState((s) => s.projects);
   const file = useStudioState((s) => s.file);
   const summaries = useStudioState((s) => s.projectSummaries);
+  const projectsRoot = useStudioState((s) => s.projectsRoot);
+  const removable = useStudioState((s) => s.removableProjects);
   const id = useId();
   return (
     <main className="home projects-page" aria-labelledby="projects-heading">
-      <h2 id="projects-heading" className="page-title">
-        <Icon name="project" size={22} /> Projects
-      </h2>
-      <p className="hint">Choose a project to work on its workflows. The projects are the folders this server was started with (--project).</p>
+      <div className="page-header">
+        <h2 id="projects-heading" className="page-title">
+          <Icon name="project" size={22} /> Projects
+        </h2>
+        <button
+          type="button"
+          className="primary with-icon"
+          disabled={projectsRoot === undefined}
+          title={projectsRoot === undefined ? 'Start the server with --projects-root <folder> to create projects' : `Create a project in ${projectsRoot}`}
+          onClick={() => studio.startNewProject()}
+        >
+          <Icon name="file-new" size={16} /> New project…
+        </button>
+      </div>
+      <p className="hint">
+        Choose a project to work on its workflows.{' '}
+        {projectsRoot !== undefined ? `New projects are created in ${projectsRoot}.` : 'To create projects here, start the server with --projects-root and a folder.'}
+      </p>
       {projects.length === 0 ? (
-        <p className="hint">This server has no projects. Start it with --project and a folder.</p>
+        <p className="hint">There are no projects yet.</p>
       ) : (
         <ul className="project-grid" aria-label="Projects">
           {projects.map((name, index) => {
@@ -476,8 +493,14 @@ function ProjectsPage() {
                 </button>
                 <small id={`${id}-${index}`}>
                   {details}
+                  {!removable.has(name) && ' · named with --project'}
                   {file?.project === name && ` · open: ${file.path}`}
                 </small>
+                {removable.has(name) && (
+                  <button type="button" className="project-delete with-icon" aria-label={`Delete project ${name}`} title={`Move ${name} to the trash of the projects folder`} onClick={() => studio.startDeleteProject(name)}>
+                    <Icon name="delete" size={15} /> Delete…
+                  </button>
+                )}
               </li>
             );
           })}
@@ -630,6 +653,7 @@ function useTheme(): [Theme, (theme: Theme) => void] {
 function Toolbar() {
   const studio = useStudio();
   const connection = useStudioState((s) => s.connection);
+  const page = useStudioState((s) => s.page);
   const project = useStudioState((s) => s.project);
   const files = useStudioState((s) => s.files);
   const file = useStudioState((s) => s.file);
@@ -709,7 +733,7 @@ function Toolbar() {
           <span>Open</span>
         </button>
       </div>
-      {ready && (
+      {ready && page !== 'projects' && (
         <div className="commands">
           <div className="command-group" role="toolbar" aria-label="File">
             <Command icon="file-new" label="New workflow…" onClick={() => studio.startName('new')} disabled={project === undefined} title="Create a new workflow in the project" />
@@ -1158,23 +1182,27 @@ function FilesPanel() {
     <section className="files" aria-labelledby="files-heading">
       <div className="files-header">
         <h2 id="files-heading">Files</h2>
-        <div className="editbar" role="toolbar" aria-label="Files">
-          <button type="button" onClick={() => studio.startName('new', inFolder)} disabled={project === undefined} title={inFolder ? `Create a new workflow in ${inFolder}` : 'Create a new workflow in the project'}>
-            New…
+        {/* Icon buttons: the accessible name is the action, the tooltip says where it applies. */}
+        <div className="editbar icon-bar" role="toolbar" aria-label="Files">
+          <button type="button" className="icon-button" aria-label="New…" onClick={() => studio.startName('new', inFolder)} disabled={project === undefined} title={inFolder ? `New workflow in ${inFolder}` : 'New workflow in the project'}>
+            <Icon name="file-new" size={17} />
           </button>
-          <button type="button" onClick={() => studio.startName('folder', inFolder)} disabled={project === undefined} title={inFolder ? `Create a folder in ${inFolder}` : 'Create a folder in the project'}>
-            New folder…
+          <button type="button" className="icon-button" aria-label="New folder…" onClick={() => studio.startName('folder', inFolder)} disabled={project === undefined} title={inFolder ? `New folder in ${inFolder}` : 'New folder in the project'}>
+            <Icon name="folder-new" size={17} />
           </button>
-          <button type="button" onClick={() => target && studio.startName('rename', target)} disabled={target === undefined} title={target ? `Rename or move ${target} (F2)` : 'Select a file'}>
-            Rename…
+          <span className="icon-bar-separator" aria-hidden="true" />
+          <button type="button" className="icon-button" aria-label="Rename…" onClick={() => target && studio.startName('rename', target)} disabled={target === undefined} title={target ? `Rename or move ${target} (F2)` : 'Rename: select a file first'}>
+            <Icon name="rename" size={17} />
           </button>
-          <button type="button" onClick={() => target && studio.startDelete(target)} disabled={target === undefined} title={target ? `Delete ${target} (Delete)` : 'Select a file'}>
-            Delete…
+          <button type="button" className="icon-button danger-icon" aria-label="Delete…" onClick={() => target && studio.startDelete(target)} disabled={target === undefined} title={target ? `Delete ${target} (Delete)` : 'Delete: select a file first'}>
+            <Icon name="delete" size={17} />
           </button>
         </div>
       </div>
-      <p className="hint">Double-click or Enter opens a file; click a folder to open or close it.</p>
-      <ul role="tree" aria-label="Workflow files" ref={list} onKeyDown={onKeyDown}>
+      <p className="visually-hidden" id="files-help">
+        Double-click or Enter opens a file; click a folder to open or close it.
+      </p>
+      <ul role="tree" aria-label="Workflow files" aria-describedby="files-help" ref={list} onKeyDown={onKeyDown}>
         {project !== undefined && (
           <li
             role="treeitem"
@@ -1315,6 +1343,10 @@ function StudioDialogView({ dialog }: { dialog: StudioDialog }) {
           </div>
         </Modal>
       );
+    case 'new-project':
+      return <NewProjectDialog dialog={dialog} />;
+    case 'delete-project':
+      return <DeleteProjectDialog dialog={dialog} />;
     case 'conflict':
       return (
         <Modal title="The file changed on disk" onCancel={() => void studio.resolveConflict('cancel')}>
@@ -1404,6 +1436,83 @@ const workflowKinds: readonly (readonly [NewWorkflowKind, string, string])[] = [
   ['flowchart', 'Flowchart', 'steps joined by arrows, with decisions'],
   ['state-machine', 'State machine', 'states and transitions'],
 ];
+
+/** New project (ADR-0046): a folder name; the server's refusal (a taken or unsafe name) stays in the dialog. */
+function NewProjectDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'new-project' }> }) {
+  const studio = useStudio();
+  const id = useId();
+  const root = useStudioState((s) => s.projectsRoot);
+  const [name, setName] = useState('');
+  return (
+    <Modal title="New project" onCancel={() => studio.closeDialog()}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void studio.confirmNewProject(name);
+        }}
+      >
+        <div className="field">
+          <label className="field-label" htmlFor={id}>
+            Project name
+          </label>
+          <input id={id} value={name} spellCheck={false} aria-invalid={dialog.error !== undefined} aria-describedby={`${id}-hint ${id}-error`} onChange={(e) => setName(e.target.value)} />
+          <span id={`${id}-hint`} className="hint">
+            A new folder in {root}.
+          </span>
+          <span id={`${id}-error`} className="field-error" role="status">
+            {dialog.error}
+          </span>
+        </div>
+        <div className="dialog-buttons">
+          <button type="submit" disabled={name.trim() === ''}>
+            Create
+          </button>
+          <button type="button" onClick={() => studio.closeDialog()}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Delete project (ADR-0046): the folder moves to the projects folder's trash; the name is typed to confirm. */
+function DeleteProjectDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'delete-project' }> }) {
+  const studio = useStudio();
+  const id = useId();
+  const [typed, setTyped] = useState('');
+  return (
+    <Modal title={`Delete project ${dialog.name}`} onCancel={() => studio.closeDialog()}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (typed === dialog.name) {
+            void studio.confirmDeleteProject();
+          }
+        }}
+      >
+        <p>
+          The folder of {dialog.name} and every workflow in it move to the .trash folder of the projects folder, where they can be restored by hand.
+          {dialog.dirty ? ' A workflow of it is open with unsaved changes, which will be lost.' : ''}
+        </p>
+        <div className="field">
+          <label className="field-label" htmlFor={id}>
+            Type {dialog.name} to confirm
+          </label>
+          <input id={id} value={typed} spellCheck={false} autoComplete="off" onChange={(e) => setTyped(e.target.value)} />
+        </div>
+        <div className="dialog-buttons">
+          <button type="submit" className="danger" disabled={typed !== dialog.name}>
+            Delete project
+          </button>
+          <button type="button" onClick={() => studio.closeDialog()}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }> }) {
   const studio = useStudio();
