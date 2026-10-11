@@ -29,6 +29,7 @@ public sealed class DocumentationTests
         "plugins/MyRPA.Sftp/README.md",
         "plugins/MyRPA.Scripting/README.md",
         "plugins/MyRPA.Ai.OpenAiCompatible/README.md",
+        "plugins/MyRPA.Ai.Agent/README.md",
     ];
 
     public static TheoryData<string> PluginDocuments() => [.. _pluginDocuments];

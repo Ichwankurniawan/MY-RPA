@@ -1,0 +1,4 @@
+[
+  "{\"action\": \"call_tool\", \"tool\": \"credit_limit\", \"arguments\": \"{\\\"customer\\\": \\\"ACME Ltd\\\"}\", \"output\": \"\"}",
+  "{\"action\": \"finish\", \"tool\": \"\", \"arguments\": \"\", \"output\": \"{\\\"invoice\\\": \\\"INV-7\\\", \\\"customer\\\": \\\"ACME Ltd\\\", \\\"total\\\": 120.5, \\\"creditLimit\\\": 500}\"}"
+]

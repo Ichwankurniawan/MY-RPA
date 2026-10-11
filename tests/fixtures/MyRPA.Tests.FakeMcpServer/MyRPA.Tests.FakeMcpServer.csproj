@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    A fake MCP server for the AI Agent tests (ADR-0048): JSON-RPC over standard input and output, written by hand (no MCP
+    SDK), with tools that echo, add, fail, hang, crash and leak a secret. Started by the plugin's stdio transport.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MyRPA.Tests.FakeMcpServer</RootNamespace>
+    <NoWarn>$(NoWarn);CS1591;CA1515</NoWarn>
+  </PropertyGroup>
+</Project>

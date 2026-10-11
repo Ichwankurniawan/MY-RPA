@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0",
+  "id": "credit-limit",
+  "name": "Credit limit (fake ERP lookup)",
+  "version": "1.0.0",
+  "description": "A tool workflow for agent-demo.json: the credit limit of a customer (fake data).",
+  "arguments": [
+    {
+      "name": "customer",
+      "direction": "In",
+      "type": "String",
+      "required": true
+    },
+    {
+      "name": "limit",
+      "direction": "Out",
+      "type": "Decimal"
+    }
+  ],
+  "root": {
+    "id": "lookup",
+    "type": "Core.Switch",
+    "properties": {
+      "expression": "customer"
+    },
+    "slots": {
+      "case:ACME Ltd": {
+        "id": "acme",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "limit",
+          "value": "500"
+        }
+      },
+      "default": {
+        "id": "unknown",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "limit",
+          "value": "0"
+        }
+      }
+    }
+  }
+}
