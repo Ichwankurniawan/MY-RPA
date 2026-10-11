@@ -299,6 +299,7 @@ const summaryOf = (files: readonly WorkflowFile[], folders: readonly string[]): 
 export type SidebarTab = 'activities' | 'files';
 
 const isSidebarTab = (value: unknown): value is SidebarTab => value === 'activities' || value === 'files';
+const isText = (value: unknown): value is string => typeof value === 'string';
 
 /** One recorded step as the user keeps it (ADR-0039): the chosen selector and, for typing, the edited text. */
 export interface RecordedItem {
@@ -966,7 +967,13 @@ export class Studio {
         await this.selectProject(info.open.project);
         await this.open(info.open.path);
       } else if (info.projects.length > 0) {
-        await this.selectProject(info.projects[0]);
+        // The Projects view only when there is a choice: one project, or the last one used here, opens its workspace.
+        const last = this.preferences.read(preferenceKeys.lastProject, isText);
+        const chosen = last !== undefined && info.projects.includes(last) ? last : info.projects.length === 1 ? info.projects[0] : undefined;
+        await this.selectProject(chosen ?? info.projects[0]);
+        if (chosen !== undefined && this.state.project === chosen) {
+          this.store.set({ workflowsView: 'workspace' });
+        }
       }
 
       await this.loadProjectSummaries();
@@ -1031,6 +1038,7 @@ export class Studio {
         page: 'workflows',
         workflowsView: 'workspace',
       });
+      this.preferences.write(preferenceKeys.lastProject, project);
       this.store.set(treeView);
     } catch (error) {
       this.store.set({ busy: undefined, message: `Cannot open ${path}: ${(error as Error).message}` });
@@ -1440,6 +1448,7 @@ export class Studio {
   async enterProject(project: string): Promise<void> {
     await this.selectProject(project);
     if (this.state.project === project) {
+      this.preferences.write(preferenceKeys.lastProject, project);
       this.store.set({ page: 'workflows', workflowsView: 'workspace', sidebarTab: this.state.file?.project === project ? this.state.sidebarTab : 'files' });
     }
   }

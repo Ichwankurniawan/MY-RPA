@@ -47,29 +47,24 @@ describe('Laconi shell', () => {
     expect(document.title).toBe('Laconi Studio');
   });
 
-  it('starts the Workflows page at the projects; a project opens its workspace; the rail switches to Home and back', async () => {
+  it('opens the workspace of the only project; Projects in the title bar lists the projects; the rail switches to Home and back', async () => {
     await renderStudio();
     const rail = within(screen.getByRole('navigation', { name: 'Main' }));
 
+    // One project: no choice to make, so its workspace (the tree starts at the project).
     expect(rail.getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
-    const projects = within(screen.getByRole('main', { name: 'Projects' }));
-    expect(screen.queryByRole('list', { name: 'Activity catalog' })).toBeNull();
-    const card = projects.getByRole('button', { name: 'Open project demo' });
-    expect(document.getElementById(card.getAttribute('aria-describedby')!)!.textContent).toMatch(/^2 workflows · 1 folder · changed /);
-
-    // A project without an open workflow shows its files first.
-    await act(async () => fireEvent.click(card));
-    expect(screen.getByRole('tab', { name: 'Files' }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('tree', { name: 'Workflow files' }).querySelector('.project-root .tree-name')!.textContent).toBe('demo');
-    await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Activities' })));
+    expect(screen.queryByRole('main', { name: 'Projects' })).toBeNull();
     expect(screen.getByRole('list', { name: 'Activity catalog' })).toBeTruthy();
+    expect(screen.getByRole('tree', { name: 'Workflow files', hidden: true }).querySelector('.project-root .tree-name')!.textContent).toBe('demo');
     const location = within(screen.getByRole('navigation', { name: 'Location' }));
     expect(location.getByTestId('current-project').textContent).toBe('demo');
 
-    // The title bar's Projects link comes back to the projects.
+    // The title bar's Projects link shows the projects; choosing one comes back to its workspace.
     await act(async () => fireEvent.click(location.getByRole('button', { name: 'Projects' })));
-    expect(screen.getByRole('main', { name: 'Projects' })).toBeTruthy();
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open project demo' })));
+    const card = within(screen.getByRole('main', { name: 'Projects' })).getByRole('button', { name: 'Open project demo' });
+    expect(document.getElementById(card.getAttribute('aria-describedby')!)!.textContent).toMatch(/^2 workflows · 1 folder · changed /);
+    await act(async () => fireEvent.click(card));
+    expect(screen.getByRole('tab', { name: 'Files' }).getAttribute('aria-selected')).toBe('true');
 
     fireEvent.click(rail.getByRole('button', { name: 'Home' }));
     expect(rail.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
@@ -94,6 +89,24 @@ describe('Laconi shell', () => {
 
     expect(screen.getByTestId('document-title').textContent).toBe('flows/second.json');
     expect(screen.getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('reopens the project used last in this browser when there are several', async () => {
+    const api = new FakeApi();
+    const info = api.info.bind(api);
+    api.info = async () => ({ ...(await info()), projects: ['other', 'demo'] });
+    const preferences = memoryPreferences();
+    preferences.write('myrpa.ui.lastProject', 'demo');
+    const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { preferences, validateDelayMs: undefined });
+    render(<App studio={studio} />);
+    await act(settle);
+
+    expect(screen.queryByRole('main', { name: 'Projects' })).toBeNull();
+    expect(screen.getByTestId('current-project').textContent).toBe('demo');
+
+    // Entering another project makes it the one reopened next time.
+    await act(async () => studio.enterProject('other'));
+    expect(preferences.values.get('myrpa.ui.lastProject')).toBe('"other"');
   });
 
   it('lists every project with what it holds, says why one cannot be listed, and opens the one chosen', async () => {
