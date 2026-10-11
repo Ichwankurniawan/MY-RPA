@@ -92,6 +92,16 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   the file is shown, the arrow taken last is highlighted (from consecutive step events; there is no transition event).
   In a state machine the steps are states: a final state is marked, and Open shows a state's `entry` and `exit`.
 - **Session:** the server's start link and cookie. Without a session, the Studio asks for the start link.
+- **Assistant** ([ADR-0047](../adr/0047-ai-provider-and-studio-assistant.md),
+  [ai-workflow-assistant.md](ai-workflow-assistant.md)): a bottom-panel tab.
+  - **Asking:** describe a new workflow or a change; answer clarifying questions (with option chips); review a
+    proposal (plan, assumptions, the activities used, what they touch, a diff by node id); **What is sent** shows the
+    exact request.
+  - **Applying:** a new workflow becomes a new file; a change applies as one undo step, refused if the document changed
+    meanwhile.
+  - **Elsewhere:** **Fix with the assistant** in Problems; **Ask the assistant why** on a failed run, then **Propose a
+    fix**.
+  - Unavailable without an AI provider plugin. Nothing is run.
 - **Projects** ([ADR-0046](../adr/0046-projects-folder-create-and-delete.md)): its own rail page, without the editing
   toolbar. It lists every project (the `--project` folders, then those of the server's projects folder) with its number
   of workflows and folders and its latest change (a project that cannot be listed says why). **New project…** creates a

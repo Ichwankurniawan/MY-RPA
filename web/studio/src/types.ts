@@ -4,6 +4,92 @@ export type Json = null | boolean | number | string | Json[] | JsonObject;
 export type JsonObject = { readonly [key: string]: Json };
 
 /** `GET /api/info`. */
+/** `GET /api/assistant` (ADR-0047): whether the AI Workflow Assistant can answer, and with which provider and model. */
+export interface AssistantInfo {
+  available: boolean;
+  provider?: string | null;
+  model?: string | null;
+  reason?: string | null;
+}
+
+/** What a generation request asks for. */
+export type AssistantPurpose = 'create' | 'edit' | 'fixValidation' | 'fixFailure';
+
+/** An earlier turn of a clarification: the assistant's questions or the person's reply. */
+export interface AssistantTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+/** A problem the assistant's checks or the validator found in a proposal. */
+export interface AssistantDiagnostic {
+  code: string;
+  severity: string;
+  message: string;
+  path?: string | null;
+  nodeId?: string | null;
+}
+
+/** What an assistant operation used. */
+export interface AssistantUsage {
+  provider: string;
+  model: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+}
+
+/** `POST /api/assistant/generate`: a clarification, "unsupported", a validated proposal, or an invalid one (never applied). */
+export interface GenerationAnswer {
+  outcome: 'clarify' | 'unsupported' | 'proposal' | 'invalid';
+  known: string[];
+  assumptions: string[];
+  questions: { question: string; options: string[] }[];
+  missing: string[];
+  plan: string[];
+  summary: string;
+  document: string | null;
+  diagnostics: AssistantDiagnostic[];
+  repairAttempts: number;
+  activityTypes: string[];
+  sideEffects: string[];
+  usage?: AssistantUsage | null;
+}
+
+/** `POST /api/assistant/explain`. */
+export interface ExplainAnswer {
+  summary: string;
+  steps: { nodeId: string; text: string }[];
+  usage?: AssistantUsage | null;
+}
+
+/** `POST /api/assistant/debug`: a likely or possible cause, never a certainty the details do not support. */
+export interface DebugAnswer {
+  explanation: string;
+  certainty: 'likely' | 'possible' | 'unknown';
+  nodeId?: string | null;
+  suggestions: string[];
+  failure: { status: string; code?: string | null; nodeId?: string | null; activityType?: string | null; errorType?: string | null };
+  usage?: AssistantUsage | null;
+}
+
+/** `POST /api/assistant/preview`: exactly what would be sent to the AI provider. */
+export interface AssistantPreview {
+  instructions: string;
+  messages: { role: string; text: string }[];
+  schema?: string | null;
+}
+
+/** The body of a generation request (and of its preview). */
+export interface AssistantGenerateBody {
+  purpose: AssistantPurpose;
+  request: string;
+  document?: JsonObject;
+  conversation?: AssistantTurn[];
+  runId?: string;
+}
+
 /** A project of `GET /api/projects` (ADR-0046): `removable` for a folder of the projects folder, never a `--project`. */
 export interface ProjectInfo {
   name: string;

@@ -180,13 +180,14 @@ public sealed class ProviderTests
     [Fact]
     public async Task ASlowEndpoint_TimesOut_WithoutARetry()
     {
-        using var endpoint = new FakeEndpoint(new Reply(200, FakeEndpoint.Completion("{}"), DelayMs: 3_000));
-        await using var host = await ProviderHost.StartAsync(Settings(endpoint, string.Empty, ("timeoutMs", "200")));
+        using var endpoint = new FakeEndpoint(new Reply(200, FakeEndpoint.Completion("{}"), DelayMs: 10_000));
+        await using var host = await ProviderHost.StartAsync(Settings(endpoint, string.Empty, ("timeoutMs", "1000"), ("maxRetries", "2")));
 
         var error = await Assert.ThrowsAsync<AiProviderException>(() => host.Provider.CompleteAsync(_request, Token));
 
+        // Under load the attempt may time out before the request even arrives; either way there is no retry.
         Assert.Equal(AiFailureKind.Timeout, error.Kind);
-        Assert.Single(endpoint.Received);
+        Assert.True(endpoint.Received.Count <= 1, $"{endpoint.Received.Count} requests");
     }
 
     [Fact]

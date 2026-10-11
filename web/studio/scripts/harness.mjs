@@ -5,7 +5,7 @@
 // and Playwright's Chromium (installed once with the browser plugin's playwright.ps1; these scripts never download).
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +22,26 @@ export const check = (condition, message) => {
 };
 
 /** Runs `body({ project, page, startLink })` against a fresh server and browser; cleans up; exits 1 on failure. */
+/**
+ * A plugin configuration that loads the scripted AI provider (tests/fixtures/MyRPA.Tests.ScriptedAi, ADR-0047): it
+ * answers from `answers` in order and records each request in `log`. No model, network or key is used.
+ */
+export function scriptedAi(folder, answers) {
+  mkdirSync(folder, { recursive: true });
+  const configuration = process.env.MYRPA_CONFIGURATION ?? 'Release';
+  const answersFile = join(folder, 'ai-answers.json');
+  const log = join(folder, 'ai-requests.jsonl');
+  const config = join(folder, 'ai-plugins.json');
+  writeFileSync(answersFile, JSON.stringify(answers));
+  const directory = join(repo, 'tests', 'fixtures', 'MyRPA.Tests.ScriptedAi', 'bin', configuration, 'net10.0');
+  writeFileSync(config, JSON.stringify({ pluginConfigVersion: '1.0', plugins: [{ directory, settings: { answers: answersFile, log } }] }));
+  return { config, log };
+}
+
+/** A scripted assistant answer: a proposal of `workflow` with its plan. */
+export const proposalAnswer = (workflow, plan) =>
+  JSON.stringify({ kind: 'proposal', known: [], assumptions: ['A log message is enough'], questions: [], missing: [], plan, summary: 'Logs a greeting.', workflowJson: JSON.stringify(workflow) });
+
 /**
  * Enters a project's workspace when the Workflows page shows the projects (where it starts after a page load); does
  * nothing in the workspace.

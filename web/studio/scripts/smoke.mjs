@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { check, repo, results, studioDir, withStudio, showTab } from './harness.mjs';
+import { check, proposalAnswer, repo, results, scriptedAi, studioDir, withStudio, showTab } from './harness.mjs';
 
 const step = (text) => console.log(`  ✓ ${text}`);
 
@@ -783,6 +783,30 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   check(readdirSync(join(projectsRoot, '.trash')).some((name) => name.startsWith('Smoke Project-')), 'the project folder is in .trash');
   check((await page.getByRole('button', { name: 'Delete project demo' }).count()) === 0, 'a --project offers no Delete');
   step('ADR-0046. Projects page (no editing toolbar): New project created a folder in --projects-root and opened it; Delete (name typed) moved it to .trash; the --project has no Delete');
+
+  // ADR-0047: the AI Workflow Assistant against a real server with the scripted provider (no model, no key): describe,
+  // review the validated proposal, create it as a new file. Nothing is run.
+  const aiWorkflow = { schemaVersion: '1.0', id: 'ai-greet', name: 'AI greet', version: '1.0.0', root: { id: 'main', type: 'Core.Sequence', children: [{ id: 'say', type: 'Core.Log', properties: { message: "'Hello from a proposal'" } }] } };
+  const ai = scriptedAi(join(project, '..', 'ai'), [proposalAnswer(aiWorkflow, ['Log a greeting'])]);
+  await page.goto(await startServer(['--project', project, '--plugin-config', ai.config, '--web', join(studioDir, 'dist')]));
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  const runsBefore = runRequests;
+  await page.getByRole('tab', { name: /^Assistant/ }).click();
+  await page.getByTestId('assistant-status').filter({ hasText: 'AI provider: scripted' }).waitFor();
+  await page.getByLabel('Describe what to build or change').fill('Log a greeting');
+  await page.getByRole('toolbar', { name: 'Assistant' }).getByRole('button', { name: 'New workflow', exact: true }).click();
+  const proposalCard = page.getByTestId('assistant-proposal');
+  await proposalCard.waitFor();
+  check((await proposalCard.textContent()).includes('Log a greeting'), 'the plan is shown');
+  check((await page.getByTestId('assistant-side-effects').textContent()) === 'Touches: nothing outside the workflow', 'what it touches is shown');
+  await proposalCard.getByRole('button', { name: 'Create as new file…' }).click();
+  check((await page.getByRole('dialog').getByLabel('Path in the project').inputValue()) === 'ai-greet.json', 'the file name comes from the proposal');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByTestId('document-title').filter({ hasText: /^ai-greet\.json$/ }).waitFor();
+  check(JSON.parse(readFileSync(join(project, 'ai-greet.json'), 'utf8')).id === 'ai-greet', 'the proposal was saved as a new file');
+  check(readFileSync(ai.log, 'utf8').trim().split(/\r?\n/).length === 1, 'one request was sent to the provider');
+  check(runRequests === runsBefore, 'nothing was run');
+  step('ADR-0047. AI Workflow Assistant (scripted provider): described a workflow, reviewed the validated proposal (plan, what it touches), created it as ai-greet.json; one provider request; nothing run');
 
   // Phase 6 (ADR-0039), the definition of done: record a simple website interaction and insert it into the Studio. The
   // server loads the browser plugin; the recording browser is headless with a DevTools port (test-only flags) so this

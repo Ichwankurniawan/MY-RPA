@@ -114,7 +114,7 @@ describe('Bottom panel', () => {
     const tab = (name: RegExp) => screen.getByRole('tab', { name });
 
     expect(tab(/^Problems/).getAttribute('aria-selected')).toBe('true');
-    expect(within(screen.getByRole('tablist', { name: 'Output' })).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Problems', 'Variables (0)', 'Arguments (2)', 'Execution', 'Recorder']);
+    expect(within(screen.getByRole('tablist', { name: 'Output' })).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Problems', 'Variables (0)', 'Arguments (2)', 'Execution', 'Recorder', 'Assistant']);
 
     await act(async () => {
       await studio.run({ argumentText: {} });
@@ -143,11 +143,11 @@ describe('Bottom panel', () => {
     problems.focus();
 
     fireEvent.keyDown(problems, { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Assistant' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Assistant' }), { key: 'ArrowLeft' });
     expect(screen.getByRole('tab', { name: 'Recorder' }).getAttribute('aria-selected')).toBe('true');
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Recorder' }), { key: 'ArrowLeft' });
-    expect(screen.getByRole('tab', { name: 'Execution' }).getAttribute('aria-selected')).toBe('true');
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Execution' }), { key: 'End' });
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Recorder' }), { key: 'ArrowRight' });
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Recorder' }), { key: 'End' });
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Assistant' }), { key: 'ArrowRight' });
     expect(screen.getByRole('tab', { name: /^Problems/ }).getAttribute('aria-selected')).toBe('true');
   });
 });

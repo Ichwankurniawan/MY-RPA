@@ -663,3 +663,21 @@ button.danger:not(:disabled) { background: var(--error); color: var(--primary-te
 .files-header .editbar .icon-button.danger-icon:hover:not(:disabled) { color: var(--error); background: var(--panel-2); }
 .files-header .editbar .icon-button:disabled { opacity: 0.4; }
 .icon-bar-separator { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
+
+/* ADR-0047: the AI Workflow Assistant tab. Answers are cards; proposals show what they touch and change. */
+.assistant { display: grid; gap: 8px; max-width: 980px; }
+.assistant-status { margin: 0; color: var(--muted); font-size: 12px; }
+.assistant textarea { width: 100%; resize: vertical; font: inherit; }
+.assistant-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.assistant-results { display: grid; gap: 10px; }
+.assistant-answer { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); }
+.assistant-answer h3 { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 13px; font-weight: 650; }
+.assistant-answer ul, .assistant-answer ol { margin: 0; padding-left: 20px; }
+.assistant-answer p { margin: 0; }
+.assistant-label { color: var(--muted); }
+.assistant-options { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 8px; }
+.assistant-options .chip { padding: 1px 8px; font-size: 12px; border-radius: 999px; }
+.assistant-changes .change-added { color: var(--accent-strong); }
+.assistant-changes .change-removed { color: var(--error); }
+.assistant-changes .change-changed, .assistant-changes .change-moved { color: var(--info); }
+.assistant pre { max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }

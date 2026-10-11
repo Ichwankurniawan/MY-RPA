@@ -2,7 +2,7 @@
 
 import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
-import type { ActivityDescriptor, DebugCommandName, DebugState, ExecutionEvent, ExpressionFunction, NameReferences, ScopeName, GeneratedActivities, JsonObject, PluginReport, RecordedStep, RunStatus, ValidationResult } from './types';
+import type { ActivityDescriptor, AssistantGenerateBody, AssistantInfo, DebugAnswer, DebugCommandName, DebugState, ExecutionEvent, ExplainAnswer, ExpressionFunction, GeneratedActivities, GenerationAnswer, JsonObject, NameReferences, PluginReport, RecordedStep, RunStatus, ScopeName, ValidationResult } from './types';
 
 export const helloWorld = `{
   "schemaVersion": "1.0",
@@ -154,6 +154,56 @@ export class FakeApi implements StudioApi {
     }
 
     return { name: 'MyRPA.Server', mode: 'local', workflowSchemaVersions: ['1.0'], projects: ['demo', ...this.createdProjects], open: this.openOnStart };
+  }
+
+  // AI Workflow Assistant (ADR-0047): availability, scripted answers (the last repeats) and the requests made.
+  assistant: AssistantInfo = { available: true, provider: 'scripted', model: 'test-model', reason: null };
+  generateAnswers: (GenerationAnswer | ApiError)[] = [];
+  explainAnswer: ExplainAnswer = { summary: 'Greets someone.', steps: [] };
+  debugAnswer: DebugAnswer = { explanation: 'Unclear.', certainty: 'unknown', nodeId: null, suggestions: [], failure: { status: 'Failed' } };
+  assistantRequests: { operation: string; body: unknown }[] = [];
+  /** While set, assistant requests wait for it (or for cancellation). */
+  assistantHold?: Promise<void>;
+
+  async assistantInfo() {
+    return this.assistant;
+  }
+
+  async assistantPreview(body: AssistantGenerateBody & { operation: string }) {
+    this.assistantRequests.push({ operation: 'preview', body });
+    return { instructions: 'You are the MyRPA workflow assistant.', messages: [{ role: 'user', text: `REQUEST:\n${body.request}` }], schema: null };
+  }
+
+  async assistantGenerate(body: AssistantGenerateBody, signal?: AbortSignal) {
+    this.assistantRequests.push({ operation: 'generate', body });
+    await this.assistantWait(signal);
+    const next = this.generateAnswers.length > 1 ? this.generateAnswers.shift()! : this.generateAnswers[0];
+    if (next instanceof ApiError) {
+      throw next;
+    }
+
+    return next;
+  }
+
+  async assistantExplain(document: JsonObject, signal?: AbortSignal) {
+    this.assistantRequests.push({ operation: 'explain', body: { document } });
+    await this.assistantWait(signal);
+    return this.explainAnswer;
+  }
+
+  async assistantDebug(document: JsonObject, runId: string, signal?: AbortSignal) {
+    this.assistantRequests.push({ operation: 'debug', body: { document, runId } });
+    await this.assistantWait(signal);
+    return this.debugAnswer;
+  }
+
+  private async assistantWait(signal?: AbortSignal) {
+    if (this.assistantHold) {
+      await Promise.race([
+        this.assistantHold,
+        new Promise<never>((_, reject) => signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))),
+      ]);
+    }
   }
 
   // Projects (ADR-0046): the projects folder (null: none), the projects created in it, and which may be deleted.

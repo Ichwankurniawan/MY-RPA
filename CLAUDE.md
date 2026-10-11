@@ -18,8 +18,9 @@ Guidance for AI agents and contributors working in this repository.
   **Scripting authorized by the owner on 2026-10-10 ("do both"): ADR-0045, plugin `MyRPA.Scripting` (sandboxed
   JavaScript, opt-in Python); scripting stays out of the engine and `src`.**
   **Phase 8 (AI Automation) authorized by the owner on 2026-10-11 ("proceed for the next phase"); plan
-  `docs/architecture/ai-automation-plan.md`, ADR-0047; slices A-1 → A-5, none done yet.** AI never executes anything:
-  answers are advice, generated drafts are validated and accepted by a person. Phase 9 (AI Agents & MCP) must not start
+  `docs/architecture/ai-automation-plan.md` (the owner's brief `ai-workflow-assistant-brief.md`), ADR-0047; slices A-1 →
+  A-6 done (2026-10-11; `docs/architecture/ai-workflow-assistant.md`).** AI never executes anything: answers are advice,
+  proposals pass `WorkflowLoader` and a person applies them; providers are plugins (`MyRPA.Ai.Contracts`). Phase 9 (AI Agents & MCP) must not start
   without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
@@ -66,15 +67,15 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   Execution.Hosting. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
   Plugins. Nothing references a composition root.
 - `MyRPA.Core`, `MyRPA.Workflow` and `MyRPA.Sdk`: BCL only, no packages, plain `net10.0` (ADR-0004, ADR-0013).
-- Plugin projects (`plugins/*`, `samples/plugins/*`, `tests/fixtures/*`) reference only `MyRPA.Sdk` and
-  `MyRPA.Browser.Contracts` (host contract assemblies with `Private="false"`; a plugin may register an implementation of
+- Plugin projects (`plugins/*`, `samples/plugins/*`, `tests/fixtures/*`) reference only `MyRPA.Sdk`,
+  `MyRPA.Browser.Contracts` and `MyRPA.Ai.Contracts` (host contract assemblies with `Private="false"`; a plugin may register an implementation of
   an extension contract interface, ADR-0039), set `EnableDynamicLoading`, and are never compiled against: tests reference them
   with `ReferenceOutputAssembly="false"` and load them through the plugin host.
 - Technology packages live only in their provider plugin (`ArchitectureRules.TechnologyPackageOwners`):
   `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`, `DocumentFormat.OpenXml` only in
   `plugins/MyRPA.Spreadsheet`, `PdfPig` only in `plugins/MyRPA.Documents`, `MailKit`/`MimeKit` only in `plugins/MyRPA.Email`, the database drivers (`Microsoft.Data.Sqlite`, `Microsoft.Data.SqlClient`, `Npgsql`) only in `plugins/MyRPA.Database`, `SSH.NET` only in `plugins/MyRPA.Sftp`, `Jint` only in `plugins/MyRPA.Scripting`. Never in src, tests or other plugins.
 - Product plugins with side effects (ADR-0042): file paths only through `MyRPA.Sdk.Files.FileRootPolicy` (no silent
-  overwrite, no folder delete, links refused); HTTP only in `plugins/MyRPA.Http` (allowedHosts per redirect hop, no
+  overwrite, no folder delete, links refused); HTTP only in `plugins/MyRPA.Http` and AI provider plugins to their one configured endpoint (ADR-0047; allowedHosts per redirect hop, no
   credentials to another origin, TLS validation never off); secrets only through secret properties (MYRPA1066).
 - Browser plugin rules (ADR-0017, ADR-0039): no JavaScript evaluation (`EvaluateAsync`; only the recorder adds its
   fixed script and binding, `BrowserPluginRulesTests`), http/https/about:blank URLs only, file

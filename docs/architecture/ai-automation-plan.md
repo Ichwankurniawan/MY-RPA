@@ -52,6 +52,8 @@ Studio (Assistant tab) ──/api/assistant/*──▶ MyRPA.Server (endpoints, 
 
 ## Slices
 
+Status (2026-10-11): A-1 to A-6 done. Architecture and use: [ai-workflow-assistant.md](ai-workflow-assistant.md).
+
 | Slice | Delivers |
 |---|---|
 | **A-1** | Contracts (capabilities, failure kinds); the OpenAI-compatible plugin (bounded retries, timeouts, no redirects, HTTPS except loopback, key from the environment); a scripted fake provider fixture; `GET /api/assistant`; architecture rules |
