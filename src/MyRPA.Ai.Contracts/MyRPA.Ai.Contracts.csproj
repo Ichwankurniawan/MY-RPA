@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    AI provider contracts (ADR-0047): the vendor-neutral boundary between the AI Workflow Assistant and provider plugins.
+    The plugin host shares this assembly with plugins (like MyRPA.Browser.Contracts) and lets a plugin implement
+    IAiProvider. BCL only: no project references, no packages, no HTTP.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Ai.Contracts</RootNamespace>
+    <Description>MyRPA AI provider contracts.</Description>
+  </PropertyGroup>
+</Project>

@@ -23,7 +23,7 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExpressionFunction, ExecutionEvent, Json, JsonObject, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, NameReference, ScopeName, WorkflowFile } from './types';
+import type { ActivityDescriptor, AssistantInfo, AssistantPreview, AssistantPurpose, AssistantTurn, DebugAnswer, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExecutionEvent, ExplainAnswer, ExpressionFunction, GenerationAnswer, Json, JsonObject, NameReference, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, ScopeName, WorkflowFile } from './types';
 import { isBreakpointMap, isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
 import { renameReferences, usagesOf, type Usage } from './rename';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
@@ -217,6 +217,8 @@ export interface StudioState {
   readonly projectsRoot?: string;
   /** The projects the Studio may delete: those of the projects folder, never a --project. */
   readonly removableProjects: ReadonlySet<string>;
+  /** The AI Workflow Assistant (ADR-0047): its answers are shown for review; nothing is applied or run by itself. */
+  readonly assistant: AssistantView;
   /** The left panel's tab: the activity catalog or the project's files (remembered per browser). */
   readonly sidebarTab: SidebarTab;
   /** Containers whose children are hidden in the designer (UX-3; never an ancestor of the selection). */
@@ -273,7 +275,30 @@ const isPanes = (value: unknown): value is Panes => {
 };
 
 /** The tabs of the bottom panel. */
-export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution' | 'recording';
+export type OutputTab = 'problems' | 'variables' | 'arguments' | 'execution' | 'recording' | 'assistant';
+
+/** The assistant's state in the Studio (ADR-0047). */
+export interface AssistantView {
+  readonly info?: AssistantInfo;
+  readonly busy?: 'generate' | 'explain' | 'debug' | 'preview';
+  /** The words in the request box (kept between requests). */
+  readonly request: string;
+  /** What the shown answer was asked for. */
+  readonly purpose?: AssistantPurpose;
+  /** The clarification so far: the original request and the questions, then each reply and the next questions. */
+  readonly conversation: readonly AssistantTurn[];
+  /** The workflow as it was when the change was asked for: applying is refused if the document is no longer this object. */
+  readonly base?: JsonObject;
+  /** The failed run a failure explanation or fix is about. */
+  readonly runId?: string;
+  readonly answer?: GenerationAnswer;
+  /** The proposal as a document (parsed like an opened file). */
+  readonly proposal?: JsonObject;
+  readonly explanation?: ExplainAnswer;
+  readonly debug?: DebugAnswer;
+  readonly preview?: AssistantPreview;
+  readonly error?: string;
+}
 
 /** The pages of the navigation rail (ADR-0044); only pages that work are listed. Workflows is the chosen project's workspace. */
 export type StudioPage = 'workflows' | 'home' | 'projects';
@@ -410,7 +435,7 @@ export function newWorkflowText(path: string, kind: NewWorkflowKind = 'sequence'
 
 /** Why `path` is not a usable workflow path (undefined when it is); the server checks the rest. */
 /** What the name dialog asks a path for. */
-export type NamePurpose = 'new' | 'rename' | 'save-as' | 'folder';
+export type NamePurpose = 'new' | 'rename' | 'save-as' | 'folder' | 'proposal';
 
 /** Why a folder path cannot be created (the server checks again). */
 export function folderRefusal(path: string): string | undefined {
@@ -838,6 +863,7 @@ export class Studio {
       page: 'workflows',
       projectSummaries: new Map(),
       removableProjects: new Set(),
+      assistant: { request: '', conversation: [] },
       sidebarTab: this.preferences.read(preferenceKeys.sidebarTab, isSidebarTab) ?? 'activities',
       collapsed: new Set(),
       graphLists: new Set(),
@@ -979,6 +1005,7 @@ export class Studio {
       }
 
       await this.loadProjects();
+      await this.loadAssistant();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         this.store.set({ connection: 'signed-out', message: error.message });
@@ -1544,6 +1571,178 @@ export class Studio {
     this.store.set({ projectSummaries: new Map(entries) });
   }
 
+  private assistantAbort?: AbortController;
+
+  /** Whether the assistant can answer, and with which provider (a failure only makes it unavailable). */
+  private async loadAssistant(): Promise<void> {
+    try {
+      const info = await this.api.assistantInfo();
+      this.store.set((state) => ({ assistant: { ...state.assistant, info } }));
+    } catch (error) {
+      this.store.set((state) => ({ assistant: { ...state.assistant, info: { available: false, reason: (error as Error).message } } }));
+    }
+  }
+
+  /** The words in the assistant's request box. */
+  setAssistantRequest(text: string): void {
+    this.store.set((state) => ({ assistant: { ...state.assistant, request: text } }));
+  }
+
+  /** Runs one assistant request; a newer one or Cancel stops it, and a failure is shown, never taken as an answer. */
+  private async assistantRun<T>(busy: NonNullable<AssistantView['busy']>, work: (signal: AbortSignal) => Promise<T>, done: (value: T) => Partial<AssistantView>, clear = true): Promise<void> {
+    this.assistantAbort?.abort();
+    const abort = new AbortController();
+    this.assistantAbort = abort;
+    this.store.set((state) => ({
+      outputTab: 'assistant',
+      assistant: clear
+        ? { ...state.assistant, busy, error: undefined, answer: undefined, proposal: undefined, explanation: undefined, debug: undefined, preview: undefined }
+        : { ...state.assistant, busy, error: undefined },
+    }));
+    try {
+      const value = await work(abort.signal);
+      if (this.assistantAbort === abort) {
+        this.store.set((state) => ({ assistant: { ...state.assistant, ...done(value), busy: undefined } }));
+      }
+    } catch (error) {
+      if (this.assistantAbort !== abort) {
+        return;
+      }
+
+      const stopped = abort.signal.aborted || (error as Error).name === 'AbortError';
+      this.store.set((state) => ({ assistant: { ...state.assistant, busy: undefined, error: stopped ? 'Stopped. Nothing was changed.' : `The assistant could not answer: ${(error as Error).message} Nothing was changed.` } }));
+    } finally {
+      if (this.assistantAbort === abort) {
+        this.assistantAbort = undefined;
+      }
+    }
+  }
+
+  /** The answer, with a proposal read like an opened file; an unreadable proposal is shown as a failure. */
+  private assistantAnswer(answer: GenerationAnswer, purpose: AssistantPurpose, conversation: readonly AssistantTurn[]): Partial<AssistantView> {
+    const opened = answer.outcome === 'proposal' && answer.document ? openWorkflow(answer.document) : undefined;
+    if (opened !== undefined && !opened.ok) {
+      return { answer: undefined, error: `The proposal could not be read: ${opened.error}` };
+    }
+
+    const questions = answer.questions.map((q) => q.question).join('\n');
+    return {
+      answer,
+      purpose,
+      proposal: opened?.ok ? opened.document : undefined,
+      conversation: answer.outcome === 'clarify' ? [...conversation, { role: 'assistant', text: questions }] : [],
+    };
+  }
+
+  /**
+   * Asks for a new workflow (create) or a change of the open one (edit, fix the validation problems, fix the failed
+   * run). The answer is shown for review; nothing is applied, saved or run.
+   */
+  async askAssistant(purpose: AssistantPurpose, words?: string): Promise<void> {
+    const state = this.state;
+    const request = (words ?? state.assistant.request).trim();
+    const document = purpose === 'create' ? undefined : state.document;
+    if (purpose !== 'create' && document === undefined) {
+      this.store.set((s) => ({ outputTab: 'assistant', assistant: { ...s.assistant, error: 'Open a workflow first.' } }));
+      return;
+    }
+
+    const runId = purpose === 'fixFailure' ? state.assistant.runId : undefined;
+    const conversation: AssistantTurn[] = request === '' ? [] : [{ role: 'user', text: request }];
+    this.store.set((s) => ({ assistant: { ...s.assistant, base: document, conversation: [] } }));
+    await this.assistantRun(
+      'generate',
+      (signal) => this.api.assistantGenerate({ purpose, request, document, runId }, signal),
+      (answer) => this.assistantAnswer(answer, purpose, conversation),
+    );
+  }
+
+  /** Answers the assistant's questions and asks again, with the same purpose and the same starting workflow. */
+  async answerAssistant(reply: string): Promise<void> {
+    const assistant = this.state.assistant;
+    const text = reply.trim();
+    if (assistant.answer?.outcome !== 'clarify' || assistant.purpose === undefined || text === '') {
+      return;
+    }
+
+    const purpose = assistant.purpose;
+    const conversation = assistant.conversation;
+    await this.assistantRun(
+      'generate',
+      (signal) => this.api.assistantGenerate({ purpose, request: text, document: assistant.base, conversation: [...conversation], runId: assistant.runId }, signal),
+      (answer) => this.assistantAnswer(answer, purpose, [...conversation, { role: 'user', text }]),
+    );
+  }
+
+  /** Explains the open workflow. */
+  async explainWorkflow(): Promise<void> {
+    const document = this.state.document;
+    if (document === undefined) {
+      this.store.set((s) => ({ outputTab: 'assistant', assistant: { ...s.assistant, error: 'Open a workflow first.' } }));
+      return;
+    }
+
+    await this.assistantRun('explain', (signal) => this.api.assistantExplain(document, signal), (explanation) => ({ explanation }));
+  }
+
+  /** Explains why a run of the open workflow failed, from the run's error only. */
+  async askWhyRunFailed(runId: string): Promise<void> {
+    const document = this.state.document;
+    if (document === undefined) {
+      return;
+    }
+
+    this.store.set((s) => ({ assistant: { ...s.assistant, runId } }));
+    await this.assistantRun('debug', (signal) => this.api.assistantDebug(document, runId, signal), (debug) => ({ debug, runId }));
+  }
+
+  /** Shows exactly what a request would send; nothing is sent to the provider. */
+  async previewAssistant(operation: 'generate' | 'explain' | 'debug', purpose: AssistantPurpose = 'create'): Promise<void> {
+    const state = this.state;
+    const body = { operation, purpose, request: state.assistant.request.trim() || '(your request)', document: purpose === 'create' && operation === 'generate' ? undefined : state.document, runId: state.assistant.runId };
+    await this.assistantRun('preview', () => this.api.assistantPreview(body), (preview) => ({ preview }), false);
+  }
+
+  /** Stops the assistant's request; nothing changes. */
+  cancelAssistant(): void {
+    this.assistantAbort?.abort();
+  }
+
+  /** Puts the shown answer away. */
+  discardAssistantAnswer(): void {
+    this.store.set((state) => ({ assistant: { ...state.assistant, answer: undefined, proposal: undefined, explanation: undefined, debug: undefined, preview: undefined, error: undefined, conversation: [], base: undefined } }));
+  }
+
+  /**
+   * Applies the reviewed proposal: a new workflow is created as a new file (its name is asked); a change replaces the
+   * open document as one undo step, and is refused when the document changed since it was asked for. Never runs it.
+   */
+  applyProposal(): void {
+    const state = this.state;
+    const { answer, proposal, purpose, base } = state.assistant;
+    if (answer?.outcome !== 'proposal' || proposal === undefined) {
+      return;
+    }
+
+    if (purpose === 'create') {
+      this.startName('proposal');
+      return;
+    }
+
+    const refusal =
+      editRefusal(state)
+      ?? (state.document !== base ? 'The workflow changed after the assistant was asked; ask again so the proposal starts from the current version.' : undefined);
+    if (refusal !== undefined) {
+      this.store.set((s) => ({ assistant: { ...s.assistant, error: refusal } }));
+      return;
+    }
+
+    const root = proposal.root;
+    this.commit(proposal, isObject(root) ? keyOf(root) : undefined, "Apply the assistant's proposal");
+    this.store.set((s) => ({ assistant: { ...s.assistant, answer: undefined, proposal: undefined, base: undefined, conversation: [] } }));
+    this.say("Applied the assistant's proposal. Undo reverts it; nothing was run.");
+  }
+
   /** Shows a tab of the bottom panel. */
   showOutput(tab: OutputTab): void {
     this.store.set({ outputTab: tab });
@@ -1980,6 +2179,7 @@ export class Studio {
     const current = from ?? this.state.file?.path;
     const initial =
       purpose === 'new' ? unique(inFolder('new-workflow'))
+      : purpose === 'proposal' ? unique(inFolder(String(this.state.assistant.proposal?.id ?? 'assistant-workflow').replace(/[^A-Za-z0-9_-]+/g, '-') || 'assistant-workflow'))
       : purpose === 'folder' ? unique(inFolder('new-folder'), '')
       : purpose === 'save-as' && current ? unique(current.replace(/\.json$/i, '') + '-copy')
       : (current ?? '');
@@ -2007,7 +2207,21 @@ export class Studio {
     }
 
     try {
-      if (dialog.purpose === 'new') {
+      if (dialog.purpose === 'proposal') {
+        // The reviewed proposal becomes a new file and opens; it is not run (ADR-0047).
+        const proposal = this.state.assistant.proposal;
+        if (proposal === undefined) {
+          this.closeDialog();
+          return;
+        }
+
+        await this.api.createWorkflow(project, target, serialize(proposal));
+        this.closeDialog();
+        this.store.set((state) => ({ assistant: { ...state.assistant, answer: undefined, proposal: undefined, conversation: [], base: undefined } }));
+        await this.refreshFiles();
+        await this.requestOpen(target);
+        this.say(`Created ${target} from the assistant's proposal. It has not been run.`);
+      } else if (dialog.purpose === 'new') {
         await this.api.createWorkflow(project, target, newWorkflowText(target, kind));
         this.closeDialog();
         await this.refreshFiles();

@@ -18,13 +18,14 @@ const tabs: readonly { id: Tab; label: string }[] = [
   { id: 'arguments', label: 'Arguments' },
   { id: 'execution', label: 'Execution' },
   { id: 'recording', label: 'Recorder' },
+  { id: 'assistant', label: 'Assistant' },
 ];
 
 /**
  * The bottom panel (UX-2): one tab strip for Problems, Variables, Arguments and Execution, with counts. The tab is Studio
  * state, so the Studio can show Execution when a run starts and Problems when an explicit check finds errors.
  */
-export function BottomPanel({ execution, recording }: { execution: ReactNode; recording: ReactNode }) {
+export function BottomPanel({ execution, recording, assistant }: { execution: ReactNode; recording: ReactNode; assistant: ReactNode }) {
   const studio = useStudio();
   const id = useId();
   const tab = useStudioState((s) => s.outputTab);
@@ -32,7 +33,7 @@ export function BottomPanel({ execution, recording }: { execution: ReactNode; re
   const variables = useStudioState((s) => (s.document ? rows(s.document, 'variables').length : 0));
   const args = useStudioState((s) => (s.document ? rows(s.document, 'arguments').length : 0));
   const recorded = useStudioState((s) => s.recorder?.items.length);
-  const counts: Record<Tab, string> = { problems: errors > 0 ? ` (${errors})` : '', variables: ` (${variables})`, arguments: ` (${args})`, execution: '', recording: recorded ? ` (${recorded})` : '' };
+  const counts: Record<Tab, string> = { problems: errors > 0 ? ` (${errors})` : '', variables: ` (${variables})`, arguments: ` (${args})`, execution: '', recording: recorded ? ` (${recorded})` : '', assistant: '' };
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -75,22 +76,28 @@ export function BottomPanel({ execution, recording }: { execution: ReactNode; re
         ))}
       </div>
       <div role="tabpanel" id={`${id}-${tab}-panel`} aria-labelledby={`${id}-${tab}`} className="tab-panel">
-        {tab === 'problems' ? <ProblemsList /> : tab === 'execution' ? execution : tab === 'recording' ? recording : <RowsEditor list={tab} />}
+        {tab === 'problems' ? <ProblemsList /> : tab === 'execution' ? execution : tab === 'recording' ? recording : tab === 'assistant' ? assistant : <RowsEditor list={tab} />}
       </div>
     </div>
   );
 }
 
-const tabIcons: Record<Tab, IconName> = { problems: 'problems', variables: 'activity', arguments: 'plugin', execution: 'run', recording: 'record' };
+const tabIcons: Record<Tab, IconName> = { problems: 'problems', variables: 'activity', arguments: 'plugin', execution: 'run', recording: 'record', assistant: 'sparkle' };
 
 function ProblemsList() {
   const studio = useStudio();
   const diagnostics = useStudioState((s) => s.diagnostics);
   const validated = useStudioState((s) => s.validated);
   const stale = useStudioState((s) => s.diagnostics !== undefined && s.validated !== s.document);
+  const fixable = useStudioState((s) => s.assistant.info?.available === true && s.file?.readOnlyReason === undefined && (s.diagnostics?.some((d) => d.severity === 'Error') ?? false));
   return (
     <div className="problems">
       <h2>Problems{stale ? ' (checking…)' : ''}</h2>
+      {fixable && (
+        <button type="button" className="with-icon" onClick={() => void studio.askAssistant('fixValidation', '')} title="Ask the AI Workflow Assistant to propose a correction (you review it before anything changes)">
+          <Icon name="sparkle" size={14} /> Fix with the assistant
+        </button>
+      )}
       {diagnostics === undefined ? (
         <p className="hint">Not validated yet.</p>
       ) : diagnostics.length === 0 ? (

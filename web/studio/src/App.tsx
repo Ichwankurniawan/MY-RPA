@@ -8,6 +8,7 @@ import { arrowShape, arrowText, canvasPositions, canvasSize, isGraphActivity, is
 import type { Position } from './placement';
 import { PropertiesPanel } from './PropertyEditors';
 import { RecordingPanel } from './RecordingPanel';
+import { AssistantPanel } from './AssistantPanel';
 import {
   collapseAllRefusalOf,
   currentRun,
@@ -1519,8 +1520,8 @@ function NameDialog({ dialog }: { dialog: Extract<StudioDialog, { kind: 'name' }
   const id = useId();
   const [path, setPath] = useState(dialog.initial);
   const [kind, setKind] = useState<NewWorkflowKind>('sequence');
-  const title = dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'folder' ? 'New folder' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
-  const action = dialog.purpose === 'new' || dialog.purpose === 'folder' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
+  const title = dialog.purpose === 'proposal' ? 'Create the proposed workflow' : dialog.purpose === 'new' ? 'New workflow' : dialog.purpose === 'folder' ? 'New folder' : dialog.purpose === 'rename' ? `Rename ${dialog.from}` : 'Save as';
+  const action = dialog.purpose === 'new' || dialog.purpose === 'folder' || dialog.purpose === 'proposal' ? 'Create' : dialog.purpose === 'rename' ? 'Rename' : 'Save';
   return (
     <Modal title={title} onCancel={() => studio.closeDialog()}>
       <form
@@ -2604,7 +2605,7 @@ function CaseZone({ parentKey, prefix, picked }: { parentKey: string; prefix: st
 function OutputPanel() {
   return (
     <section className="output" aria-label="Output">
-      <BottomPanel execution={<ExecutionPanel />} recording={<RecordingPanel />} />
+      <BottomPanel execution={<ExecutionPanel />} recording={<RecordingPanel />} assistant={<AssistantPanel />} />
     </section>
   );
 }
@@ -2628,6 +2629,17 @@ function useNow(active: boolean): number {
 function failureKind(error: { activityType?: string | null; errorType?: string | null }): string {
   const parts = [error.activityType, error.errorType].filter((p): p is string => typeof p === 'string' && p !== '');
   return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+}
+
+/** Asks the AI Workflow Assistant why a run of the open workflow failed (ADR-0047); shown only when it can answer. */
+function AskWhyButton({ runId }: { runId: string }) {
+  const studio = useStudio();
+  const available = useStudioState((s) => s.assistant.info?.available === true);
+  return available ? (
+    <button type="button" className="with-icon" onClick={() => void studio.askWhyRunFailed(runId)}>
+      <Icon name="sparkle" size={14} /> Ask the assistant why
+    </button>
+  ) : null;
 }
 
 /** Plugins that failed to load (optional ones; a required one stops the server) and what each said. */
@@ -2790,7 +2802,8 @@ function ExecutionPanel() {
             <button type="button" onClick={() => studio.selectNodeId(failedNode)}>
               Select failed node
             </button>
-          )}
+          )}{' '}
+          {failedNode && run.runId && <AskWhyButton runId={run.runId} />}
         </p>
       )}
       {run !== undefined && run.missingEvents > 0 && (

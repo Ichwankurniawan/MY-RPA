@@ -148,6 +148,7 @@ internal static class ServerApplication
         services.AddSingleton<EventStreams>();
         services.AddSingleton<Recordings>();
         services.AddSingleton<DebugRuns>();
+        services.AddSingleton<AssistantHost>();
         if (options.WebRoot is { } webRoot)
         {
             // Factory-created, so the container disposes it. Hidden, dot-prefixed and system files are never served.
@@ -233,6 +234,7 @@ internal static class ServerApplication
         MapExpressions(api);
         MapStreams(api);
         MapRecordings(api);
+        AssistantEndpoints.Map(api);
     }
 
     private static void MapProjects(RouteGroupBuilder api)

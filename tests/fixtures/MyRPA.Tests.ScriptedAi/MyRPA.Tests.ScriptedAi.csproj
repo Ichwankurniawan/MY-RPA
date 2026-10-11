@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    A scripted AI provider for tests and the Studio's end-to-end checks (ADR-0047): it answers from a JSON file instead
+    of a model, and records each request, so no test needs a real AI service or a key.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Tests.ScriptedAi</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <NoWarn>$(NoWarn);CS1591;CA1515</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" Private="false" ExcludeAssets="runtime" />
+    <ProjectReference Include="..\..\..\src\MyRPA.Ai.Contracts\MyRPA.Ai.Contracts.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="myrpa-plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="ExcludeHostContractAssemblies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow' or '%(Filename)' == 'MyRPA.Ai.Contracts'" />
+    </ItemGroup>
+  </Target>
+</Project>

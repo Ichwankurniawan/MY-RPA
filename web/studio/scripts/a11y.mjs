@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { check, repo, results, withStudio, showTab } from './harness.mjs';
+import { check, proposalAnswer, repo, results, scriptedAi, withStudio, showTab } from './harness.mjs';
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 const step = (text) => console.log(`  ✓ ${text}`);
@@ -202,6 +202,17 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.getByRole('dialog', { name: 'Rename message' }).getByText(/will change/).waitFor();
   await scan('Rename dialog');
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  // ADR-0047: the AI Workflow Assistant with a reviewed proposal (scripted provider: no model, no key).
+  const proposal = { schemaVersion: '1.0', id: 'ai-a11y', name: 'AI', version: '1', root: { id: 'main', type: 'Core.Sequence', children: [{ id: 'say', type: 'Core.Log', properties: { message: "'hi'" } }] } };
+  const ai = scriptedAi(join(project, '..', 'ai'), [proposalAnswer(proposal, ['Log hi'])]);
+  await page.goto(await startServer(['--project', project, '--plugin-config', ai.config, '--web', join(repo, 'web', 'studio', 'dist')]));
+  await page.getByText('Connected to MyRPA.Server').waitFor();
+  await page.getByRole('tab', { name: /^Assistant/ }).click();
+  await page.getByLabel('Describe what to build or change').fill('Log hi');
+  await page.getByRole('toolbar', { name: 'Assistant' }).getByRole('button', { name: 'New workflow', exact: true }).click();
+  await page.getByTestId('assistant-proposal').waitFor();
+  await scan('Assistant with a proposal');
 
   const blocking = findings.filter((f) => f.impact === 'serious' || f.impact === 'critical');
   check(blocking.length === 0, `${blocking.length} serious or critical accessibility violation(s)`);

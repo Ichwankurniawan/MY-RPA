@@ -1,0 +1,14 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Ai.OpenAiCompatible",
+  "name": "MyRPA AI provider (OpenAI-compatible)",
+  "version": "0.1.0",
+  "description": "An AI provider for the Studio's AI Workflow Assistant (ADR-0047): OpenAI-compatible chat completions (OpenAI, Azure OpenAI, Ollama, LM Studio). The key comes from an environment variable; HTTPS only, except to this machine; no redirects. No activities: workflows never call it.",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Ai.OpenAiCompatible.dll",
+    "type": "MyRPA.Ai.OpenAiCompatible.OpenAiCompatiblePlugin"
+  },
+  "capabilities": [ "Network" ]
+}

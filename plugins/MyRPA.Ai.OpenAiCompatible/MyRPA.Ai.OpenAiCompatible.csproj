@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The first AI provider (ADR-0047): OpenAI-compatible chat completions (OpenAI, Azure OpenAI, local servers such as
+    Ollama or LM Studio). A plugin: it references the Automation SDK and the AI contracts (host-provided, so
+    Private=false / ExcludeAssets=runtime) and uses only the BCL HttpClient: no vendor SDK package. It registers an
+    IAiProvider; it has no activities, so workflows never call it.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Ai.OpenAiCompatible</RootNamespace>
+    <Description>MyRPA AI provider for OpenAI-compatible endpoints.</Description>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Sdk\MyRPA.Sdk.csproj" Private="false" ExcludeAssets="runtime" />
+    <ProjectReference Include="..\..\src\MyRPA.Ai.Contracts\MyRPA.Ai.Contracts.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="myrpa-plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- MyRPA.Core and MyRPA.Workflow arrive transitively through MyRPA.Sdk; they and the AI contracts are host-provided. -->
+  <Target Name="ExcludeHostContractAssemblies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'MyRPA.Core' or '%(Filename)' == 'MyRPA.Workflow' or '%(Filename)' == 'MyRPA.Ai.Contracts'" />
+    </ItemGroup>
+  </Target>
+</Project>

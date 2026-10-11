@@ -91,6 +91,8 @@ Command line: `MyRPA.Server [--projects-root <dir>] [--project <dir>]... [--open
 | `GET /api/streams/{streamId}` | The tab's SSE stream (see below) |
 | `POST /api/streams/{streamId}/subscriptions` | `{ runId, afterSequence? }` or `{ recordingId, afterSequence? }`: follow a run or a recording on this stream |
 | `DELETE /api/streams/{streamId}/subscriptions/{id}` | Stop following a run or recording |
+| `GET /api/assistant` | `{ available, provider, model, reason }`: whether the AI Workflow Assistant can answer (ADR-0047) |
+| `POST /api/assistant/preview` · `generate` · `explain` · `debug` | The assistant's operations: what would be sent, proposals checked by the server, explanations; nothing is saved, applied or run. See [ai-workflow-assistant.md](ai-workflow-assistant.md) §4 |
 | `GET /api/recordings` | `{ available, reason }`: whether this server can record (it needs the browser plugin) |
 | `POST /api/recordings/generate` | `{ startUrl, steps: [{ kind, selector, element, text, secret, values, url, fileName }] }` → `{ nodes, arguments }`: the browser plugin's activities for the steps the user kept (v1.0 nodes: Open, the steps, Close; a password becomes the In argument `password`). 400 for a step it cannot turn into an activity |
 | `POST /api/recordings` | `{ startUrl }` (http/https) → 201 `{ recordingId, startUrl }`: opens a visible recording browser on this machine (ADR-0039). 409 while another recording runs (one at a time), 400 for a bad URL, 503 without the browser plugin |

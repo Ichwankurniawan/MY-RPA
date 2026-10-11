@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, DebugCommandName, DebugState, Diagnostic, ExpressionFunction, GeneratedActivities, JsonObject, NameReferences, PluginReport, ProjectListing, ProjectsInfo, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, WorkflowFile } from './types';
+import type { ActivityDescriptor, AssistantGenerateBody, AssistantInfo, AssistantPreview, DebugAnswer, DebugCommandName, DebugState, Diagnostic, ExplainAnswer, ExpressionFunction, GeneratedActivities, GenerationAnswer, JsonObject, NameReferences, PluginReport, ProjectListing, ProjectsInfo, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -37,6 +37,16 @@ export interface StudioApi {
   plugins(): Promise<PluginReport>;
   /** The projects and the projects folder (ADR-0046). */
   projects(): Promise<ProjectsInfo>;
+  /** Whether the AI Workflow Assistant can answer (ADR-0047). */
+  assistantInfo(): Promise<AssistantInfo>;
+  /** Exactly what an assistant request would send to the provider; nothing is sent. */
+  assistantPreview(body: AssistantGenerateBody & { operation: 'generate' | 'explain' | 'debug' }): Promise<AssistantPreview>;
+  /** A clarification, "unsupported", or a proposal checked by the server; nothing is saved, applied or run. */
+  assistantGenerate(body: AssistantGenerateBody, signal?: AbortSignal): Promise<GenerationAnswer>;
+  /** An explanation of the workflow. */
+  assistantExplain(document: JsonObject, signal?: AbortSignal): Promise<ExplainAnswer>;
+  /** An explanation of a failed run of this server, from its error only. */
+  assistantDebug(document: JsonObject, runId: string, signal?: AbortSignal): Promise<DebugAnswer>;
   /** Creates an empty project in the projects folder. 409 when the name is taken or there is no projects folder, 400 for a refused name. */
   createProject(name: string): Promise<void>;
   /** Moves a project of the projects folder to its trash; returns the trash path. 409 for a --project or a folder in use. */
@@ -113,11 +123,12 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
     return (await response.json()) as T;
   };
 
-  const send = async (method: string, url: string, body?: string, headers: Record<string, string> = {}): Promise<Response> => {
+  const send = async (method: string, url: string, body?: string, headers: Record<string, string> = {}, signal?: AbortSignal): Promise<Response> => {
     const response = await fetcher(url, {
       method,
       headers: { ...antiForgery, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers },
       body,
+      signal,
     });
     if (!response.ok) {
       throw await failure(response);
@@ -131,6 +142,11 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
     activities: async () => (await get<{ activities: ActivityDescriptor[] }>('/api/activities')).activities,
     plugins: () => get<PluginReport>('/api/plugins'),
     projects: () => get<ProjectsInfo>('/api/projects'),
+    assistantInfo: () => get<AssistantInfo>('/api/assistant'),
+    assistantPreview: async (body) => (await send('POST', '/api/assistant/preview', JSON.stringify(body))).json() as Promise<AssistantPreview>,
+    assistantGenerate: async (body, signal) => (await send('POST', '/api/assistant/generate', JSON.stringify(body), {}, signal)).json() as Promise<GenerationAnswer>,
+    assistantExplain: async (document, signal) => (await send('POST', '/api/assistant/explain', JSON.stringify({ document }), {}, signal)).json() as Promise<ExplainAnswer>,
+    assistantDebug: async (document, runId, signal) => (await send('POST', '/api/assistant/debug', JSON.stringify({ document, runId }), {}, signal)).json() as Promise<DebugAnswer>,
     async createProject(name) {
       await send('POST', '/api/projects', JSON.stringify({ name }));
     },
