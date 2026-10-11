@@ -44,13 +44,21 @@ public static class ArchitectureRules
         new("MyRPA.Browser.Contracts", typeof(MyRPA.Browser.Contracts.IBrowserRecorder).Assembly,
             AllowedProjects: [],
             AllowedPackages: []),
+        // ADR-0047: AI provider contracts, shared by the server and AI provider plugins. BCL only.
+        new("MyRPA.Ai.Contracts", typeof(MyRPA.Ai.Contracts.IAiProvider).Assembly,
+            AllowedProjects: [],
+            AllowedPackages: []),
+        // ADR-0047: the AI Workflow Assistant pipeline: workflow contracts and the provider contract; no HTTP, no engine.
+        new("MyRPA.Ai.Assistant", typeof(MyRPA.Ai.Assistant.WorkflowAssistant).Assembly,
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Ai.Contracts"],
+            AllowedPackages: ["Microsoft.Extensions.Logging.Abstractions"]),
         // ADR-0022/0023: execution hosting shared by the server, agents and robots. Engine contracts only (not Runtime).
         new("MyRPA.Execution.Hosting", typeof(MyRPA.Execution.Hosting.ExecutionHost).Assembly,
             AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Contracts"],
             AllowedPackages: ["Microsoft.Extensions.DependencyInjection.Abstractions", "Microsoft.Extensions.Logging.Abstractions"]),
         // ADR-0022/0025: the control-plane server; a composition root and the only src project allowed to use ASP.NET Core.
         new("MyRPA.Server", typeof(MyRPA.Server.ServerApplication).Assembly,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting"],
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Ai.Contracts", "MyRPA.Ai.Assistant"],
             AllowedPackages: [],
             IsCompositionRoot: true,
             AllowsAspNetCore: true),
@@ -68,6 +76,7 @@ public static class ArchitectureRules
         "MyRPA.Sdk",
         "MyRPA.Contracts",
         "MyRPA.Browser.Contracts",
+        "MyRPA.Ai.Contracts",
     };
 
     /// <summary>
@@ -90,7 +99,7 @@ public static class ArchitectureRules
     /// The src projects a plugin project (plugins, samples/plugins, tests/fixtures) may reference (ADR-0014): the SDK and
     /// the extension contracts (ADR-0039), both provided by the host.
     /// </summary>
-    public static IReadOnlyList<string> PluginProjectAllowedReferences { get; } = ["MyRPA.Sdk", "MyRPA.Browser.Contracts"];
+    public static IReadOnlyList<string> PluginProjectAllowedReferences { get; } = ["MyRPA.Sdk", "MyRPA.Browser.Contracts", "MyRPA.Ai.Contracts"];
 
     /// <summary>
     /// Page-scripting APIs of Playwright (ADR-0017: workflow runs never run JavaScript in pages). Only the recorder may
@@ -226,8 +235,12 @@ public static class ArchitectureRules
         ["MyRPA.Database.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Sftp.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
         ["MyRPA.Scripting.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime"],
+        // ADR-0047: the assistant pipeline with the real built-in catalog and fake providers; the provider plugin through
+        // the real plugin host and a local test server.
+        ["MyRPA.Ai.Assistant.Tests"] = ["MyRPA.Ai.Assistant", "MyRPA.Ai.Contracts", "MyRPA.Activities"],
+        ["MyRPA.Ai.OpenAiCompatible.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime", "MyRPA.Ai.Contracts"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
-        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Server", "MyRPA.Cli"],
+        ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Ai.Contracts", "MyRPA.Ai.Assistant", "MyRPA.Server", "MyRPA.Cli"],
         // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.
         ["MyRPA.Server.Tests"] = ["MyRPA.Server"],
         // Execution hosting runs the real engine with the built-in activities.

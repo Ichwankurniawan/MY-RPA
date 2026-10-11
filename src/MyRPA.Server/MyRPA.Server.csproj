@@ -22,6 +22,8 @@
     <ProjectReference Include="..\MyRPA.Contracts\MyRPA.Contracts.csproj" />
     <ProjectReference Include="..\MyRPA.Browser.Contracts\MyRPA.Browser.Contracts.csproj" />
     <ProjectReference Include="..\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
+    <ProjectReference Include="..\MyRPA.Ai.Contracts\MyRPA.Ai.Contracts.csproj" />
+    <ProjectReference Include="..\MyRPA.Ai.Assistant\MyRPA.Ai.Assistant.csproj" />
   </ItemGroup>
   <!--
     W6 (ADR-0031): the built Web Studio (web/studio/dist, from 'npm run build') is copied next to the server as wwwroot,
