@@ -654,3 +654,12 @@ textarea.multiline-text { width: 100%; min-height: 10em; resize: vertical; font-
 .project-card .project-delete { justify-self: start; margin-left: 36px; padding: 3px 8px; font-size: 12px; color: var(--muted); background: none; }
 .project-card .project-delete:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
 button.danger:not(:disabled) { background: var(--error); color: var(--primary-text); border-color: transparent; font-weight: 650; }
+
+/* Files panel: one row of icon buttons (New workflow, New folder | Rename, Delete), tooltips name what they do. */
+.files-header { display: flex; align-items: center; justify-content: flex-end; }
+.files-header .editbar.icon-bar { display: flex; align-items: center; gap: 2px; flex-wrap: nowrap; }
+.files-header .editbar .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--muted); }
+.files-header .editbar .icon-button:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.files-header .editbar .icon-button.danger-icon:hover:not(:disabled) { color: var(--error); background: var(--panel-2); }
+.files-header .editbar .icon-button:disabled { opacity: 0.4; }
+.icon-bar-separator { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }

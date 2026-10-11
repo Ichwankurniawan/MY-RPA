@@ -1182,23 +1182,27 @@ function FilesPanel() {
     <section className="files" aria-labelledby="files-heading">
       <div className="files-header">
         <h2 id="files-heading">Files</h2>
-        <div className="editbar" role="toolbar" aria-label="Files">
-          <button type="button" onClick={() => studio.startName('new', inFolder)} disabled={project === undefined} title={inFolder ? `Create a new workflow in ${inFolder}` : 'Create a new workflow in the project'}>
-            New…
+        {/* Icon buttons: the accessible name is the action, the tooltip says where it applies. */}
+        <div className="editbar icon-bar" role="toolbar" aria-label="Files">
+          <button type="button" className="icon-button" aria-label="New…" onClick={() => studio.startName('new', inFolder)} disabled={project === undefined} title={inFolder ? `New workflow in ${inFolder}` : 'New workflow in the project'}>
+            <Icon name="file-new" size={17} />
           </button>
-          <button type="button" onClick={() => studio.startName('folder', inFolder)} disabled={project === undefined} title={inFolder ? `Create a folder in ${inFolder}` : 'Create a folder in the project'}>
-            New folder…
+          <button type="button" className="icon-button" aria-label="New folder…" onClick={() => studio.startName('folder', inFolder)} disabled={project === undefined} title={inFolder ? `New folder in ${inFolder}` : 'New folder in the project'}>
+            <Icon name="folder-new" size={17} />
           </button>
-          <button type="button" onClick={() => target && studio.startName('rename', target)} disabled={target === undefined} title={target ? `Rename or move ${target} (F2)` : 'Select a file'}>
-            Rename…
+          <span className="icon-bar-separator" aria-hidden="true" />
+          <button type="button" className="icon-button" aria-label="Rename…" onClick={() => target && studio.startName('rename', target)} disabled={target === undefined} title={target ? `Rename or move ${target} (F2)` : 'Rename: select a file first'}>
+            <Icon name="rename" size={17} />
           </button>
-          <button type="button" onClick={() => target && studio.startDelete(target)} disabled={target === undefined} title={target ? `Delete ${target} (Delete)` : 'Select a file'}>
-            Delete…
+          <button type="button" className="icon-button danger-icon" aria-label="Delete…" onClick={() => target && studio.startDelete(target)} disabled={target === undefined} title={target ? `Delete ${target} (Delete)` : 'Delete: select a file first'}>
+            <Icon name="delete" size={17} />
           </button>
         </div>
       </div>
-      <p className="hint">Double-click or Enter opens a file; click a folder to open or close it.</p>
-      <ul role="tree" aria-label="Workflow files" ref={list} onKeyDown={onKeyDown}>
+      <p className="visually-hidden" id="files-help">
+        Double-click or Enter opens a file; click a folder to open or close it.
+      </p>
+      <ul role="tree" aria-label="Workflow files" aria-describedby="files-help" ref={list} onKeyDown={onKeyDown}>
         {project !== undefined && (
           <li
             role="treeitem"
