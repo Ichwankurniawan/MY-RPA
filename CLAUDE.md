@@ -17,7 +17,10 @@ Guidance for AI agents and contributors working in this repository.
   `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 done.**
   **Scripting authorized by the owner on 2026-10-10 ("do both"): ADR-0045, plugin `MyRPA.Scripting` (sandboxed
   JavaScript, opt-in Python); scripting stays out of the engine and `src`.**
-  Phase 8 (AI Automation) must not start without the owner's explicit authorization.
+  **Phase 8 (AI Automation) authorized by the owner on 2026-10-11 ("proceed for the next phase"); plan
+  `docs/architecture/ai-automation-plan.md`, ADR-0047; slices A-1 → A-5, none done yet.** AI never executes anything:
+  answers are advice, generated drafts are validated and accepted by a person. Phase 9 (AI Agents & MCP) must not start
+  without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
