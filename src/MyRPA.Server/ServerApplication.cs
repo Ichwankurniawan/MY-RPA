@@ -10,6 +10,8 @@ using MyRPA.Browser.Contracts;
 using MyRPA.Core.Activities;
 using MyRPA.Core.Diagnostics;
 using MyRPA.Execution.Hosting;
+using MyRPA.Orchestration;
+using MyRPA.Orchestration.Sqlite;
 using MyRPA.Plugins;
 using MyRPA.Runtime;
 using MyRPA.Storage;
@@ -28,6 +30,9 @@ internal sealed class RunningServer(WebApplication app, Uri baseUri, PluginSet? 
 
     /// <summary>The loopback address the server listens on.</summary>
     public Uri BaseUri { get; } = baseUri;
+
+    /// <summary>The Runner listener's address (ADR-0051), if one was configured.</summary>
+    public Uri? RunnerUri => App.Services.GetRequiredService<ServerListeners>().RunnerUri;
 
     /// <summary>The one-time start link (opens a browser session), or null once used.</summary>
     public Uri? StartUri => App.Services.GetRequiredService<LocalSessions>().StartToken is { } token ? new Uri(BaseUri, $"/?token={token}") : null;
@@ -54,7 +59,11 @@ internal static class ServerApplication
         // ADR-0046: with no project named at all, the projects folder is Documents/Laconi Projects.
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var defaultProjectsRoot = documents.Length > 0 ? Path.Combine(documents, "Laconi Projects") : null;
-        if (ServerCommandLine.Parse(args, out var usageError, Path.Combine(AppContext.BaseDirectory, "wwwroot"), defaultProjectsRoot) is not { } options)
+
+        // ADR-0050: the orchestrator's store lives in the user's local application data unless --data names a folder.
+        var localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var defaultData = localData.Length > 0 ? Path.Combine(localData, "Laconi", "Server") : null;
+        if (ServerCommandLine.Parse(args, out var usageError, Path.Combine(AppContext.BaseDirectory, "wwwroot"), defaultProjectsRoot, defaultData) is not { } options)
         {
             await error.WriteLineAsync($"Error: {usageError}\nUsage: {ServerCommandLine.Usage}").ConfigureAwait(false);
             return 2;
@@ -83,8 +92,27 @@ internal static class ServerApplication
             return 5;
         }
 
-        await using var server = await StartAsync(options, plugins, cancellationToken).ConfigureAwait(false);
+        RunningServer server;
+        try
+        {
+            server = await StartAsync(options, plugins, cancellationToken).ConfigureAwait(false);
+        }
+        catch (System.Security.Cryptography.CryptographicException ex)
+        {
+            await error.WriteLineAsync($"Error: the Runner listener certificate could not be loaded: {ex.Message}").ConfigureAwait(false);
+            if (plugins is not null)
+            {
+                await plugins.DisposeAsync().ConfigureAwait(false);
+            }
+
+            return 2;
+        }
+
+        await using var running = server;
         await output.WriteLineAsync($"MyRPA Server (local mode) listening on {server.BaseUri}").ConfigureAwait(false);
+        await output.WriteLineAsync(options.DataDirectory is { } data
+            ? $"Orchestrator: data in {data}" + (server.RunnerUri is { } runnerUri ? $"; Runners connect to {runnerUri}" : $"; Runners on this machine connect to {server.BaseUri}")
+            : "Orchestrator: off (no --data folder)").ConfigureAwait(false);
         await output.WriteLineAsync(options.WebRoot is { } webRoot ? $"Web Studio: {webRoot}" : "Web Studio: not built (run 'npm run build' in web/studio, then build the server, or pass --web <dir>)").ConfigureAwait(false);
         await output.WriteLineAsync($"Open this link in your browser (valid once): {server.StartUri}").ConfigureAwait(false);
         await server.App.WaitForShutdownAsync(cancellationToken).ConfigureAwait(false);
@@ -112,9 +140,28 @@ internal static class ServerApplication
             ContentRootPath = AppContext.BaseDirectory,
             Args = [],
         });
+        Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions? runnerListen = null;
+        var runnerCertificate = options.RunnerCertificate is { } certificatePath
+            ? System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(certificatePath, Environment.GetEnvironmentVariable("MYRPA_RUNNER_CERT_PASSWORD"))
+            : null;
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             kestrel.Listen(IPAddress.Loopback, options.Port);
+            if (options.RunnerUrl is { } runnerUrl)
+            {
+                // ADR-0051: a separate listener for Runners (and token-authenticated tools), https unless on loopback.
+                var host = runnerUrl.Host.Trim('[', ']');
+                var address = host == "localhost" ? IPAddress.Loopback : IPAddress.Parse(host);
+                kestrel.Listen(address, runnerUrl.Port, listen =>
+                {
+                    runnerListen = listen;
+                    if (runnerCertificate is not null)
+                    {
+                        listen.UseHttps(runnerCertificate);
+                    }
+                });
+            }
+
             kestrel.AddServerHeader = false;
             kestrel.Limits.MaxRequestBodySize = options.MaxRequestBodyBytes;
         });
@@ -149,6 +196,15 @@ internal static class ServerApplication
         services.AddSingleton<Recordings>();
         services.AddSingleton<DebugRuns>();
         services.AddSingleton<AssistantHost>();
+        services.AddSingleton<ServerListeners>();
+        if (options.DataDirectory is { } dataDirectory)
+        {
+            // ADR-0049/0050: the orchestrator decides what runs where; Runners execute. It never runs a workflow here.
+            services.AddMyRpaSqliteOrchestrationStore(Path.Combine(dataDirectory, "orchestration.db"));
+            services.AddMyRpaOrchestration(options.ConfigureOrchestrator);
+            services.AddHostedService<OrchestratorBackground>();
+        }
+
         if (options.WebRoot is { } webRoot)
         {
             // Factory-created, so the container disposes it. Hidden, dot-prefixed and system files are never served.
@@ -165,8 +221,23 @@ internal static class ServerApplication
         }
 
         MapEndpoints(app);
+        if (options.DataDirectory is not null)
+        {
+            RunnerEndpoints.Map(app);
+            await app.Services.GetRequiredService<IOrchestrationStore>().InitializeAsync(cancellationToken).ConfigureAwait(false);
+        }
 
+        var listeners = app.Services.GetRequiredService<ServerListeners>();
+        listeners.StartedAt = app.Services.GetRequiredService<TimeProvider>().GetUtcNow();
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
+        if (runnerListen is not null && options.RunnerUrl is { } configured)
+        {
+            // Port 0 picks a free port; the bound one is known only now.
+            var port = runnerListen.IPEndPoint?.Port ?? configured.Port;
+            listeners.RunnerUri = new UriBuilder(configured) { Port = port }.Uri;
+            listeners.RunnerPort = port;
+        }
+
         plugins?.VerifyProviders(app.Services);
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
         return new RunningServer(app, new Uri(address.Replace("[::]", "127.0.0.1", StringComparison.Ordinal)), plugins);
@@ -199,11 +270,14 @@ internal static class ServerApplication
 
         var api = app.MapGroup("/api");
 
-        api.MapGet("/info", (ServerOptions options, ProjectStore store) => Results.Json(new
+        api.MapGet("/info", (ServerOptions options, ProjectStore store, IEnumerable<MyRPA.Ai.Contracts.IAgentToolCatalog> agentTools) => Results.Json(new
         {
             name = "MyRPA.Server",
             version = typeof(ServerApplication).Assembly.GetName().Version?.ToString(),
             mode = "local",
+            orchestrator = options.DataDirectory is not null,
+            // ADR-0048 amendment: the AI Agent plugin is loaded, so the Studio shows its tools (built-ins, MCP servers).
+            agentTools = agentTools.Any(),
             workflowSchemaVersions = new[] { MyRPA.Workflow.WorkflowSchemaVersion.Initial.ToString(), MyRPA.Workflow.WorkflowSchemaVersion.Graphs.ToString() },
             projects = store.Projects.Select(p => p.Name),
             // The workflow named on the command line (--open), which the Studio opens after connecting (W6).
@@ -235,6 +309,17 @@ internal static class ServerApplication
         MapStreams(api);
         MapRecordings(api);
         AssistantEndpoints.Map(api);
+        AgentToolEndpoints.Map(api);
+        if (app.Services.GetService<Orchestrator>() is not null)
+        {
+            OrchestratorEndpoints.Map(api);
+        }
+        else
+        {
+            // Without --data there is no orchestrator; its endpoints must not be mapped (their services do not exist).
+            api.MapMethods("/orchestrator/{**rest}", ["GET", "POST", "PUT", "PATCH", "DELETE"], () =>
+                Problem(StatusCodes.Status404NotFound, "The orchestrator is not enabled on this Server (start it with --data)."));
+        }
     }
 
     private static void MapProjects(RouteGroupBuilder api)

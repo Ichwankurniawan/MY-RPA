@@ -149,6 +149,10 @@ jobs:
         working-directory: web/studio
         run: npm run a11y
 
+      - name: Operations (Phase 10, real Runner process)
+        working-directory: web/studio
+        run: npm run operations
+
       - name: Performance
         working-directory: web/studio
         run: npm run perf

@@ -24,8 +24,12 @@ Guidance for AI agents and contributors working in this repository.
   **Phase 9 (AI Agents & MCP) authorized by the owner on 2026-10-12 (the Phase 9 brief, "Yes, proceed to Phase 9");
   plan `docs/architecture/ai-agents-plan.md`, ADR-0048; done (2026-10-12; `docs/architecture/ai-agents.md`).** `AI.Agent`
   (plugin `MyRPA.Ai.Agent`) is a bounded agent activity: tools only from the author's list, checked at every call,
-  budgets in the runtime, output validated; MCP client only in that plugin. Phase 10 (Orchestrator) must not start
-  without the owner's explicit authorization.
+  budgets in the runtime, output validated; MCP client only in that plugin.
+  **Phase 10 (Orchestrator) authorized by the owner on 2026-10-12 (the Phase 10 brief, "Yes, proceed to Phase 10");
+  plan `docs/architecture/orchestrator-plan.md`, ADR-0049/0050/0051; slices O-1 → O-6 done (2026-10-12;
+  `docs/architecture/orchestrator.md`).** The Server decides (`MyRPA.Orchestration`, SQLite store), Runners execute
+  (`src/MyRPA.Runner`, the existing engine through `ExecutionHost`); the Server never executes published jobs. Phase 11
+  (Enterprise Security & Operations) must not start without the owner's explicit authorization.
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.
@@ -53,6 +57,8 @@ dotnet run --project src/MyRPA.Cli -- --plugin samples/plugins/MyRPA.Samples.Dem
 cd web/studio && npm ci && npm test && npm run build   # the Studio (npm.cmd in Windows PowerShell)
 dotnet run --project src/MyRPA.Server -- --open samples/control-flow.json   # Studio + control plane (bundled Studio needs a build after npm run build)
 dotnet run --project src/MyRPA.Server -- --project samples --web web/studio/dist --port 0   # serve web/studio/dist directly
+dotnet run --project src/MyRPA.Runner -- run --config runner.json   # a Runner (token from Studio → Admin → Create Runner)
+cd web/studio && npm run operations   # Phase 10 in a real browser with a real Runner (needs the Release build)
 cd web/studio && npm run smoke && npm run manual && npm run a11y && npm run perf   # end to end (needs the Release build)
 dotnet format MyRPA.sln --verify-no-changes   # CI enforces naming rules the build does not
 pwsh plugins/MyRPA.Browser.Playwright/bin/Debug/net10.0/playwright.ps1 install chromium   # once, for browser tests
@@ -67,7 +73,9 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   Core, Workflow ← Runtime; Core, Workflow ← Storage; Core, Workflow ← Sdk; Core, Workflow, Sdk, Activities ← Plugins;
   everything ← Cli; Contracts and Browser.Contracts have no references (Browser.Contracts ← Server, Cli, the browser plugin;
   ADR-0039);
-  Core, Workflow, Contracts ← Execution.Hosting (ADR-0022); engine, Plugins, Contracts, Execution.Hosting ← Server. The engine and plugin host never reference Contracts or
+  Core, Workflow, Contracts ← Execution.Hosting (ADR-0022); engine, Plugins, Contracts, Execution.Hosting ← Server;
+  Core, Workflow, Contracts ← Orchestration ← Orchestration.Sqlite ← Server; the Runner composes like the CLI plus
+  Contracts, Execution.Hosting and Orchestration (ADR-0049). The engine and plugin host never reference Contracts or
   Execution.Hosting. Runtime must not reference Activities. The engine and built-in libraries never reference Sdk or
   Plugins. Nothing references a composition root.
 - `MyRPA.Core`, `MyRPA.Workflow` and `MyRPA.Sdk`: BCL only, no packages, plain `net10.0` (ADR-0004, ADR-0013).
@@ -77,7 +85,7 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
   with `ReferenceOutputAssembly="false"` and load them through the plugin host.
 - Technology packages live only in their provider plugin (`ArchitectureRules.TechnologyPackageOwners`):
   `Microsoft.Playwright` only in `plugins/MyRPA.Browser.Playwright`, `DocumentFormat.OpenXml` only in
-  `plugins/MyRPA.Spreadsheet`, `PdfPig` only in `plugins/MyRPA.Documents`, `MailKit`/`MimeKit` only in `plugins/MyRPA.Email`, the database drivers (`Microsoft.Data.Sqlite`, `Microsoft.Data.SqlClient`, `Npgsql`) only in `plugins/MyRPA.Database`, `SSH.NET` only in `plugins/MyRPA.Sftp`, `Jint` only in `plugins/MyRPA.Scripting`, `ModelContextProtocol.Core` only in `plugins/MyRPA.Ai.Agent`. Never in src, tests or other plugins.
+  `plugins/MyRPA.Spreadsheet`, `PdfPig` only in `plugins/MyRPA.Documents`, `MailKit`/`MimeKit` only in `plugins/MyRPA.Email`, the database drivers (`Microsoft.Data.Sqlite`, `Microsoft.Data.SqlClient`, `Npgsql`) only in `plugins/MyRPA.Database` (and `Microsoft.Data.Sqlite` also in `src/MyRPA.Orchestration.Sqlite`, ADR-0050), `SSH.NET` only in `plugins/MyRPA.Sftp`, `Jint` only in `plugins/MyRPA.Scripting`, `ModelContextProtocol.Core` only in `plugins/MyRPA.Ai.Agent`. Never in src, tests or other plugins.
 - Product plugins with side effects (ADR-0042): file paths only through `MyRPA.Sdk.Files.FileRootPolicy` (no silent
   overwrite, no folder delete, links refused); HTTP only in `plugins/MyRPA.Http` and AI provider plugins to their one configured endpoint (ADR-0047; allowedHosts per redirect hop, no
   credentials to another origin, TLS validation never off); secrets only through secret properties (MYRPA1066).
@@ -90,8 +98,9 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 - No `async void`, no mutable static fields, no static service locators, no implicit discovery/assembly scanning (ADR-0005).
 - Banned APIs (IL scan, ADR-0008/0012/0014): `Type.GetType(string)`, `Assembly.Load*`, `Assembly.GetType(string)`,
   `AssemblyLoadContext.LoadFrom*`, `Activator.CreateInstance(string…)`, `BinaryFormatter`, `Process.Start`,
-  `HttpClient`/`WebClient`/`WebRequest`, sockets. The only exemption is `MyRPA.Plugins.Loading.PluginLoadContext`
-  (`ArchitectureRules.BannedApiExemptions`); do not add others without an ADR.
+  `HttpClient`/`WebClient`/`WebRequest`, sockets. The only exemptions are `MyRPA.Plugins.Loading.PluginLoadContext` and
+  `MyRPA.Runner.RunnerConnection` (HttpClient, ADR-0049) (`ArchitectureRules.BannedApiExemptions`); do not add others
+  without an ADR.
 - Never describe `AssemblyLoadContext` as a sandbox or security boundary: in-process plugins are fully trusted
   (ADR-0015).
 - Adding a `src` project requires: an entry in `ArchitectureRules.SourceProjects`, a row in the overview's project table,
@@ -148,8 +157,10 @@ On this workstation the SDK was installed user-locally to `%USERPROFILE%\.dotnet
 - Edits are pure functions on the v1.0 JSON with refusal reasons (`document.ts`, `placement.ts`, `workflowData.ts`); the
   store is the small `useSyncExternalStore` store; diagnostics are located like WPF did (corpus parity, ADR-0035).
 - Keep the CSP (`default-src 'self'`: no inline styles or scripts), the session, Origin and anti-forgery checks.
-- The Studio is branded **Laconi Studio** (ADR-0044): colours only through the tokens in `style.css` (dark reference
-  theme), the `logo` icon is the Laconi mark, and the rail lists only pages that work. Code names (`MyRPA.*`, `myrpa`,
+- The web portal is branded **Laconi Automation** and **Studio** is its workflow builder (ADR-0044 and its amendment:
+  Home first; Studio and Deployments start with choosing a project): colours only through the tokens in `style.css` (the "Atlas"
+  scheme, amended 2026-10-12: graphite neutrals, cobalt brand and header, `--hue-*` family colours for icons and
+  markers only, status as dots, no orange, IBM Plex Sans bundled), the `logo` icon is the Laconi mark, and the rail lists only pages that work. Code names (`MyRPA.*`, `myrpa`,
   `MyRPA.Server`) are unchanged unless the owner decides otherwise.
 
 ## Code style

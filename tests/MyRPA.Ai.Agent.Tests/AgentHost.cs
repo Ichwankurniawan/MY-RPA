@@ -30,6 +30,8 @@ public sealed class AgentHost : IAsyncDisposable
 
     public PluginSet Plugins { get; }
 
+    public IServiceProvider Services => _services;
+
     public string Folder { get; }
 
     public LogCapture Log { get; }

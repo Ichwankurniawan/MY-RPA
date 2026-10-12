@@ -6,7 +6,8 @@ import { Studio } from './studio';
 import { catalog, FakeApi, FakeEventSource, helloWorld, immediately, settle } from './test-support';
 import type { ActivityDescriptor } from './types';
 
-// ADR-0044: the Laconi brand, the navigation rail, the Home page (real data only) and catalog-driven icons.
+// ADR-0044 (and its amendment): Laconi Automation, the rail (Studio starts with the projects), Home (real data only)
+// and catalog-driven icons.
 
 const http: ActivityDescriptor = {
   type: 'Http.Request',
@@ -40,58 +41,64 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Laconi shell', () => {
-  it('names the product Laconi Studio in the header and the page title', async () => {
+  it('names the portal Laconi Automation in the header and the page title', async () => {
     await renderStudio();
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Laconi Studio' })).toBeTruthy();
-    expect(document.title).toBe('Laconi Studio');
+    expect(screen.getByRole('heading', { level: 1, name: 'Laconi Automation' })).toBeTruthy();
+    expect(document.title).toBe('Laconi Automation');
   });
 
-  it('opens the workspace of the only project; Projects in the title bar lists the projects; the rail switches to Home and back', async () => {
+  it('starts on Home; Studio starts with the projects and opens the one chosen; the rail and the title bar move between them', async () => {
     await renderStudio();
     const rail = within(screen.getByRole('navigation', { name: 'Main' }));
 
-    // One project: no choice to make, so its workspace (the tree starts at the project).
-    expect(rail.getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
-    expect(screen.queryByRole('main', { name: 'Projects' })).toBeNull();
-    expect(screen.getByRole('list', { name: 'Activity catalog' })).toBeTruthy();
-    expect(screen.getByRole('tree', { name: 'Workflow files', hidden: true }).querySelector('.project-root .tree-name')!.textContent).toBe('demo');
-    const location = within(screen.getByRole('navigation', { name: 'Location' }));
-    expect(location.getByTestId('current-project').textContent).toBe('demo');
+    // Laconi Automation opens on Home: no editing toolbar and no workflow picker outside Studio's workspace.
+    expect(rail.getAllByRole('button').map((b) => b.textContent)).toEqual(['Home', 'Studio']);
+    expect(rail.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Workflow' })).toBeNull();
 
-    // The title bar's Projects link shows the projects; choosing one comes back to its workspace.
-    await act(async () => fireEvent.click(location.getByRole('button', { name: 'Projects' })));
-    const card = within(screen.getByRole('main', { name: 'Projects' })).getByRole('button', { name: 'Open project demo' });
+    // Studio starts with choosing a project.
+    await act(async () => fireEvent.click(rail.getByRole('button', { name: 'Studio' })));
+    expect(rail.getByRole('button', { name: 'Studio' }).getAttribute('aria-current')).toBe('page');
+    const card = within(screen.getByRole('main', { name: 'Studio' })).getByRole('button', { name: 'Open project demo' });
     expect(document.getElementById(card.getAttribute('aria-describedby')!)!.textContent).toMatch(/^2 workflows · 1 folder · changed /);
     await act(async () => fireEvent.click(card));
     expect(screen.getByRole('tab', { name: 'Files' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tree', { name: 'Workflow files' }).querySelector('.project-root .tree-name')!.textContent).toBe('demo');
+    const location = within(screen.getByRole('navigation', { name: 'Location' }));
+    expect(location.getByTestId('current-project').textContent).toBe('demo');
+    expect(screen.getByRole('toolbar', { name: 'File' })).toBeTruthy();
 
+    // Home and back: Studio returns to the project's workspace.
     fireEvent.click(rail.getByRole('button', { name: 'Home' }));
-    expect(rail.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
-    expect(screen.getByRole('main', { name: 'Laconi Studio' })).toBeTruthy();
+    expect(screen.getByRole('main', { name: 'Laconi Automation' })).toBeTruthy();
     expect(screen.queryByRole('tree', { name: 'Workflow files' })).toBeNull();
-
-    // Back on Workflows, the chosen project's workspace is where it was.
-    fireEvent.click(rail.getByRole('button', { name: 'Workflows' }));
+    await act(async () => fireEvent.click(rail.getByRole('button', { name: 'Studio' })));
     expect(screen.getByRole('tree', { name: 'Workflow files' })).toBeTruthy();
+
+    // The title bar's Studio link goes back to the projects.
+    await act(async () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Location' })).getByRole('button', { name: 'Studio' })));
+    expect(screen.getByRole('main', { name: 'Studio' })).toBeTruthy();
   });
 
-  it('lists the real project workflows and activities on Home, and opens a workflow in the designer', async () => {
+  it('shows the projects, the workflows, runs and the platform on Home, and opens a workflow in Studio', async () => {
     await renderStudio(withPlugin());
-    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
-    const home = within(screen.getByRole('main', { name: 'Laconi Studio' }));
+    const home = within(screen.getByRole('main', { name: 'Laconi Automation' }));
 
+    expect(home.getByRole('button', { name: 'Open demo in Studio' }).closest('li')!.textContent).toContain('2 workflows');
     expect(home.getByText(/no runs yet/i)).toBeTruthy();
     expect(home.getByText(`${catalog.length} built-in, 1 from plugins.`, { exact: false })).toBeTruthy();
+    expect(home.queryByRole('heading', { name: 'Operations' })).toBeNull();
 
     await act(async () => fireEvent.click(home.getByRole('button', { name: 'Open flows/second.json' })));
     await act(settle);
 
     expect(screen.getByTestId('document-title').textContent).toBe('flows/second.json');
-    expect(screen.getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
+    expect(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Studio' }).getAttribute('aria-current')).toBe('page');
   });
 
-  it('reopens the project used last in this browser when there are several', async () => {
+  it('preselects the project used last in this browser for Home, and Studio still starts with the projects', async () => {
     const api = new FakeApi();
     const info = api.info.bind(api);
     api.info = async () => ({ ...(await info()), projects: ['other', 'demo'] });
@@ -101,10 +108,11 @@ describe('Laconi shell', () => {
     render(<App studio={studio} />);
     await act(settle);
 
-    expect(screen.queryByRole('main', { name: 'Projects' })).toBeNull();
-    expect(screen.getByTestId('current-project').textContent).toBe('demo');
+    expect(screen.getByRole('heading', { name: 'Workflows in demo' })).toBeTruthy();
+    await act(async () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Studio' })));
+    expect(screen.getByRole('main', { name: 'Studio' })).toBeTruthy();
 
-    // Entering another project makes it the one reopened next time.
+    // Entering another project makes it the one preselected next time.
     await act(async () => studio.enterProject('other'));
     expect(preferences.values.get('myrpa.ui.lastProject')).toBe('"other"');
   });
@@ -123,6 +131,7 @@ describe('Laconi shell', () => {
       return project === 'empty' ? { workflows: [], folders: [] } : listing();
     }) as unknown as typeof api.workflows;
     await renderStudio(api);
+    await act(async () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Studio' })));
     const projects = within(screen.getByRole('list', { name: 'Projects' }));
     const details = (name: string) => document.getElementById(projects.getByRole('button', { name: `Open project ${name}` }).getAttribute('aria-describedby')!)!.textContent;
 

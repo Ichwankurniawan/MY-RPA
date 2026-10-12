@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ApiError } from './api';
 import { App } from './App';
 import { Studio } from './studio';
-import { FakeApi, FakeEventSource, immediately, settle } from './test-support';
+import { FakeApi, FakeEventSource, immediately, settle, enterStudio } from './test-support';
 import type { ExecutionEvent, GenerationAnswer } from './types';
 
 // The AI Workflow Assistant in the Studio (ADR-0047): propose, clarify, review, then apply or discard. Nothing runs.
@@ -40,6 +40,7 @@ async function renderStudio(api = new FakeApi(), open?: string) {
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { validateDelayMs: undefined });
   render(<App studio={studio} />);
   await act(settle);
+  await enterStudio();
   if (open) {
     await act(async () => studio.open(open));
   }

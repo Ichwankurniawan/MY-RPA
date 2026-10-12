@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The orchestrator's durable store on SQLite (ADR-0050): one file in the Server's data folder. The only src project that
+    may reference a database driver (Microsoft.Data.Sqlite); the engine, the Runner and the plugins never see it.
+  -->
+  <PropertyGroup>
+    <RootNamespace>MyRPA.Orchestration.Sqlite</RootNamespace>
+    <Description>MyRPA orchestrator store on SQLite.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyRPA.Orchestration\MyRPA.Orchestration.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+</Project>

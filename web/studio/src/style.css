@@ -1,43 +1,56 @@
-/* Laconi Studio (ADR-0044, on the UX-1 tokens). Colours are tokens with a light and a dark theme: the system's by
-   default, or the one chosen in View › Theme (data-theme on <html>). No inline styles (CSP). Dark is the brand's
-   reference theme: deep navy surfaces, lime for the primary action, selection and focus, cyan for information. */
+/* Laconi Studio (ADR-0044, amended 2026-10-12: "Atlas"). Colours are tokens with a light and a dark theme: the system's
+   by default, or the one chosen in View › Theme (data-theme on <html>). No inline styles (CSP). Warm graphite neutrals,
+   cobalt for the brand, the primary action, selection and focus, a solid cobalt header, and one hue per activity family
+   and per page (--hue-*), used only for icons and markers. Status colours stay separate. IBM Plex Sans (bundled). */
 :root {
-  --bg: #f4f6f9;
+  --bg: #f4f4f2;
   --panel: #ffffff;
-  --panel-2: #f1f5f9;
-  --chrome: #ffffff;
-  --border: #dde3ea;
-  --border-strong: #b8c2cc;
-  --text: #0f172a;
-  --muted: #475569;
-  --accent: #4d7c0f;
-  --accent-strong: #3f6212;
+  --panel-2: #f7f7f5;
+  --chrome: #fafaf9;
+  --border: #e0e0dc;
+  --border-strong: #c9c9c4;
+  --text: #1c1d20;
+  --muted: #63656b;
+  --accent: #2f5bd8;
+  --accent-strong: #2549b8;
   --accent-text: #ffffff;
-  --accent-soft: #ecfccb;
-  --selected: #e3f5c6;
-  --primary: #a3e635;
-  --primary-hover: #93d42a;
-  --primary-text: #0f172a;
-  --info: #0e7490;
-  --error: #b91c1c;
-  --error-bg: #fde4e4;
-  --ok: #15803d;
-  --ok-bg: #dcfce7;
-  --info-bg: #e0f6fb;
-  --warn: #92400e;
-  --warn-bg: #fef3c7;
-  --container: #f1f5f4;
-  --canvas: #f7f9fb;
-  --canvas-dot: #dfe5ec;
+  --accent-soft: #e8eefc;
+  --selected: #dfe7fb;
+  --primary: #2f5bd8;
+  --primary-hover: #2549b8;
+  --primary-text: #ffffff;
+  --info: #0b77a8;
+  --error: #c93131;
+  --error-bg: #fbe7e7;
+  --ok: #146c3e;
+  --ok-bg: #e3f4ea;
+  --info-bg: #e5f3fa;
+  --warn: #765a00;
+  --warn-bg: #f8f0d6;
+  --container: #f2f2ef;
+  --canvas: #f7f7f5;
+  --canvas-dot: #dcdcd7;
 
-  --scroll-thumb: #c7d0da;
-  --scroll-thumb-hover: #94a3b8;
-  --radius: 6px;
-  --radius-lg: 10px;
+  --scroll-thumb: #cfcfca;
+  --scroll-thumb-hover: #a3a49f;
+    --hue-blue: #2f5bd8;
+    --hue-violet: #6d4fd6;
+    --hue-teal: #0f8a7e;
+    --hue-gold: #8a6a00;
+    --hue-pink: #c0367f;
+    --hue-indigo: #4b51c9;
+    --hue-sky: #0b77a8;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --header: #1d3f9e;
+  --header-ink: #ffffff;
+  --header-muted: #c3d0f5;
+  --header-control: rgb(255 255 255 / 0.12);
+  --header-control-border: rgb(255 255 255 / 0.28);
   --shadow: 0 1px 2px rgb(15 23 42 / 0.06);
   --shadow-lg: 0 8px 24px rgb(15 23 42 / 0.12);
   color-scheme: light;
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--bg);
@@ -45,36 +58,43 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0f172a;
-    --panel: #111f2b;
-    --panel-2: #162736;
-    --chrome: #07131d;
-    --border: #263746;
-    --border-strong: #35495b;
-    --text: #f8fafc;
-    --muted: #94a3b8;
-    --accent: #a3e635;
-    --accent-strong: #bef264;
-    --accent-text: #0f172a;
-    --accent-soft: #1b2b1f;
-    --selected: #1e3322;
-    --primary: #a3e635;
-    --primary-hover: #bef264;
-    --primary-text: #0f172a;
-    --info: #22d3ee;
+    --bg: #141517;
+    --panel: #1b1c1f;
+    --panel-2: #222327;
+    --chrome: #17181a;
+    --border: #2b2d32;
+    --border-strong: #383a40;
+    --text: #e8e8e6;
+    --muted: #9a9b9f;
+    --accent: #6e94ff;
+    --accent-strong: #8eabff;
+    --accent-text: #0b1020;
+    --accent-soft: #1c2337;
+    --selected: #22304f;
+    --primary: #3b6cf6;
+    --primary-hover: #5580f8;
+    --primary-text: #ffffff;
+    --info: #56c2f0;
     --error: #f87171;
-    --error-bg: #3a1d26;
+    --error-bg: #3a1f22;
     --ok: #4ade80;
-    --ok-bg: #12301f;
-    --info-bg: #0d2c38;
-    --warn: #fbbf24;
-    --warn-bg: #382c12;
-    --container: #0c1a25;
-    --canvas: #0b1620;
-    --canvas-dot: #1b2b3a;
+    --ok-bg: #15291e;
+    --info-bg: #13283a;
+    --warn: #e8c25a;
+    --warn-bg: #33291a;
+    --container: #18191c;
+    --canvas: #121315;
+    --canvas-dot: #26282c;
 
-    --scroll-thumb: #2b3d4e;
-    --scroll-thumb-hover: #46607a;
+    --scroll-thumb: #34363b;
+    --scroll-thumb-hover: #4b4e55;
+    --hue-blue: #6e94ff;
+    --hue-violet: #a78bfa;
+    --hue-teal: #2dd4bf;
+    --hue-gold: #e8c25a;
+    --hue-pink: #f472b6;
+    --hue-indigo: #818cf8;
+    --hue-sky: #56c2f0;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.45);
     color-scheme: dark;
@@ -82,36 +102,43 @@
 }
 
 :root[data-theme='dark'] {
-  --bg: #0f172a;
-  --panel: #111f2b;
-  --panel-2: #162736;
-  --chrome: #07131d;
-  --border: #263746;
-  --border-strong: #35495b;
-  --text: #f8fafc;
-  --muted: #94a3b8;
-  --accent: #a3e635;
-  --accent-strong: #bef264;
-  --accent-text: #0f172a;
-  --accent-soft: #1b2b1f;
-  --selected: #1e3322;
-  --primary: #a3e635;
-  --primary-hover: #bef264;
-  --primary-text: #0f172a;
-  --info: #22d3ee;
+  --bg: #141517;
+  --panel: #1b1c1f;
+  --panel-2: #222327;
+  --chrome: #17181a;
+  --border: #2b2d32;
+  --border-strong: #383a40;
+  --text: #e8e8e6;
+  --muted: #9a9b9f;
+  --accent: #6e94ff;
+  --accent-strong: #8eabff;
+  --accent-text: #0b1020;
+  --accent-soft: #1c2337;
+  --selected: #22304f;
+  --primary: #3b6cf6;
+  --primary-hover: #5580f8;
+  --primary-text: #ffffff;
+  --info: #56c2f0;
   --error: #f87171;
-  --error-bg: #3a1d26;
+  --error-bg: #3a1f22;
   --ok: #4ade80;
-  --ok-bg: #12301f;
-  --info-bg: #0d2c38;
-  --warn: #fbbf24;
-  --warn-bg: #382c12;
-  --container: #0c1a25;
-  --canvas: #0b1620;
-  --canvas-dot: #1b2b3a;
+  --ok-bg: #15291e;
+  --info-bg: #13283a;
+  --warn: #e8c25a;
+  --warn-bg: #33291a;
+  --container: #18191c;
+  --canvas: #121315;
+  --canvas-dot: #26282c;
 
-  --scroll-thumb: #2b3d4e;
-  --scroll-thumb-hover: #46607a;
+  --scroll-thumb: #34363b;
+  --scroll-thumb-hover: #4b4e55;
+    --hue-blue: #6e94ff;
+    --hue-violet: #a78bfa;
+    --hue-teal: #2dd4bf;
+    --hue-gold: #e8c25a;
+    --hue-pink: #f472b6;
+    --hue-indigo: #818cf8;
+    --hue-sky: #56c2f0;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.45);
   color-scheme: dark;
@@ -301,7 +328,7 @@ label.command select { font-size: 12px; padding: 1px 4px; color: var(--text); }
 .drag-overlay.refused { cursor: not-allowed; }
 .drop-indicator { position: fixed; z-index: 10; height: 3px; margin-top: -2px; background: var(--accent); border-radius: 2px; pointer-events: none; }
 .drop-indicator.zone { margin-top: 0; background: none; border: 2px solid var(--accent); border-radius: 6px; }
-.badge { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--border); }
+.badge { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--border); color: var(--text); }
 .badge.error, .badge.status-failed { background: var(--error-bg); color: var(--error); }
 .badge.status-succeeded { background: var(--ok-bg); color: var(--ok); }
 .badge.status-running { background: var(--info-bg); color: var(--accent); }
@@ -681,3 +708,136 @@ button.danger:not(:disabled) { background: var(--error); color: var(--primary-te
 .assistant-changes .change-removed { color: var(--error); }
 .assistant-changes .change-changed, .assistant-changes .change-moved { color: var(--info); }
 .assistant pre { max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+/* Phase 10 operations pages (ADR-0049): Monitoring, Deployments, Robots, Administration. Tokens only (ADR-0044). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.ops-page { display: grid; gap: 16px; align-content: start; }
+.ops-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ops-card { padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); min-width: 0; }
+.ops-card h3 { margin: 0 0 10px; font-size: 15px; font-weight: 650; }
+.ops-card h4 { margin: 14px 0 6px; font-size: 13px; font-weight: 650; color: var(--muted); }
+.ops-card .page-header h3 { margin: 0; }
+.ops-detail { border-color: var(--accent); }
+.ops-figures { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.ops-figure { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); }
+.ops-figure strong { font-size: 22px; font-weight: 700; }
+.ops-figure span { color: var(--muted); font-size: 12px; }
+.ops-chart { margin: 0; }
+.ops-chart svg { width: 100%; height: 140px; display: block; background: var(--canvas); border-radius: var(--radius); }
+.ops-chart figcaption { margin-top: 6px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 12px; }
+.bar-ok { fill: var(--ok); }
+.bar-failed { fill: var(--error); }
+.bar-cancelled { fill: var(--warn); }
+.bar-interrupted { fill: var(--info); }
+.legend::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; vertical-align: -1px; }
+.legend.bar-ok::before { background: var(--ok); }
+.legend.bar-failed::before { background: var(--error); }
+.legend.bar-cancelled::before { background: var(--warn); }
+.legend.bar-interrupted::before { background: var(--info); }
+.ops-table-wrap { overflow-x: auto; }
+.ops-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ops-table th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border-strong); }
+.ops-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ops-table tr.selected td { background: var(--accent-soft); }
+.ops-table tr.selected .link { color: var(--text); font-weight: 650; }
+.ops-table .hint { margin: 2px 0 0; font-size: 12px; }
+.ops-pager { display: flex; align-items: center; gap: 10px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.ops-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: 13px; }
+.ops-facts dt { color: var(--muted); }
+.ops-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ops-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.ops-list.error li { color: var(--error); }
+.ops-events { list-style: none; margin: 0; padding: 8px; max-height: 320px; overflow: auto; background: var(--canvas); border-radius: var(--radius); font-family: ui-monospace, Consolas, monospace; font-size: 12px; display: grid; gap: 2px; }
+.ops-events .event-time { color: var(--muted); }
+.ops-events .event-kind { color: var(--info); }
+.ops-events .event-error { color: var(--error); }
+.ops-data { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.ops-data pre, .ops-secret pre { margin: 4px 0 0; padding: 8px; max-height: 240px; overflow: auto; background: var(--canvas); border-radius: var(--radius); font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ops-form { display: grid; grid-template-columns: max-content minmax(180px, 360px); gap: 6px 12px; align-items: center; margin: 6px 0; }
+.ops-form > button, .ops-form > .ops-wide, .ops-form > .ops-result { grid-column: 1 / -1; justify-self: start; }
+.ops-form .ops-argument { grid-column: 1 / -1; display: grid; grid-template-columns: max-content minmax(180px, 360px); gap: 12px; align-items: center; }
+.ops-checks { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; margin: 0; max-height: 220px; overflow-y: auto; display: grid; gap: 4px; min-width: min(100%, 360px); }
+.ops-checks legend { padding: 0 4px; }
+.ops-checks label { display: flex; align-items: center; gap: 6px; }
+.ops-result { margin: 8px 0; padding: 6px 10px; border-radius: var(--radius); font-size: 13px; }
+.ops-result.ok { background: var(--ok-bg); color: var(--ok); }
+.ops-result.error { background: var(--error-bg); color: var(--error); }
+.ops-secret { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--radius); background: var(--warn-bg); }
+.badge.status-queued, .badge.status-assigned, .badge.status-published, .badge.status-viewer, .badge.status-operator, .badge.status-developer, .badge.status-admin { background: var(--info-bg); color: var(--info); }
+.badge.status-deployed, .badge.status-available { background: var(--ok-bg); color: var(--ok); }
+.badge.status-busy { background: var(--info-bg); color: var(--accent); }
+.badge.status-timedout, .badge.status-error, .badge.status-disabled { background: var(--error-bg); color: var(--error); }
+.badge.status-interrupted, .badge.status-offline { background: var(--warn-bg); color: var(--warn); }
+
+/* Laconi Atlas (ADR-0044 amendment, 2026-10-12): the header, rail, family colours, status dots and quiet corners. */
+.titlebar { background: var(--header); color: var(--header-ink); border-bottom: 0; }
+.titlebar .brand .wordmark, .titlebar .document-title { color: var(--header-ink); }
+.titlebar .brand .product, .titlebar label { color: var(--header-muted); }
+.titlebar button, .titlebar select { color: var(--header-ink); background: var(--header-control); border-color: var(--header-control-border); }
+.titlebar button:hover:not(:disabled) { border-color: var(--header-ink); }
+.titlebar button.link, .titlebar a { color: var(--header-ink); background: none; border-color: transparent; }
+.titlebar select option { color: var(--text); background: var(--panel); }
+.titlebar .icon { color: var(--header-ink); }
+.icon-logo .logo-facet { fill: var(--logo-facet, #3b6cf6); stroke: var(--logo-facet, #3b6cf6); }
+.icon-logo .logo-mark { stroke: var(--logo-mark, #6e94ff); }
+.titlebar .icon-logo { --logo-facet: #8eabff; --logo-mark: #ffffff; }
+.titlebar .icon-logo .logo-facet { opacity: 0.6; }
+
+.rail-item { border-radius: 0; }
+.rail-item .icon { color: var(--muted); }
+.rail-item[aria-current='page'] { color: var(--text); background: var(--panel-2); box-shadow: inset 2px 0 0 var(--rail-hue, var(--accent)); }
+.rail-item[aria-current='page'] .icon { color: var(--rail-hue, var(--accent)); }
+.rail-item[data-page='workflows'], .rail-item[data-page='projects'] { --rail-hue: var(--hue-blue); }
+.rail-item[data-page='deployments'] { --rail-hue: var(--hue-violet); }
+.rail-item[data-page='monitoring'] { --rail-hue: var(--hue-teal); }
+.rail-item[data-page='robots'] { --rail-hue: var(--hue-gold); }
+.rail-item[data-page='administration'] { --rail-hue: var(--hue-indigo); }
+.rail-item[data-page='home'] { --rail-hue: var(--muted); }
+
+.icon.family-control { --family: var(--hue-blue); }
+.icon.family-data { --family: var(--hue-violet); }
+.icon.family-browser { --family: var(--hue-teal); }
+.icon.family-files { --family: var(--hue-gold); }
+.icon.family-email, .icon.family-ai { --family: var(--hue-pink); }
+.icon.family-database { --family: var(--hue-indigo); }
+.icon.family-script { --family: var(--hue-sky); }
+.icon.family-other { --family: var(--muted); }
+.icon[class*='family-'], .toolbox button.insert .icon[class*='family-'], .card-header > .icon[class*='family-'], .node.selected .card-header > .icon[class*='family-'] { color: var(--family); }
+.node.selected { box-shadow: inset 3px 0 0 var(--accent); }
+
+.badge[class*='status-'] { display: inline-flex; align-items: center; gap: 6px; padding: 0; border-radius: 0; background: none; color: var(--text); font-weight: 500; }
+.badge[class*='status-']::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--dot, var(--muted)); }
+.badge.status-succeeded, .badge.status-deployed, .badge.status-available { --dot: var(--ok); }
+.badge.status-failed, .badge.status-timedout, .badge.status-error, .badge.status-disabled { --dot: var(--error); }
+.badge.status-running, .badge.status-busy, .badge.status-assigned { --dot: var(--accent); }
+.badge.status-interrupted, .badge.status-offline, .badge.status-paused { --dot: var(--warn); }
+.badge.status-queued, .badge.status-cancelled, .badge.status-published { --dot: var(--muted); }
+.badge.status-admin, .badge.status-developer, .badge.status-operator, .badge.status-viewer { --dot: var(--hue-indigo); }
+
+.home-card, .ops-card, .ops-figure, .project-card { border-radius: var(--radius); }
+.page-title .icon, .project-card .icon, .home-list .icon { color: var(--accent); }
+h2, .ops-card h3 { letter-spacing: 0.06em; }
+.titlebar .location { color: var(--header-muted); }
+.titlebar .location .crumb { color: var(--header-muted); background: none; border-color: transparent; }
+.titlebar .location .crumb:hover:not(:disabled) { color: var(--header-ink); background: var(--header-control); }
+.titlebar .location .crumb[data-testid="current-project"] { color: var(--header-ink); }
+.badge:not([class*='status-']):not(.secret):not(.error):not(.start):not(.final) { color: var(--text); }
+
+/* Agent tools (ADR-0048 amendment): MCP servers and the tools picker under an AI Agent's tools. */
+.mcp-servers { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.mcp-server h4 { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ops-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0 0; }
+.ops-facts dt { color: var(--muted); }
+.ops-facts dd { margin: 0; overflow-wrap: anywhere; }
+.agent-tools-picker { margin-top: 6px; display: grid; gap: 6px; }
+.agent-tool-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.agent-tool-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--radius); }
+.agent-tool-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.agent-tool-add select { max-width: 100%; }
+
+/* Laconi Automation Home (ADR-0044 amendment): today's operations as figures. */
+.home-figures { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.home-figures li { color: var(--muted); }
+.home-figures strong { display: block; color: var(--text); font-size: 20px; font-weight: 700; }
+.home-project { display: flex; align-items: center; gap: 8px; }
+.home-project small { margin-left: auto; color: var(--muted); white-space: nowrap; }

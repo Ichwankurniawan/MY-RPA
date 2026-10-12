@@ -4,7 +4,7 @@ import { App } from './App';
 import { memoryDrafts } from './drafts';
 import { serialize } from './document';
 import { Studio } from './studio';
-import { FakeApi, FakeEventSource, immediately, settle } from './test-support';
+import { FakeApi, FakeEventSource, immediately, settle, enterStudio } from './test-support';
 import type { JsonObject } from './types';
 
 const workflow: JsonObject = {
@@ -31,11 +31,14 @@ async function renderStudio(api = new FakeApi()) {
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { drafts: memoryDrafts(), validateDelayMs: undefined });
   render(<App studio={studio} />);
   await act(settle);
+  await enterStudio();
   fireEvent.change(screen.getByRole('combobox', { name: 'Workflow' }), { target: { value: 'w.json' } });
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     await settle();
   });
+  // Entering a project shows its files; the activities are the left panel's first tab.
+  fireEvent.click(screen.getByRole('tab', { name: /^Activities/ }));
   return { studio, api, state: () => studio.store.get() };
 }
 

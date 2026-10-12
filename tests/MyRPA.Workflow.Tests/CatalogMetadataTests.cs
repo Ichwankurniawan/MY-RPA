@@ -71,6 +71,26 @@ public sealed class CatalogMetadataTests
         Assert.Throws<ArgumentException>(() => new ActivityPropertyDefinition("p", ActivityPropertyKind.Expression) { IsMultiline = true });
     }
 
+    [Fact]
+    public void EditorHint_RoundTrips_AndIsOnlyForTextPropertiesWithASimpleName()
+    {
+        var agent = new ActivityDescriptor(
+            new ActivityTypeName("Test.Agent"),
+            "Agent",
+            "Test",
+            "Uses tools.",
+            [new ActivityPropertyDefinition("tools", ActivityPropertyKind.Text) { IsMultiline = true, Editor = "agentTools" }, new ActivityPropertyDefinition("name", ActivityPropertyKind.Text)]);
+
+        var json = ActivityCatalogJson.Write([agent]);
+        var read = Assert.Single(ActivityCatalogJson.Read(json).Descriptors);
+
+        Assert.Contains("\"editor\": \"agentTools\"", json, StringComparison.Ordinal);
+        Assert.Equal(["agentTools", null], read.Properties.Select(p => p.Editor));
+        Assert.Throws<ArgumentException>(() => new ActivityPropertyDefinition("p", ActivityPropertyKind.Expression) { Editor = "agentTools" });
+        Assert.Throws<ArgumentException>(() => new ActivityPropertyDefinition("p", ActivityPropertyKind.Text) { Editor = "agent-tools" });
+        Assert.Throws<ArgumentException>(() => new ActivityPropertyDefinition("p", ActivityPropertyKind.Text) { Editor = "" });
+    }
+
     [Theory]
     [InlineData("\"valueType\": \"String\"", "\"valueType\": \"Number\"", "valueType")]
     [InlineData("\"secret\": true", "\"secret\": \"yes\"", "secret")]

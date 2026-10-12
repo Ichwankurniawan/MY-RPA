@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Phase 10 end to end (ADR-0049): a real Server (Kestrel on loopback, SQLite store) and real Runners (the Runner's own
+    composition root) in one process, talking the Runner protocol over HTTP. Plugins are loaded through the plugin host.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyRPA.Server\MyRPA.Server.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Runner\MyRPA.Runner.csproj" />
+    <!-- Built first, never compiled against: loaded through the plugin host (AI.Agent with the scripted provider). -->
+    <ProjectReference Include="..\fixtures\MyRPA.Tests.ScriptedAi\MyRPA.Tests.ScriptedAi.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\MyRPA.Ai.Agent\MyRPA.Ai.Agent.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ScriptedAiDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\fixtures\MyRPA.Tests.ScriptedAi\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>AgentPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Ai.Agent\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SamplesDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\samples</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

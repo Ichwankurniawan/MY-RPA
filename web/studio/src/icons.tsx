@@ -9,10 +9,30 @@ const paths = {
   // triangle. Brand colours, not currentColor, so the mark reads the same on dark and light backgrounds.
   logo: (
     <>
-      <path d="M6.6 4.6L19.2 12L6.6 18.4Z" fill="#65a30d" stroke="#65a30d" strokeWidth={4} />
-      <path d="M6.6 4.6V18.4L19.2 12" stroke="#a3e635" strokeWidth={4.4} />
+      <path className="logo-facet" d="M6.6 4.6L19.2 12L6.6 18.4Z" fill="#3b6cf6" stroke="#3b6cf6" strokeWidth={4} />
+      <path className="logo-mark" d="M6.6 4.6V18.4L19.2 12" stroke="#6e94ff" strokeWidth={4.4} />
     </>
   ),
+  // Phase 10 operations pages (ADR-0049): a trend line, an upward arrow out of a box, a robot head, a shield.
+  monitor: (
+    <>
+      <path d="M4 19.5h16" />
+      <path d="M5 15l4-4.5 3.5 3 6.5-7" />
+    </>
+  ),
+  deploy: (
+    <>
+      <path d="M12 15V4M7.5 8.5L12 4l4.5 4.5" />
+      <path d="M5 13.5v4.5A1.5 1.5 0 0 0 6.5 19.5h11a1.5 1.5 0 0 0 1.5-1.5v-4.5" />
+    </>
+  ),
+  robot: (
+    <>
+      <rect x="5" y="8" width="14" height="10.5" rx="2.5" />
+      <path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M3 12.5v2.5M21 12.5v2.5" />
+    </>
+  ),
+  admin: <path d="M12 3.5l7 2.8v5.2c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V6.3zM9 12l2.2 2.2L15.5 10" />,
   globe: (
     <>
       <circle cx="12" cy="12" r="8.5" />
@@ -316,10 +336,10 @@ export type IconName = keyof typeof paths;
 export const iconNames = Object.keys(paths) as IconName[];
 
 /** One icon of the MyRPA set; decorative unless `label` is given (then it is an image with that name). */
-export function Icon({ name, size = 18, label }: { name: IconName; size?: number; label?: string }) {
+export function Icon({ name, size = 18, label, className }: { name: IconName; size?: number; label?: string; className?: string }) {
   return (
     <svg
-      className={`icon icon-${name}`}
+      className={className === undefined ? `icon icon-${name}` : `icon icon-${name} ${className}`}
       viewBox="0 0 24 24"
       width={size}
       height={size}

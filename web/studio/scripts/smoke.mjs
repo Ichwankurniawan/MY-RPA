@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { check, proposalAnswer, repo, results, scriptedAi, studioDir, withStudio, showTab } from './harness.mjs';
+import { check, enterProject, proposalAnswer, repo, results, scriptedAi, studioDir, withStudio, showTab } from './harness.mjs';
 
 const step = (text) => console.log(`  ✓ ${text}`);
 
@@ -71,6 +71,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const selected = () => page.locator('[role=treeitem][data-node-id][aria-selected=true]').getAttribute('data-node-id');
   const expectTree = async (expected, what) => check((await treeIds()) === expected, `${what}: tree ${await treeIds()}`);
   const openWorkflow = async (name) => {
+    await enterProject(page);
     await page.getByRole('combobox', { name: 'Workflow' }).selectOption(name);
     await click('Open');
     await title.filter({ hasText: new RegExp(`^${name.replace('.', '\\.')}$`) }).waitFor();
@@ -766,7 +767,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.goto(await startServer(['--project', project, '--projects-root', projectsRoot, '--web', join(studioDir, 'dist')]));
   await page.getByText('Connected to MyRPA.Server').waitFor();
   const railButton = (name) => page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name, exact: true });
-  await railButton('Projects').click();
+  await railButton('Studio').click();
   await page.getByRole('button', { name: 'New project…' }).waitFor();
   check((await page.getByRole('toolbar', { name: 'File' }).count()) === 0, 'no editing toolbar on the Projects page');
   await page.getByRole('button', { name: 'New project…' }).click();
@@ -774,7 +775,8 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click();
   await page.getByTestId('current-project').filter({ hasText: /^Smoke Project$/ }).waitFor();
   check(existsSync(join(projectsRoot, 'Smoke Project')), 'the project folder was created in the projects folder');
-  await railButton('Projects').click();
+  // In a project's workspace the title bar's Studio link goes back to the projects.
+  await page.getByRole('navigation', { name: 'Location' }).getByRole('button', { name: 'Studio', exact: true }).click();
   await page.getByRole('button', { name: 'Delete project Smoke Project' }).click();
   await page.getByRole('dialog').getByLabel('Type Smoke Project to confirm').fill('Smoke Project');
   await page.getByRole('dialog').getByRole('button', { name: 'Delete project' }).click();
@@ -790,6 +792,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   const ai = scriptedAi(join(project, '..', 'ai'), [proposalAnswer(aiWorkflow, ['Log a greeting'])]);
   await page.goto(await startServer(['--project', project, '--plugin-config', ai.config, '--web', join(studioDir, 'dist')]));
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await enterProject(page);
   const runsBefore = runRequests;
   await page.getByRole('tab', { name: /^Assistant/ }).click();
   await page.getByTestId('assistant-status').filter({ hasText: 'AI provider: scripted' }).waitFor();

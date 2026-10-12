@@ -3,6 +3,7 @@
 // Every change is a document edit (one undo step per field while typing); validation stays on the server.
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { AgentToolsEditor } from './AgentTools';
 import { useStudio, useStudioState } from './context';
 import { ExpressionInput } from './ExpressionInput';
 import { indexDocument, isObject, nodeAt, type Step } from './document';
@@ -420,7 +421,7 @@ function PropertyEditor({
       </select>
     );
   } else if (descriptor.kind === 'Text' && descriptor.multiline) {
-    editor = (
+    const box = (
       <textarea
         id={id}
         className="code multiline-text"
@@ -433,6 +434,16 @@ function PropertyEditor({
         onChange={(e) => onChange(e.target.value)}
       />
     );
+    // A catalog editor hint (ADR-0048 amendment) adds a picker; the text stays the value and stays editable.
+    editor =
+      descriptor.editor === 'agentTools' ? (
+        <>
+          {box}
+          <AgentToolsEditor descriptor={descriptor} text={text} disabled={disabled} onChange={onChange} />
+        </>
+      ) : (
+        box
+      );
   } else if (descriptor.kind === 'Expression') {
     editor = (
       <ExpressionInput

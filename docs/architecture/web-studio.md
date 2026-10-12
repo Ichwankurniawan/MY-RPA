@@ -102,27 +102,43 @@ The dev proxy forwards `/api` and the start link; it is development-only (ADR-00
   - **Elsewhere:** **Fix with the assistant** in Problems; **Ask the assistant why** on a failed run, then **Propose a
     fix**.
   - Unavailable without an AI provider plugin. Nothing is run.
-- **Projects** ([ADR-0046](../adr/0046-projects-folder-create-and-delete.md)): its own rail page, without the editing
-  toolbar. It lists every project (the `--project` folders, then those of the server's projects folder) with its number
+- **Agent tools** ([ADR-0048](../adr/0048-agentic-runtime-and-mcp.md) amendment): a rail page, shown when the AI Agent
+  plugin is loaded, without the editing toolbar. It lists the MCP servers configured in the plugin's settings
+  (transport, URL or command, allowed and approval tools, whether the token's environment variable is set) with **Test
+  connection**, and the built-in tools. A property with the catalog editor hint `agentTools` (the agent's `tools`) gets a
+  picker under its text box that adds MCP server tools, built-ins and project workflows and removes entries. Read-only
+  for servers: nothing in the Studio adds one.
+- **Studio's projects** ([ADR-0046](../adr/0046-projects-folder-create-and-delete.md), ADR-0044 amendment): where
+  Studio starts, without the editing toolbar. It lists every project (the `--project` folders, then those of the server's projects folder) with its number
   of workflows and folders and its latest change (a project that cannot be listed says why). **New project…** creates a
   folder in the projects folder (disabled, with the reason, without one); **Delete…** (only for those) asks for the
-  project's name and moves its folder to the projects folder's `.trash`. The Studio starts on it only when there is a
-  choice: with one project, or with the one used last in this browser, it opens that project's workspace (the
-  Workflows page, where the Files tree has the project as its root). The title bar shows **Projects / project**:
-  Projects comes back to this page, the project name to its workspace.
+  project's name and moves its folder to the projects folder's `.trash`. Choosing a project opens its workspace (the
+  designer, where the Files tree has the project as its root). The title bar shows **Studio / project**: Studio comes
+  back to the projects, the project name to its workspace; the rail's Studio returns to where Studio was.
+- **Operations pages** (Phase 10, [orchestrator.md](orchestrator.md), ADR-0049):
+  - **Deployments, Monitoring, Robots and Admin** appear in the rail only when the Server runs the orchestrator
+    (`/api/info` → `orchestrator`).
+  - **They use `/api/orchestrator/*`** through `orchestrator.ts`. The session is the local owner (Admin); the Server
+    enforces every role.
+  - **Data, refresh and states:** real data only; refresh every few seconds; loading, empty and error states.
+  - **Disabled actions** carry the missing role as their reason.
+  - **Charts** are SVG with attributes only, keeping the CSP.
+  - **Tests:** `OperationsUi.test.tsx`, and `npm run operations` in a real browser with a real Runner process.
 - **Open:** choose a workflow file in the title bar, then Open; or double-click a file (or Enter) in the Files panel.
   Opening a workflow always shows the workspace. A file named with the server's `--open` opens after connecting. The file is parsed into the document model.
 - **Brand and shell (ADR-0044):**
-  - **Brand:** the product is shown as **Laconi Studio**, with the Laconi mark (`logo` icon, favicon) and the tagline
-    "Design it. Run it. Lakoni.". The server program and code keep their `MyRPA` names.
+  - **Brand:** the portal is **Laconi Automation** (ADR-0044 amendment) and **Studio** is its workflow builder, with
+    the Laconi mark (`logo` icon, favicon). The server program and code keep their `MyRPA` names.
   - **Theme:** the tokens in `style.css` carry the brand palette (dark reference theme, light variant). `--primary`
     marks the main action (Run).
-  - **Navigation rail:** shows only working pages: **Workflows** (the start page: the Projects view, then a project's workspace with the designer) and **Home**.
-  - **Home page:** shows only real data:
-    - the project's workflows (open one in the designer);
-    - New workflow;
+  - **Navigation rail:** shows only working pages: **Home** (the start page), **Studio** (the projects, then a
+    project's workspace with the designer), and the operations pages and Agent tools when the Server offers them.
+  - **Home page** (a portal overview) shows only real data:
+    - the projects (open one in Studio) and the preselected project's workflows;
+    - today's jobs and Runners, with links to Monitoring, Deployments and Robots (when the Server runs the
+      orchestrator);
     - the runs of this session;
-    - the activity count and the loaded plugins.
+    - the activity count, the loaded plugins and Agent tools.
   - **Toolbar:** one row. The main commands show labels; editing and view commands are icons whose names stay the
     accessible names and tooltips.
   - **Activity list:** group chips (one per catalog namespace) and an icon per activity. Built-ins get theirs by

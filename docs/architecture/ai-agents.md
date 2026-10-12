@@ -8,6 +8,15 @@ Plugin settings: [plugins/MyRPA.Ai.Agent/README.md](../../plugins/MyRPA.Ai.Agent
 ## 1. Architecture
 
 ```text
+MyRPA Agent (AI.Agent)
+    ├── Workflow tools   → project workflows, run by the engine
+    ├── Built-in tools   → time_now, regex_extract, json_get
+    └── MCP servers      → configured by an administrator (database, GitHub, SaaS, internal APIs, custom tools)
+          ├── Streamable HTTP (HTTPS; bearer token from an environment variable)
+          └── stdio process (exactly the configured command)
+```
+
+```text
 workflow ─ engine ─▶ AI.Agent (plugins/MyRPA.Ai.Agent)
                         │  AgentRuntime: loop, budgets, typed outcomes, output schema
                         ├─▶ IAiProvider (Phase 8 provider plugin)      ← the model only answers
@@ -53,6 +62,11 @@ workflow ─ engine ─▶ AI.Agent (plugins/MyRPA.Ai.Agent)
   - `time_now`: the UTC time;
   - `regex_extract`: matches, with a 1 s timeout;
   - `json_get`: a value from JSON text by a path.
+
+In the Studio, the **Agent tools** page (shown when the plugin is loaded) lists the configured MCP servers with a
+**Test connection** button and the built-ins. Under an agent's `tools`, a picker adds MCP server tools, built-ins and
+project workflows (their In arguments become `input`) and writes the JSON; the text stays editable (ADR-0048
+amendment).
 
 In the Studio, `AI.Agent` appears under **AI** in the activity list. Its instructions, tools and schema are edited in
 multi-line fields. Its events appear in the Execution log.

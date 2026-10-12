@@ -74,17 +74,39 @@ internal sealed record ServerOptions
 
     /// <summary>Execution limits (concurrency, replay buffer, retention).</summary>
     public Action<Execution.Hosting.ExecutionHostOptions>? ConfigureHosting { get; init; }
+
+    /// <summary>
+    /// The Server's data folder (<c>--data</c>, ADR-0050): the orchestrator's store lives there. Null: no orchestrator
+    /// (publishing, jobs, Runners and schedules are unavailable; the Studio's local runs still work).
+    /// </summary>
+    public string? DataDirectory { get; init; }
+
+    /// <summary>
+    /// The Runner listener (<c>--runner-url</c>, ADR-0051): an address remote Runners connect to, separate from the
+    /// loopback Studio listener. It serves only the Runner protocol and the token-authenticated management API. https
+    /// needs <see cref="RunnerCertificate"/>; http is allowed only on a loopback address.
+    /// </summary>
+    public Uri? RunnerUrl { get; init; }
+
+    /// <summary>PFX certificate for an https Runner listener (<c>--runner-cert</c>; password in MYRPA_RUNNER_CERT_PASSWORD).</summary>
+    public string? RunnerCertificate { get; init; }
+
+    /// <summary>Lease and heartbeat timing of the Runner protocol.</summary>
+    public Action<Orchestration.OrchestratorOptions>? ConfigureOrchestrator { get; init; }
+
+    /// <summary>How often leases are checked and schedules evaluated.</summary>
+    public TimeSpan OrchestratorTick { get; init; } = TimeSpan.FromSeconds(2);
 }
 
 /// <summary>A workflow named on the command line: its project and project-relative path (with <c>/</c>).</summary>
 internal sealed record OpenWorkflow(string Project, string Path);
 
 /// <summary>
-/// <c>MyRPA.Server [--projects-root &lt;dir&gt;] [--project &lt;dir&gt;]... [--open &lt;file&gt;] [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--web &lt;dir&gt;] [--port &lt;n&gt;]</c>.
+/// <c>MyRPA.Server [--projects-root &lt;dir&gt;] [--project &lt;dir&gt;]... [--open &lt;file&gt;] [--plugin &lt;dir&gt;]... [--plugin-config &lt;file&gt;] [--web &lt;dir&gt;] [--port &lt;n&gt;] [--data &lt;dir&gt;] [--runner-url &lt;url&gt; [--runner-cert &lt;pfx&gt;]]</c>.
 /// </summary>
 internal static class ServerCommandLine
 {
-    public const string Usage = "MyRPA.Server [--projects-root <dir>] [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]";
+    public const string Usage = "MyRPA.Server [--projects-root <dir>] [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>] [--data <dir>] [--runner-url <url> [--runner-cert <pfx>]]";
 
     /// <summary>Parses the command line.</summary>
     /// <param name="args">Arguments.</param>
@@ -94,8 +116,12 @@ internal static class ServerCommandLine
     /// The projects folder used when no project is named at all (ADR-0046: <c>Documents/Laconi Projects</c>); created if
     /// missing. Null: a project must be named.
     /// </param>
-    public static ServerOptions? Parse(IReadOnlyList<string> args, out string? error, string? bundledWebRoot = null, string? defaultProjectsRoot = null)
+    /// <param name="defaultDataDirectory">The data folder used without <c>--data</c> (null: no orchestrator).</param>
+    public static ServerOptions? Parse(IReadOnlyList<string> args, out string? error, string? bundledWebRoot = null, string? defaultProjectsRoot = null, string? defaultDataDirectory = null)
     {
+        string? data = null;
+        Uri? runnerUrl = null;
+        string? runnerCertificate = null;
         var projects = new List<ProjectRoot>();
         string? projectsRoot = null;
         var plugins = new List<string>();
@@ -115,7 +141,7 @@ internal static class ServerCommandLine
                 continue;
             }
 
-            if (name is not ("--project" or "--projects-root" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port" or "--recorder-debugging-port"))
+            if (name is not ("--project" or "--projects-root" or "--open" or "--plugin" or "--plugin-config" or "--web" or "--port" or "--recorder-debugging-port" or "--data" or "--runner-url" or "--runner-cert"))
             {
                 error = $"Unexpected argument '{name}'.";
                 return null;
@@ -200,6 +226,28 @@ internal static class ServerCommandLine
                 case "--recorder-debugging-port":
                     error = "--recorder-debugging-port must be a number from 1 to 65535.";
                     return null;
+                case "--data" when data is null:
+                    data = Path.TrimEndingDirectorySeparator(Path.GetFullPath(value));
+                    break;
+                case "--runner-url" when runnerUrl is null:
+                    if (!TryRunnerUrl(value, out runnerUrl, out error))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "--runner-cert" when runnerCertificate is null:
+                    runnerCertificate = Path.GetFullPath(value);
+                    if (!File.Exists(runnerCertificate))
+                    {
+                        error = $"Certificate file '{runnerCertificate}' does not exist.";
+                        return null;
+                    }
+
+                    break;
+                case "--data" or "--runner-url" or "--runner-cert":
+                    error = $"{name} may be given once.";
+                    return null;
                 default:
                     error = $"--port must be a number from 0 to 65535.";
                     return null;
@@ -242,8 +290,73 @@ internal static class ServerCommandLine
         }
 
         web ??= bundledWebRoot is not null && File.Exists(Path.Combine(bundledWebRoot, "index.html")) ? bundledWebRoot : null;
+        data ??= defaultDataDirectory;
+        if (runnerUrl is not null && data is null)
+        {
+            error = "--runner-url needs the orchestrator, which needs a --data folder.";
+            return null;
+        }
+
+        if (runnerUrl is { Scheme: "https" } && runnerCertificate is null)
+        {
+            error = "An https --runner-url needs --runner-cert <pfx> (password in the MYRPA_RUNNER_CERT_PASSWORD environment variable).";
+            return null;
+        }
+
+        if (runnerCertificate is not null && runnerUrl is not { Scheme: "https" })
+        {
+            error = "--runner-cert is used only with an https --runner-url.";
+            return null;
+        }
+
         error = null;
-        return new ServerOptions { Projects = projects, ProjectsRoot = projectsRoot, PluginDirectories = plugins, PluginConfiguration = config, WebRoot = web, Port = port, Open = openWorkflow, RecorderHeadless = recorderHeadless, RecorderDebuggingPort = recorderDebuggingPort };
+        return new ServerOptions
+        {
+            Projects = projects,
+            ProjectsRoot = projectsRoot,
+            PluginDirectories = plugins,
+            PluginConfiguration = config,
+            WebRoot = web,
+            Port = port,
+            Open = openWorkflow,
+            RecorderHeadless = recorderHeadless,
+            RecorderDebuggingPort = recorderDebuggingPort,
+            DataDirectory = data,
+            RunnerUrl = runnerUrl,
+            RunnerCertificate = runnerCertificate,
+        };
+    }
+
+    /// <summary>
+    /// A Runner listener address (ADR-0051): http or https with an IP address (or localhost) and a port. Plain http is
+    /// refused anywhere but loopback, so Runner tokens never cross a network unencrypted.
+    /// </summary>
+    internal static bool TryRunnerUrl(string value, out Uri? url, out string? error)
+    {
+        url = null;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("http" or "https") || parsed.AbsolutePath != "/" || parsed.Query.Length > 0)
+        {
+            error = $"--runner-url '{value}' must look like https://0.0.0.0:5311 (scheme, address and port only).";
+            return false;
+        }
+
+        var host = parsed.Host.Trim('[', ']');
+        var loopback = host is "localhost" || (System.Net.IPAddress.TryParse(host, out var ip) && System.Net.IPAddress.IsLoopback(ip));
+        if (!loopback && !System.Net.IPAddress.TryParse(host, out _))
+        {
+            error = $"--runner-url '{value}' must use an IP address (0.0.0.0 for every interface) or localhost.";
+            return false;
+        }
+
+        if (parsed.Scheme == "http" && !loopback)
+        {
+            error = "A Runner listener on the network must use https; plain http is allowed only on a loopback address.";
+            return false;
+        }
+
+        url = parsed;
+        error = null;
+        return true;
     }
 
     /// <summary>The projects folder as a full path, created if missing (ADR-0046).</summary>

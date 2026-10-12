@@ -5,7 +5,7 @@ import { memoryPreferences } from './preferences';
 import { Studio } from './studio';
 import { FakeApi, FakeEventSource, immediately, settle } from './test-support';
 
-// The Projects page (ADR-0046): its own rail item without the editing toolbar; New project and Delete project.
+// Studio's start (ADR-0046, ADR-0044 amendment): the projects, without the editing toolbar; New project and Delete project.
 
 async function renderStudio(api = new FakeApi()) {
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { preferences: memoryPreferences(), validateDelayMs: undefined });
@@ -15,29 +15,28 @@ async function renderStudio(api = new FakeApi()) {
 }
 
 const rail = () => within(screen.getByRole('navigation', { name: 'Main' }));
-const page = () => within(screen.getByRole('main', { name: 'Projects' }));
+const page = () => within(screen.getByRole('main', { name: 'Studio' }));
 const dialog = () => within(screen.getByRole('dialog'));
-const showProjects = () => act(async () => fireEvent.click(rail().getByRole('button', { name: 'Projects' })));
+const showProjects = () => act(async () => fireEvent.click(rail().getByRole('button', { name: 'Studio' })));
 
 afterEach(cleanup);
 
-describe('Projects page', () => {
-  it('is a rail item of its own, between Home and Workflows, without the editing toolbar', async () => {
+describe('Studio projects', () => {
+  it('are where Studio starts, without the editing toolbar; choosing one opens its workspace with the toolbar', async () => {
     await renderStudio();
 
-    expect(rail().getAllByRole('button').map((b) => b.textContent)).toEqual(['Home', 'Projects', 'Workflows']);
-    expect(screen.getByRole('toolbar', { name: 'File' })).toBeTruthy();
+    expect(rail().getAllByRole('button').map((b) => b.textContent)).toEqual(['Home', 'Studio']);
 
     await showProjects();
 
-    expect(rail().getByRole('button', { name: 'Projects' }).getAttribute('aria-current')).toBe('page');
+    expect(rail().getByRole('button', { name: 'Studio' }).getAttribute('aria-current')).toBe('page');
     expect(page().getByRole('button', { name: 'Open project demo' })).toBeTruthy();
     expect(screen.queryByRole('toolbar', { name: 'File' })).toBeNull();
     expect(screen.queryByRole('toolbar', { name: 'Run' })).toBeNull();
 
-    // Choosing a project shows its workspace (the Workflows page), with the toolbar.
+    // Choosing a project shows its workspace (still Studio), with the toolbar.
     await act(async () => fireEvent.click(page().getByRole('button', { name: 'Open project demo' })));
-    expect(rail().getByRole('button', { name: 'Workflows' }).getAttribute('aria-current')).toBe('page');
+    expect(rail().getByRole('button', { name: 'Studio' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('toolbar', { name: 'File' })).toBeTruthy();
   });
 
@@ -88,7 +87,8 @@ describe('Projects page', () => {
     await act(async () => studio.enterProject('Old'));
     await act(async () => studio.open('hello-world.json'));
     expect(studio.store.get().file?.project).toBe('Old');
-    await showProjects();
+    // In a project's workspace, the title bar's Studio link goes back to the projects (the rail returns to the workspace).
+    await act(async () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Location' })).getByRole('button', { name: 'Studio' })));
 
     await act(async () => fireEvent.click(page().getByRole('button', { name: 'Delete project Old' })));
     const confirm = dialog().getByRole('button', { name: 'Delete project' }) as HTMLButtonElement;

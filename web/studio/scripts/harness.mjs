@@ -26,7 +26,7 @@ export const check = (condition, message) => {
  * A plugin configuration that loads the scripted AI provider (tests/fixtures/MyRPA.Tests.ScriptedAi, ADR-0047): it
  * answers from `answers` in order and records each request in `log`. No model, network or key is used.
  */
-export function scriptedAi(folder, answers) {
+export function scriptedAi(folder, answers, { agent = false } = {}) {
   mkdirSync(folder, { recursive: true });
   const configuration = process.env.MYRPA_CONFIGURATION ?? 'Release';
   const answersFile = join(folder, 'ai-answers.json');
@@ -34,7 +34,17 @@ export function scriptedAi(folder, answers) {
   const config = join(folder, 'ai-plugins.json');
   writeFileSync(answersFile, JSON.stringify(answers));
   const directory = join(repo, 'tests', 'fixtures', 'MyRPA.Tests.ScriptedAi', 'bin', configuration, 'net10.0');
-  writeFileSync(config, JSON.stringify({ pluginConfigVersion: '1.0', plugins: [{ directory, settings: { answers: answersFile, log } }] }));
+  const plugins = [{ directory, settings: { answers: answersFile, log } }];
+  if (agent) {
+    // The AI Agent plugin (ADR-0048) with one stdio MCP server: the fake server of the tests (no network, no model).
+    const fakeMcp = join(repo, 'tests', 'fixtures', 'MyRPA.Tests.FakeMcpServer', 'bin', configuration, 'net10.0', 'MyRPA.Tests.FakeMcpServer.dll');
+    plugins.push({
+      directory: join(repo, 'plugins', 'MyRPA.Ai.Agent', 'bin', configuration, 'net10.0'),
+      settings: { 'mcp.local.transport': 'stdio', 'mcp.local.command': process.env.MYRPA_DOTNET ?? 'dotnet', 'mcp.local.args': JSON.stringify([fakeMcp]), 'mcp.local.tools': 'echo,add', 'mcp.local.approval': 'add' },
+    });
+  }
+
+  writeFileSync(config, JSON.stringify({ pluginConfigVersion: '1.0', plugins }));
   return { config, log };
 }
 
@@ -43,15 +53,25 @@ export const proposalAnswer = (workflow, plan) =>
   JSON.stringify({ kind: 'proposal', known: [], assumptions: ['A log message is enough'], questions: [], missing: [], plan, summary: 'Logs a greeting.', workflowJson: JSON.stringify(workflow) });
 
 /**
- * Enters a project's workspace when the Workflows page shows the projects (where it starts after a page load); does
- * nothing in the workspace.
+ * Enters a project's workspace in Studio (ADR-0044 amendment: Laconi Automation opens on Home, and Studio starts with
+ * the projects); does nothing in the workspace.
  */
 export async function enterProject(page, name = 'demo') {
+  const sidePanel = page.getByRole('tablist', { name: 'Side panel' });
+  await page.locator('[role=tablist][aria-label="Side panel"], .project-card, .home-hero').first().waitFor();
+  if (await sidePanel.isVisible()) {
+    return;
+  }
+
   const card = page.getByRole('button', { name: `Open project ${name}`, exact: true });
-  await page.locator('[role=tablist][aria-label="Side panel"], .project-card').first().waitFor();
+  if (!(await card.isVisible())) {
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Studio', exact: true }).click();
+    await page.locator('[role=tablist][aria-label="Side panel"], .project-card').first().waitFor();
+  }
+
   if (await card.isVisible()) {
     await card.click();
-    await page.getByRole('tablist', { name: 'Side panel' }).waitFor();
+    await sidePanel.waitFor();
   }
 }
 
@@ -80,7 +100,8 @@ export async function withStudio(body) {
     // start uses the Studio bundled next to the server, with no --web).
     const startServer = (args = ['--project', project, '--web', join(studioDir, 'dist')]) => {
       let serverOutput = '';
-      const server = spawn(process.env.MYRPA_DOTNET ?? 'dotnet', [serverDll, ...args, '--port', '0'], {
+      // Phase 10: each server keeps its orchestrator store in the temporary workspace, never in the user's data folder.
+      const server = spawn(process.env.MYRPA_DOTNET ?? 'dotnet', [serverDll, ...args, '--data', join(workspace, `data-${servers.length}`), '--port', '0'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       servers.push(server);
@@ -110,7 +131,7 @@ export async function withStudio(body) {
       }
     });
 
-    await body({ project, page, startServer, problems });
+    await body({ project, page, startServer, problems, workspace, repo, configuration });
   } catch (error) {
     failed = true;
     console.error(error);

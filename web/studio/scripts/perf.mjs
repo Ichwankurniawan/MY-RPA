@@ -5,7 +5,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { check, withStudio } from './harness.mjs';
+import { check, enterProject, withStudio } from './harness.mjs';
 
 const samples = Number(process.env.MYRPA_PERF_SAMPLES ?? 40);
 // CI runners are shared, slower machines: MYRPA_PERF_TOLERANCE scales every target there (default 1: the ADR-0021
@@ -30,6 +30,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   writeFileSync(join(project, 'flat-3000.json'), JSON.stringify(fixture(), null, 2));
   await page.goto(await startServer());
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await enterProject(page);
   await page.getByRole('combobox', { name: 'Workflow' }).selectOption('flat-3000.json');
 
   const openStart = Date.now();
@@ -192,6 +193,7 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   writeFileSync(join(project, 'flow-200.json'), JSON.stringify({ schemaVersion: '1.1', id: 'flow-200', name: 'Flow 200', version: '1.0.0', root: { id: 'flow', type: 'Core.Flowchart', properties: { maxSteps: 100000 }, children: steps } }, null, 2));
   await page.reload();
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await enterProject(page);
   await page.getByRole('combobox', { name: 'Workflow' }).selectOption('flow-200.json');
   const flowOpenStart = Date.now();
   await page.getByRole('button', { name: 'Open', exact: true }).click();

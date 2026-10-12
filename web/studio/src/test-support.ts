@@ -1,8 +1,9 @@
 // Test doubles for the unit and component tests (never imported by the application).
 
+import { act, fireEvent, screen } from '@testing-library/react';
 import { ApiError, type StartRunOptions, type StudioApi } from './api';
 import type { EventSourceLike } from './events';
-import type { ActivityDescriptor, AssistantGenerateBody, AssistantInfo, DebugAnswer, DebugCommandName, DebugState, ExecutionEvent, ExplainAnswer, ExpressionFunction, GeneratedActivities, GenerationAnswer, JsonObject, NameReferences, PluginReport, RecordedStep, RunStatus, ScopeName, ValidationResult } from './types';
+import type { ActivityDescriptor, AgentToolsInfo, AssistantGenerateBody, AssistantInfo, DebugAnswer, DebugCommandName, DebugState, ExecutionEvent, ExplainAnswer, ExpressionFunction, GeneratedActivities, GenerationAnswer, JsonObject, McpDiscoveryView, NameReferences, PluginReport, RecordedStep, RunStatus, ScopeName, ValidationResult } from './types';
 
 export const helloWorld = `{
   "schemaVersion": "1.0",
@@ -153,7 +154,7 @@ export class FakeApi implements StudioApi {
       throw new ApiError(401, 'Open the server with the start link it printed.');
     }
 
-    return { name: 'MyRPA.Server', mode: 'local', workflowSchemaVersions: ['1.0'], projects: ['demo', ...this.createdProjects], open: this.openOnStart };
+    return { name: 'MyRPA.Server', mode: 'local', workflowSchemaVersions: ['1.0'], projects: ['demo', ...this.createdProjects], open: this.openOnStart, agentTools: this.agentPluginLoaded };
   }
 
   // AI Workflow Assistant (ADR-0047): availability, scripted answers (the last repeats) and the requests made.
@@ -167,6 +168,51 @@ export class FakeApi implements StudioApi {
 
   async assistantInfo() {
     return this.assistant;
+  }
+
+  /** Whether /api/info reports the AI Agent plugin (the Agent tools page is shown only then). */
+  agentPluginLoaded = false;
+  agentToolsInfo: AgentToolsInfo = {
+    available: true,
+    builtIns: [
+      { name: 'time_now', description: 'The current date and time (UTC, ISO 8601).' },
+      { name: 'regex_extract', description: 'Finds the matches of a .NET regular expression in a text.' },
+      { name: 'json_get', description: 'Reads a value from JSON text by a path.' },
+    ],
+    servers: [
+      { name: 'crm', transport: 'http', endpoint: 'https://mcp.example.com/mcp', enabled: true, allowedTools: ['get_customer', 'search_customers'], approvalTools: ['update_customer'], tokenVariable: 'CRM_MCP_TOKEN', tokenSet: false },
+      { name: 'files', transport: 'stdio', endpoint: 'npx -y @modelcontextprotocol/server-filesystem C:/Reports', enabled: true, allowedTools: ['*'], approvalTools: [], tokenVariable: null, tokenSet: false },
+      { name: 'old', transport: 'http', endpoint: 'https://old.example.com/mcp', enabled: false, allowedTools: ['*'], approvalTools: [], tokenVariable: null, tokenSet: false },
+    ],
+  };
+  discoveries = new Map<string, McpDiscoveryView>([
+    [
+      'files',
+      {
+        ok: true,
+        durationMs: 412,
+        tools: [
+          { name: 'list_directory', description: 'Lists a folder.', inputSchema: { type: 'object' }, allowed: true, requiresApproval: false },
+          { name: 'read_text_file', description: 'Reads a text file.', inputSchema: { type: 'object' }, allowed: true, requiresApproval: false },
+        ],
+      },
+    ],
+    ['crm', { ok: false, error: "the MCP server 'crm' needs a token: set the environment variable CRM_MCP_TOKEN for the server.", durationMs: 3, tools: [] }],
+  ]);
+  discovered: string[] = [];
+
+  async agentTools() {
+    return this.agentToolsInfo;
+  }
+
+  async discoverMcp(server: string) {
+    this.discovered.push(server);
+    const found = this.discoveries.get(server);
+    if (found === undefined) {
+      throw new ApiError(404, `No MCP server named '${server}' is configured.`);
+    }
+
+    return found;
   }
 
   async assistantPreview(body: AssistantGenerateBody & { operation: string }) {
@@ -493,3 +539,11 @@ export const immediately = (flush: () => void) => flush();
 
 /** Lets pending promise callbacks run. */
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** Laconi Automation starts on Home (ADR-0044 amendment): opens a project in Studio the way a person does from there. */
+export async function enterStudio(project = 'demo'): Promise<void> {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: `Open ${project} in Studio` }));
+    await settle();
+  });
+}

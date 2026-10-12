@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { memoryDrafts, type DraftStore } from './drafts';
 import { Studio } from './studio';
-import { FakeApi, FakeEventSource, helloWorld, immediately, settle } from './test-support';
+import { FakeApi, FakeEventSource, helloWorld, immediately, settle, enterStudio } from './test-support';
 
 /** The Properties panel (the only place properties are edited). */
 const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
@@ -15,8 +15,8 @@ async function renderStudio(api = new FakeApi(), drafts: DraftStore = memoryDraf
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately, { drafts, draftDelayMs: 60_000 });
   render(<App studio={studio} />);
   await act(settle);
-  // One project: the Studio opens its workspace. The files are the left panel's second tab.
-  await act(async () => fireEvent.click(screen.getByRole('tab', { name: 'Files' })));
+  // Laconi Automation opens on Home; the project's workspace is opened in Studio. Entering a project shows its files.
+  await enterStudio();
   return { studio, api };
 }
 

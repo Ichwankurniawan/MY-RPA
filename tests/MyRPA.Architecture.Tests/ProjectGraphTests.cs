@@ -100,7 +100,7 @@ public sealed class ProjectGraphTests
 
         Assert.Empty(disallowed);
         Assert.All(
-            project.PackageReferences.Where(p => !(ArchitectureRules.TechnologyPackageOwners.TryGetValue(p, out var owner) && owner == name)),
+            project.PackageReferences.Where(p => !ArchitectureRules.OwnsTechnology(name, p)),
             p => Assert.Null(ArchitectureRules.MatchForbidden(p)));
     }
 
@@ -111,7 +111,7 @@ public sealed class ProjectGraphTests
         // project may reference them (ADR-0017).
         var offenders = Repository.AllProjects
             .SelectMany(p => p.PackageReferences.Select(package => (Project: p.Name, Package: package)))
-            .Where(x => ArchitectureRules.TechnologyPackageOwners.TryGetValue(x.Package, out var owner) && owner != x.Project)
+            .Where(x => ArchitectureRules.TechnologyPackageOwners.ContainsKey(x.Package) && !ArchitectureRules.OwnsTechnology(x.Project, x.Package))
             .Select(x => $"{x.Project} -> {x.Package}");
 
         Assert.Empty(offenders);

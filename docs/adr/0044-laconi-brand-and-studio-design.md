@@ -57,3 +57,52 @@ graph canvas with Start/End, property tabs) and must not be imitated with fake d
 - The Studio's look changes everywhere through the tokens. Behaviour, accessibility names, shortcuts and the workflow
   format are unchanged, and the browser scripts and Vitest suites must keep passing.
 - Future modules (runners, schedules, AI) get a place in the rail when they exist.
+
+## Amendment (owner, 2026-10-12): the "Atlas" colour scheme
+
+The owner found the lime-on-navy look generic ("AI-generated") and chose a refined scheme after reviewing interactive
+previews (Atlas E′, refined).
+- **Neutrals:** warm graphite in dark (`#141517` background, `#1b1c1f` panel) and off-white paper in light (`#f4f4f2`).
+- **Brand:** cobalt. Light accent `#2f5bd8`; dark accent `#6e94ff`. The primary button is `#2f5bd8` (light) or `#3b6cf6`
+  (dark), with white text. The title bar is a solid cobalt `#1d3f9e` with white text in both themes.
+- **Logo:** the same mark (L and play triangle) in cobalt. It is drawn white with a light-blue facet on the header. The
+  favicon matches.
+- **Family hues** (`--hue-*`) are used only for icons and markers, never for fills or buttons:
+  - blue: control flow, Workflows;
+  - violet: data, Deployments;
+  - teal: browser, Monitoring;
+  - gold: files, Robots;
+  - pink: email and AI;
+  - indigo: database, Admin;
+  - sky: scripting and HTTP.
+
+  Orange is deliberately absent, so the Studio is not mistaken for another RPA brand.
+- **Status** is shown as a dot with plain text. Green means succeeded, red failed, cobalt running or busy, gold
+  interrupted, offline or paused, and grey queued or cancelled. Status colours never mean a family.
+- **Shapes:** corners are 4 px (6 px for large surfaces); there are no glows. A selected card has a cobalt left edge.
+  The rail shows grey icons, and the current page shows its hue with a 2 px bar.
+- **Typeface:** IBM Plex Sans (OFL-1.1), bundled through `@fontsource/ibm-plex-sans`, so the CSP still allows only
+  `'self'`.
+- **Contrast:** checked by `npm run a11y`, with no serious or critical violations in either theme.
+
+## Amendment (owner, 2026-10-12): Laconi Automation, with Studio as its workflow builder
+
+The owner: "Let's call the web portal Laconi Automation. Studio is meant only for the workflow build. Deployment also
+starts with project selection. Workflows/Studio start with project selection/creation." Decisions (with the owner's
+choices of the recommended options):
+
+- **The portal is Laconi Automation** (header wordmark "laconi Automation", page title, Home). **Studio** is its
+  workflow builder: the only place with the editing toolbar, the workflow picker and the designer.
+- **Rail:** Home · Studio · Deployments · Monitoring · Robots · Agent tools · Admin (each still only when it works).
+  **Studio replaces Projects and Workflows:** it starts with the projects (choose one, or New project…), then the
+  chosen project's workspace. The rail's Studio returns to where Studio was; the title bar shows **Studio / project**
+  in Studio and the section's name elsewhere.
+- **Laconi Automation opens on Home** (the project used last is preselected for Home's lists; `--open` still opens its
+  file in Studio). **Home is a portal overview** from real data only: the projects (into Studio), the preselected
+  project's workflows, today's jobs and Runners with links (when the Server runs the orchestrator), this session's
+  runs, and the platform (activities, plugins, agent tools).
+- **Deployments starts with the projects** (a process is a project, ADR-0049 amendment): each card says whether it is
+  published and deployed, its schedules and last job; choosing one shows its publishing (entry points of that
+  project's saved files), versions, Run now, schedules and executions. Processes of projects no longer on the Server
+  are listed apart and can still be deployed and run.
+- Code names (`MyRPA.*`, `myrpa`, `MyRPA.Server`, the `web/studio` folder) are unchanged.

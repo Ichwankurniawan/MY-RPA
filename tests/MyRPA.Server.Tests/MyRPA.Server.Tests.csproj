@@ -10,6 +10,9 @@
     <ProjectReference Include="..\fixtures\MyRPA.Tests.ScriptedAi\MyRPA.Tests.ScriptedAi.csproj" ReferenceOutputAssembly="false" Private="false" />
     <!-- Recording tests (ADR-0039) load the browser plugin through the server's plugin host. -->
     <ProjectReference Include="..\..\plugins\MyRPA.Browser.Playwright\MyRPA.Browser.Playwright.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Agent tool endpoints (ADR-0048 amendment) load the agent plugin, with a fake stdio MCP server. -->
+    <ProjectReference Include="..\..\plugins\MyRPA.Ai.Agent\MyRPA.Ai.Agent.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\fixtures\MyRPA.Tests.FakeMcpServer\MyRPA.Tests.FakeMcpServer.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
@@ -26,6 +29,14 @@
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>BrowserPluginDirectory</_Parameter1>
       <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Browser.Playwright\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>AgentPluginDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\plugins\MyRPA.Ai.Agent\bin\$(Configuration)\$(TargetFramework)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>FakeMcpServer</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\fixtures\MyRPA.Tests.FakeMcpServer\bin\$(Configuration)\$(TargetFramework)\MyRPA.Tests.FakeMcpServer.dll</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 </Project>
