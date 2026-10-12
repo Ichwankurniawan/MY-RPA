@@ -1,0 +1,14 @@
+{
+  "pluginConfigVersion": "1.0",
+  "plugins": [
+    {
+      "directory": "../../../tests/fixtures/MyRPA.Tests.ScriptedAi/bin/Debug/net10.0",
+      "settings": {
+        "answers": "samples/plugins/agent-demo/answers.json"
+      }
+    },
+    {
+      "directory": "../../../plugins/MyRPA.Ai.Agent/bin/Debug/net10.0"
+    }
+  ]
+}

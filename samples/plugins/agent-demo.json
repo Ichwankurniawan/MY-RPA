@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1.0",
+  "id": "agent-demo",
+  "name": "Invoice check with an AI agent",
+  "version": "1.0.0",
+  "description": "ADR-0048 acceptance scenario. A deterministic step prepares the invoice text; an AI agent extracts the invoice and chooses the credit_limit tool (a project workflow, run by the engine); MyRPA checks every call and the final output against the schema; a deterministic decision approves or sends to human review. Runs with the scripted provider in samples/plugins/agent-demo (no AI service, no key).",
+  "arguments": [
+    {
+      "name": "decision",
+      "direction": "Out",
+      "type": "String"
+    },
+    {
+      "name": "extracted",
+      "direction": "Out",
+      "type": "Object"
+    },
+    {
+      "name": "toolCalls",
+      "direction": "Out",
+      "type": "List"
+    }
+  ],
+  "variables": [
+    {
+      "name": "rawInvoice",
+      "type": "String",
+      "default": "   Invoice INV-7 from ACME Ltd, total 120.50 EUR   "
+    },
+    {
+      "name": "invoiceText",
+      "type": "String"
+    },
+    {
+      "name": "agentResult",
+      "type": "Object"
+    }
+  ],
+  "root": {
+    "id": "main",
+    "type": "Core.Sequence",
+    "children": [
+      {
+        "id": "prepare",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "invoiceText",
+          "value": "trim(rawInvoice)"
+        }
+      },
+      {
+        "id": "agent",
+        "type": "AI.Agent",
+        "properties": {
+          "instructions": "Extract the invoice number, the customer and the total from the invoice text. Then look up the customer's credit limit with the credit_limit tool. Finish with the four fields; never guess a credit limit.",
+          "task": "invoiceText",
+          "tools": "[\n  {\n    \"workflow\": \"agent-tools/credit-limit.json\",\n    \"name\": \"credit_limit\",\n    \"description\": \"Looks up a customer's credit limit in the ERP.\",\n    \"input\": {\n      \"customer\": \"String\"\n    }\n  }\n]",
+          "outputSchema": "{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\n    \"invoice\",\n    \"customer\",\n    \"total\",\n    \"creditLimit\"\n  ],\n  \"properties\": {\n    \"invoice\": {\n      \"type\": \"string\"\n    },\n    \"customer\": {\n      \"type\": \"string\"\n    },\n    \"total\": {\n      \"type\": \"number\",\n      \"minimum\": 0\n    },\n    \"creditLimit\": {\n      \"type\": \"number\"\n    }\n  }\n}",
+          "maxIterations": 4,
+          "maxToolCalls": 2,
+          "timeoutMs": 60000,
+          "toolTimeoutMs": 10000,
+          "result": "agentResult",
+          "toolCalls": "toolCalls"
+        }
+      },
+      {
+        "id": "keep",
+        "type": "Core.Assign",
+        "properties": {
+          "to": "extracted",
+          "value": "agentResult"
+        }
+      },
+      {
+        "id": "decide",
+        "type": "Core.If",
+        "properties": {
+          "condition": "agentResult['total'] <= agentResult['creditLimit']"
+        },
+        "slots": {
+          "then": {
+            "id": "approve",
+            "type": "Core.Assign",
+            "properties": {
+              "to": "decision",
+              "value": "'approve'"
+            }
+          },
+          "else": {
+            "id": "review",
+            "type": "Core.Assign",
+            "properties": {
+              "to": "decision",
+              "value": "'human review'"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

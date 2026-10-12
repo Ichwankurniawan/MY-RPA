@@ -63,7 +63,7 @@ public static class ArchitectureRules
             IsCompositionRoot: true,
             AllowsAspNetCore: true),
         new("MyRPA.Cli", typeof(MyRPA.Cli.CliApplication).Assembly,
-            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Browser.Contracts"],
+            AllowedProjects: ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Browser.Contracts", "MyRPA.Ai.Contracts"],
             AllowedPackages: ["Microsoft.Extensions.Hosting"],
             IsCompositionRoot: true),
     ];
@@ -132,6 +132,7 @@ public static class ArchitectureRules
         ["Npgsql"] = "MyRPA.Database",
         ["SSH.NET"] = "MyRPA.Sftp",
         ["Jint"] = "MyRPA.Scripting",
+        ["ModelContextProtocol.Core"] = "MyRPA.Ai.Agent",
     };
 
     /// <summary>
@@ -239,6 +240,8 @@ public static class ArchitectureRules
         // the real plugin host and a local test server.
         ["MyRPA.Ai.Assistant.Tests"] = ["MyRPA.Ai.Assistant", "MyRPA.Ai.Contracts", "MyRPA.Activities"],
         ["MyRPA.Ai.OpenAiCompatible.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime", "MyRPA.Ai.Contracts"],
+        // ADR-0048: the AI Agent through the real engine, plugin host and file resolver, with a scripted provider and fake MCP servers.
+        ["MyRPA.Ai.Agent.Tests"] = ["MyRPA.Plugins", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Activities", "MyRPA.Ai.Contracts"],
         ["MyRPA.Integration.Tests"] = ["MyRPA.Cli"],
         ["MyRPA.Architecture.Tests"] = ["MyRPA.Core", "MyRPA.Workflow", "MyRPA.Activities", "MyRPA.Runtime", "MyRPA.Storage", "MyRPA.Sdk", "MyRPA.Plugins", "MyRPA.Contracts", "MyRPA.Browser.Contracts", "MyRPA.Execution.Hosting", "MyRPA.Ai.Contracts", "MyRPA.Ai.Assistant", "MyRPA.Server", "MyRPA.Cli"],
         // The server is tested as it runs: real Kestrel on loopback, real engine and plugin host.

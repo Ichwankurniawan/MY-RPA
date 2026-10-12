@@ -1,0 +1,15 @@
+{
+  "manifestVersion": "1.0",
+  "id": "MyRPA.Ai.Agent",
+  "name": "MyRPA AI Agent",
+  "version": "0.1.0",
+  "description": "AI.Agent (ADR-0048): a bounded AI agent inside a workflow. It works on one task with the tools the workflow author lists (project workflows, MCP server tools, safe built-ins), within iteration, tool-call, time and token budgets, and returns output validated against a schema. Needs an AI provider plugin.",
+  "sdkVersion": "1.2",
+  "targetFramework": "net10.0",
+  "entryPoint": {
+    "assembly": "MyRPA.Ai.Agent.dll",
+    "type": "MyRPA.Ai.Agent.AgentPlugin"
+  },
+  "capabilities": [ "Network", "Process" ],
+  "activities": [ "AI.Agent" ]
+}
