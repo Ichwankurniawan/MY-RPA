@@ -74,7 +74,16 @@ const invoiceEntry = {
     { name: 'password', direction: 'In', type: 'String', required: false, secret: true },
   ],
 };
-const importEntry = { path: 'orders/import.json', workflowId: 'import', name: 'Import orders', schemaVersion: '1.0', arguments: [{ name: 'batch', direction: 'In', type: 'Int', required: false, secret: false }] };
+const importEntry = {
+  path: 'orders/import.json',
+  workflowId: 'import',
+  name: 'Import orders',
+  schemaVersion: '1.0',
+  arguments: [
+    { name: 'batch', direction: 'In', type: 'Int', required: false, secret: false, default: '5' },
+    { name: 'dryRun', direction: 'In', type: 'Boolean', required: false, secret: false, default: 'true' },
+  ],
+};
 
 const version = (n: number) => ({
   version: n,
@@ -295,10 +304,16 @@ describe('Operations pages', () => {
   it('Deployments starts with the projects, then publishes one with its entry points, deploys, rolls back and submits a job', async () => {
     const { orchestrator } = await renderStudio();
     await show('Deployments');
-    const projects = within(screen.getByRole('list', { name: 'Projects to deploy' }));
-    const card = projects.getByRole('button', { name: 'Deployment of demo' });
-    expect(document.getElementById(card.getAttribute('aria-describedby')!)!.textContent).toBe('Deployed v2 deployed · latest v2 · 1/1 schedules on · last job Running');
-    await click(card);
+    // The projects as a table: status, deployed and latest version, schedules and the last job of each.
+    const projects = within(screen.getByRole('table', { name: 'Projects and their deployments' }));
+    const open = projects.getByRole('button', { name: 'Deployment of demo' });
+    const cells = [...open.closest('tr')!.querySelectorAll('td')].map((c) => c.textContent);
+    expect(cells[0]).toBe('Deployed');
+    expect(cells[1]).toBe('v2');
+    expect(cells[2]).toMatch(/^v2.* by local owner$/);
+    expect(cells[3]).toBe('1 of 1 on');
+    expect(cells[4]).toMatch(/^Running /);
+    await click(open);
     const page = within(screen.getByRole('main', { name: 'Deployments · demo' }));
 
     const publish = within(page.getByRole('region', { name: 'Publish the project' }));
@@ -310,28 +325,38 @@ describe('Operations pages', () => {
     expect(publish.getByRole('status').textContent).toBe('Published demo with entry point hello-world.json.');
 
     const detail = within(page.getByRole('region', { name: 'Deployment details' }));
-    expect(detail.getByText('sha256 222222222222')).toBeTruthy();
-    expect(detail.getByText(/plugins: MyRPA\.Ai\.Agent 0\.1\.0/)).toBeTruthy();
+    // A summary first: the deployed version, who deployed it, where it runs, schedules and the last run.
+    const summary = detail.getByLabelText('Deployment summary').textContent;
+    expect(summary).toContain('Deployed versionv2');
+    expect(summary).toContain('Any Runner1 of 1 Runner ready');
+    expect(summary).toContain('Schedules1 of 1 on');
+    expect(detail.getAllByText('sha256 222222222222').length).toBeGreaterThan(0);
+    expect(detail.getByText('MyRPA.Ai.Agent 0.1.0', { selector: '.plugin-chip' })).toBeTruthy();
     await click(detail.getByRole('button', { name: 'Roll back to this' }));
     expect(orchestrator.calls).toContain('deploy prc_1 v1');
 
-    const secret = detail.getByPlaceholderText('secret: comes from the Runner, never from a job') as HTMLInputElement;
+    const secret = detail.getByPlaceholderText('Secret: the Runner supplies it, never a job') as HTMLInputElement;
     expect(secret.disabled).toBe(true);
     await act(async () => fireEvent.change(detail.getByLabelText(/customer/), { target: { value: 'ACME' } }));
-    await click(detail.getByRole('button', { name: 'Submit job' }));
+    await click(detail.getByRole('button', { name: 'Run now' }));
     expect(orchestrator.calls).toContain('submit prc_1 hello-world.json {"customer":"ACME"}');
-    expect(detail.getByText(/entry points hello-world\.json, orders\/import\.json/)).toBeTruthy();
+    expect(detail.getAllByText('hello-world.json, orders/import.json').length).toBeGreaterThan(0);
 
     // Another entry point of the deployed version has its own arguments.
     await act(async () => fireEvent.change(detail.getByLabelText('Entry point to run'), { target: { value: 'orders/import.json' } }));
     expect(detail.queryByLabelText(/customer/)).toBeNull();
+    // Defaults show what an empty field means; a Boolean is a choice, not a text box.
+    expect(detail.getByLabelText(/batch/).getAttribute('placeholder')).toBe('Default: 5');
+    const dryRun = detail.getByLabelText(/dryRun/) as HTMLSelectElement;
+    expect([...dryRun.options].map((o) => o.text)).toEqual(['Default (true)', 'true', 'false']);
     await act(async () => fireEvent.change(detail.getByLabelText(/batch/), { target: { value: '7' } }));
-    await click(detail.getByRole('button', { name: 'Submit job' }));
-    expect(orchestrator.calls).toContain('submit prc_1 orders/import.json {"batch":"7"}');
+    await act(async () => fireEvent.change(dryRun, { target: { value: 'false' } }));
+    await click(detail.getByRole('button', { name: 'Run now' }));
+    expect(orchestrator.calls).toContain('submit prc_1 orders/import.json {"batch":"7","dryRun":"false"}');
 
     // All projects goes back to the choice.
     await click(page.getByRole('button', { name: 'All projects' }));
-    expect(screen.getByRole('list', { name: 'Projects to deploy' })).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Projects and their deployments' })).toBeTruthy();
   });
 
   it('an Operator cannot publish or deploy, and is told why', async () => {
@@ -347,7 +372,7 @@ describe('Operations pages', () => {
     expect(publish.disabled).toBe(true);
     expect(publish.title).toBe('Needs the Developer role');
     expect((page.getByRole('button', { name: 'Roll back to this' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((page.getByRole('button', { name: 'Submit job' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((page.getByRole('button', { name: 'Run now' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('Robots lists Runners with their status and capabilities, and says when there are none', async () => {

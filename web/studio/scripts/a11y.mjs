@@ -227,9 +227,9 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   await page.getByRole('region', { name: 'Audit history' }).getByText(/runner[.]create/).waitFor();
   await scan('Administration (Runner token shown once)');
   await rail.getByRole('button', { name: 'Deployments' }).click();
-  await page.getByRole('list', { name: 'Projects to deploy' }).waitFor();
+  await page.getByRole('table', { name: 'Projects and their deployments' }).waitFor();
   await scan('Deployments (choose a project)');
-  await page.getByRole('list', { name: 'Projects to deploy' }).getByRole('button').first().click();
+  await page.getByRole('table', { name: 'Projects and their deployments' }).getByRole('button').first().click();
   const publish = page.getByRole('region', { name: 'Publish the project' });
   await publish.getByRole('checkbox').first().check();
   await publish.getByRole('button', { name: 'Publish' }).click();

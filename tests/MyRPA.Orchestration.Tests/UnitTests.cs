@@ -284,6 +284,7 @@ public sealed class WorkflowPackageTests
         Assert.True(result.Succeeded, string.Join(" ", result.Errors));
         Assert.Equal(["main.json", "other.json"], result.Manifest!.EntryPoints.Select(e => e.Path));
         Assert.Equal(["who", "count", "greeting"], result.Manifest.EntryPoints[0].Arguments.Select(a => a.Name));
+        Assert.Equal(["\"World\"", null, null], result.Manifest.EntryPoints[0].Arguments.Select(a => a.Default));
         Assert.True(Assert.Single(result.Manifest.EntryPoints[1].Arguments).Secret);
         Assert.Equal(3, result.Manifest.Files.Count);
     }

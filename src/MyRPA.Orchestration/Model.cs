@@ -397,7 +397,11 @@ public sealed record PackageFile(string Path, string Sha256, long Size);
 /// <param name="Type">Data type.</param>
 /// <param name="Required">Whether it must be given.</param>
 /// <param name="Secret">Whether it feeds a secret property (then a job may not set it).</param>
-public sealed record PackageArgument(string Name, string Direction, string Type, bool Required, bool Secret);
+public sealed record PackageArgument(string Name, string Direction, string Type, bool Required, bool Secret)
+{
+    /// <summary>The default value as JSON (null: no default), so run forms can show what an empty field means.</summary>
+    public string? Default { get; init; }
+}
 
 /// <summary>A workflow of a package that a job may start.</summary>
 public sealed record PackageEntryPoint

@@ -841,3 +841,26 @@ h2, .ops-card h3 { letter-spacing: 0.06em; }
 .home-figures strong { display: block; color: var(--text); font-size: 20px; font-weight: 700; }
 .home-project { display: flex; align-items: center; gap: 8px; }
 .home-project small { margin-left: auto; color: var(--muted); white-space: nowrap; }
+
+/* Deployments (ADR-0044 amendment): the project list as a table and a readable deployment page. */
+.project-table th[scope='row'] { font-weight: 600; }
+.project-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.ops-detail-page { display: grid; gap: 14px; }
+.deployment-head .page-header { margin-bottom: 8px; }
+.deployment-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0; }
+.deployment-facts > div { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-2); min-width: 0; }
+.deployment-facts dt { color: var(--muted); font-size: 12px; }
+.deployment-facts dd { margin: 0; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.deployment-facts small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.deployment-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.deployment-columns h4, .ops-detail-page h4 { margin: 0 0 8px; }
+.run-form { display: grid; gap: 10px; margin: 8px 0 12px; }
+.run-argument { display: grid; gap: 4px; }
+.run-argument label { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.run-argument input, .run-argument select { width: 100%; max-width: 420px; }
+.type-chip, .plugin-chip { display: inline-block; padding: 1px 6px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); font-size: 11px; font-weight: 500; }
+.plugin-chip { margin: 0 4px 4px 0; }
+.required-tag { color: var(--warn); font-size: 11px; font-weight: 600; }
+.runner-list li, .schedule-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.schedule-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.ops-table tr.current td { background: var(--accent-soft); }

@@ -317,8 +317,22 @@ public static class WorkflowPackage
         Name = workflow.Name,
         WorkflowVersion = workflow.Version,
         SchemaVersion = workflow.SchemaVersion.ToString(),
-        Arguments = [.. workflow.Arguments.Select(a => new PackageArgument(a.Name, a.Direction.ToString(), a.Type.ToString(), a.IsRequired && a.DefaultValue is null, workflow.SecretNames.Contains(a.Name)))],
+        Arguments = [.. workflow.Arguments.Select(a => new PackageArgument(a.Name, a.Direction.ToString(), a.Type.ToString(), a.IsRequired && a.DefaultValue is null, workflow.SecretNames.Contains(a.Name))
+        {
+            Default = a.DefaultValue is null || workflow.SecretNames.Contains(a.Name) ? null : DefaultJson(a.DefaultValue),
+        })],
     };
+
+    private static string DefaultJson(object value)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            MyRPA.Workflow.Values.WorkflowValues.WriteJson(writer, value);
+        }
+
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
 
     private static PackageBuildResult Fail(List<string> errors) => new(errors, [], string.Empty, null);
 }
