@@ -17,6 +17,9 @@
     <ProjectReference Include="..\..\src\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Ai.Contracts\MyRPA.Ai.Contracts.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Ai.Assistant\MyRPA.Ai.Assistant.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Orchestration\MyRPA.Orchestration.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Orchestration.Sqlite\MyRPA.Orchestration.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\MyRPA.Runner\MyRPA.Runner.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Server\MyRPA.Server.csproj" />
     <ProjectReference Include="..\..\src\MyRPA.Cli\MyRPA.Cli.csproj" />
   </ItemGroup>

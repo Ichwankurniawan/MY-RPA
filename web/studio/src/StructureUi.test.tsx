@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { Studio } from './studio';
-import { FakeApi, FakeEventSource, settle } from './test-support';
+import { FakeApi, FakeEventSource, settle, enterStudio } from './test-support';
 
 /** The Properties panel (the only place properties are edited). */
 const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
@@ -14,11 +14,14 @@ async function renderStudio(api = new FakeApi()) {
   const studio = new Studio(api, (url) => new FakeEventSource(url));
   render(<App studio={studio} />);
   await act(settle);
+  await enterStudio();
   fireEvent.change(screen.getByRole('combobox', { name: 'Workflow' }), { target: { value: 'hello-world.json' } });
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     await settle();
   });
+  // Entering a project shows its files; the activities are the left panel's first tab.
+  fireEvent.click(screen.getByRole('tab', { name: /^Activities/ }));
   return { studio, api };
 }
 

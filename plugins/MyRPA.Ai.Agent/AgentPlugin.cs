@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using MyRPA.Ai.Contracts;
 using MyRPA.Sdk.Plugins;
 
 namespace MyRPA.Ai.Agent;
@@ -97,6 +98,7 @@ public sealed class AgentPlugin : IPlugin
         ArgumentNullException.ThrowIfNull(registrar);
         registrar
             .AddInstance(_options ?? throw new InvalidOperationException("Initialize must run before Register."))
+            .AddService<IAgentToolCatalog, AgentToolCatalog>(PluginServiceLifetime.Plugin)
             .AddActivity<AgentActivity>(AgentActivity.Descriptor);
     }
 

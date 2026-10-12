@@ -23,7 +23,16 @@ dotnet run --project src/MyRPA.Server -c Release --no-build -- --project samples
 dotnet run --project src/MyRPA.Server -c Release --no-build -- --open samples/hello-world.json   # project = its folder
 ```
 
-Command line: `MyRPA.Server [--projects-root <dir>] [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>]`.
+Command line: `MyRPA.Server [--projects-root <dir>] [--project <dir>]... [--open <workflow.json>] [--plugin <dir>]... [--plugin-config <file>] [--web <dir>] [--port <n>] [--data <dir>] [--runner-url <url> [--runner-cert <pfx>]]`.
+
+- **Orchestrator** (Phase 10, [orchestrator.md](orchestrator.md), ADR-0049/0050/0051):
+  - **`--data`** is the data folder (default `%LOCALAPPDATA%\Laconi\Server`), holding `orchestration.db`.
+  - **`--runner-url`** opens a second listener for Runners and token-authenticated tools: https with `--runner-cert`
+    (password in `MYRPA_RUNNER_CERT_PASSWORD`), or http on loopback only.
+  - **Without `--runner-url`**, Runners on the same machine use the loopback address.
+  - **APIs:** `/api/orchestrator/*` (management; the session is Admin, bearer access tokens carry their role) and
+    `/runner/v1/*` (Runner tokens).
+  - **The Server never executes published jobs;** Runners do.
 
 - **Projects folder** (`--projects-root`, [ADR-0046](../adr/0046-projects-folder-create-and-delete.md)): every folder in it is a project, after the `--project` folders. The Studio creates projects there and deletes them to its `.trash`. With no project named at all, it is `Documents/Laconi Projects`.
 - **Port:** the default is 5310; `0` picks a free port.

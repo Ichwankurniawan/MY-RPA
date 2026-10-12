@@ -9,6 +9,9 @@ import type { Position } from './placement';
 import { PropertiesPanel } from './PropertyEditors';
 import { RecordingPanel } from './RecordingPanel';
 import { AssistantPanel } from './AssistantPanel';
+import { AdministrationPage, DeploymentsPage, MonitoringPage, OrchestratorContext, RobotsPage, useLoad, useOrchestrator } from './Operations';
+import { AgentToolsPage } from './AgentTools';
+import { httpOrchestratorApi, type OrchestratorApi } from './orchestrator';
 import {
   collapseAllRefusalOf,
   currentRun,
@@ -40,14 +43,17 @@ import {
 import type { ActivityDescriptor, DebugCommandName, ExecutionEvent, Json, JsonObject, WorkflowFile } from './types';
 
 
-export function App({ studio }: { studio: Studio }) {
+export function App({ studio, orchestrator }: { studio: Studio; orchestrator?: OrchestratorApi }) {
   useEffect(() => {
     void studio.connect();
   }, [studio]);
+  const operations = useMemo(() => orchestrator ?? httpOrchestratorApi(), [orchestrator]);
 
   return (
     <StudioContext.Provider value={studio}>
-      <Shell />
+      <OrchestratorContext.Provider value={operations}>
+        <Shell />
+      </OrchestratorContext.Provider>
     </StudioContext.Provider>
   );
 }
@@ -59,7 +65,7 @@ function Shell() {
   const path = useStudioState((s) => s.file?.path);
 
   useEffect(() => {
-    document.title = `${path ? `${dirty ? '• ' : ''}${path} — ` : ''}Laconi Studio`;
+    document.title = `${path ? `${dirty ? '• ' : ''}${path} — ` : ''}Laconi Automation`;
   }, [path, dirty]);
 
   useEffect(() => {
@@ -190,6 +196,16 @@ function Shell() {
             <HomePage />
           ) : page === 'projects' ? (
             <ProjectsPage />
+          ) : page === 'monitoring' ? (
+            <MonitoringPage />
+          ) : page === 'deployments' ? (
+            <DeploymentsPage />
+          ) : page === 'robots' ? (
+            <RobotsPage />
+          ) : page === 'administration' ? (
+            <AdministrationPage />
+          ) : page === 'agentTools' ? (
+            <AgentToolsPage />
           ) : (
             <>
               <section className="sidebar" aria-label="Side panel" hidden={panes.hidden.includes('toolbox')}>
@@ -317,11 +333,21 @@ export function statusLabel(run: RunView): string {
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
 
-const pages: readonly { readonly id: StudioPage; readonly label: string; readonly icon: IconName }[] = [
-  { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'projects', label: 'Projects', icon: 'project' },
-  { id: 'workflows', label: 'Workflows', icon: 'flowchart' },
+/** The rail of Laconi Automation (ADR-0044 amendment): Studio covers the project picker and the workspace. */
+const railItems: readonly { readonly id: string; readonly label: string; readonly icon: IconName; readonly pages: readonly StudioPage[]; readonly orchestrator?: boolean; readonly agentTools?: boolean }[] = [
+  { id: 'home', label: 'Home', icon: 'home', pages: ['home'] },
+  { id: 'studio', label: 'Studio', icon: 'flowchart', pages: ['projects', 'workflows'] },
+  // Phase 10 (ADR-0049): shown only when the Server runs the orchestrator.
+  { id: 'deployments', label: 'Deployments', icon: 'deploy', pages: ['deployments'], orchestrator: true },
+  { id: 'monitoring', label: 'Monitoring', icon: 'monitor', pages: ['monitoring'], orchestrator: true },
+  { id: 'robots', label: 'Robots', icon: 'robot', pages: ['robots'], orchestrator: true },
+  // ADR-0048 amendment: shown only when the AI Agent plugin is loaded.
+  { id: 'agentTools', label: 'Agent tools', icon: 'plugin', pages: ['agentTools'], agentTools: true },
+  { id: 'administration', label: 'Admin', icon: 'admin', pages: ['administration'], orchestrator: true },
 ];
+
+/** The section a page belongs to, as the title bar names it. */
+const sectionOf = (page: StudioPage): string => railItems.find((r) => r.pages.includes(page))?.label ?? 'Home';
 
 /**
  * The navigation rail (ADR-0044): the pages that work today. Runners, schedules and other modules get a place here
@@ -330,28 +356,92 @@ const pages: readonly { readonly id: StudioPage; readonly label: string; readonl
 function NavRail() {
   const studio = useStudio();
   const page = useStudioState((s) => s.page);
+  const orchestrator = useStudioState((s) => s.orchestrator);
+  const agentTools = useStudioState((s) => s.agentTools);
   return (
     <nav className="rail" aria-label="Main">
-      {pages.map((p) => (
-        <button key={p.id} type="button" className="rail-item" aria-current={page === p.id ? 'page' : undefined} title={p.label} onClick={() => (p.id === 'projects' ? void studio.showProjects() : studio.showPage(p.id))}>
-          <Icon name={p.icon} size={20} />
-          <span>{p.label}</span>
-        </button>
-      ))}
+      {railItems
+        .filter((r) => (!r.orchestrator || orchestrator) && (!r.agentTools || agentTools))
+        .map((r) => (
+          <button key={r.id} type="button" className="rail-item" data-page={r.id} aria-current={r.pages.includes(page) ? 'page' : undefined} title={r.label} onClick={() => (r.id === 'studio' ? void studio.showStudio() : studio.showPage(r.pages[0]))}>
+            <Icon name={r.icon} size={20} />
+            <span>{r.label}</span>
+          </button>
+        ))}
     </nav>
   );
 }
 
-/** The Home page (ADR-0044): what this Studio can do now, from real data only (no invented statistics). */
+/** Today's jobs and Runners, from the orchestrator (only when the Server runs it). */
+function OperationsSummary() {
+  const studio = useStudio();
+  const api = useOrchestrator();
+  const overview = useLoad(() => api.overview('24h'), [], 30000);
+  const data = overview.data;
+  const online = data === undefined ? 0 : data.runners.total - (data.runners.byStatus.Offline ?? 0) - (data.runners.byStatus.Disabled ?? 0);
+  return (
+    <section className="home-card" aria-labelledby="home-operations">
+      <h3 id="home-operations">Operations</h3>
+      {data === undefined ? (
+        <p className="hint">{overview.error !== undefined ? `Could not load: ${overview.error}` : 'Loading…'}</p>
+      ) : (
+        <>
+          <ul className="home-figures" aria-label="Last 24 hours">
+            <li>
+              <strong>{data.total}</strong> jobs in 24 h
+            </li>
+            <li>
+              <strong>{data.byState.Succeeded ?? 0}</strong> succeeded
+            </li>
+            <li>
+              <strong>{(data.byState.Failed ?? 0) + (data.byState.TimedOut ?? 0)}</strong> failed
+            </li>
+            <li>
+              <strong>{(data.byState.Running ?? 0) + (data.byState.Assigned ?? 0) + (data.byState.Queued ?? 0)}</strong> waiting or running
+            </li>
+            <li>
+              <strong>
+                {online}/{data.runners.total}
+              </strong>{' '}
+              Runners online
+            </li>
+          </ul>
+          <div className="home-actions">
+            <button type="button" className="with-icon" onClick={() => studio.showPage('monitoring')}>
+              <Icon name="monitor" size={16} /> Monitoring
+            </button>
+            <button type="button" className="with-icon" onClick={() => studio.showPage('deployments')}>
+              <Icon name="deploy" size={16} /> Deployments
+            </button>
+            <button type="button" className="with-icon" onClick={() => studio.showPage('robots')}>
+              <Icon name="robot" size={16} /> Robots
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The Home page of Laconi Automation (ADR-0044 amendment): an overview of the portal from real data only (no invented
+ * statistics): projects and workflows (into Studio), and when the Server runs the orchestrator, today's jobs and Runners. */
 function HomePage() {
   const studio = useStudio();
   const project = useStudioState((s) => s.project);
+  const projects = useStudioState((s) => s.projects);
+  const summaries = useStudioState((s) => s.projectSummaries);
   const files = useStudioState((s) => s.files);
   const activities = useStudioState((s) => s.activities);
   const plugins = useStudioState((s) => s.plugins?.plugins);
   const runs = useStudioState((s) => s.runs);
-  const openFile = (path: string) => {
-    studio.showPage('workflows');
+  const orchestrator = useStudioState((s) => s.orchestrator);
+  const agentTools = useStudioState((s) => s.agentTools);
+  const openFile = async (path: string) => {
+    if (project !== undefined) {
+      await studio.enterProject(project);
+    }
+
     void studio.requestOpen(path);
   };
   const builtIn = activities.filter((a) => a.type.startsWith('Core.')).length;
@@ -360,38 +450,53 @@ function HomePage() {
       <section className="home-hero">
         <Icon name="logo" size={56} />
         <div>
-          <h2 id="home-heading">Laconi Studio</h2>
+          <h2 id="home-heading">Laconi Automation</h2>
           <p className="tagline">
-            Design it. Run it. <strong>Lakoni.</strong>
+            Build in Studio. Deploy, schedule and watch it run. <strong>Lakoni.</strong>
           </p>
           <div className="home-actions">
-            <button
-              type="button"
-              className="primary with-icon"
-              disabled={project === undefined}
-              onClick={() => {
-                studio.showPage('workflows');
-                studio.startName('new');
-              }}
-            >
-              <Icon name="file-new" size={16} /> New workflow
+            <button type="button" className="primary with-icon" onClick={() => void studio.showProjects()}>
+              <Icon name="flowchart" size={16} /> Open Studio
             </button>
-            <button type="button" className="with-icon" onClick={() => studio.showPage('workflows')}>
-              <Icon name="flowchart" size={16} /> Open the designer
-            </button>
+            {orchestrator && (
+              <button type="button" className="with-icon" onClick={() => studio.showPage('deployments')}>
+                <Icon name="deploy" size={16} /> Deployments
+              </button>
+            )}
           </div>
         </div>
       </section>
       <div className="home-grid">
+        <section className="home-card" aria-labelledby="home-projects">
+          <h3 id="home-projects">Projects</h3>
+          {projects.length === 0 ? (
+            <p className="hint">No project yet. Open Studio to create one.</p>
+          ) : (
+            <ul className="home-list">
+              {projects.map((name) => {
+                const summary = summaries.get(name);
+                return (
+                  <li key={name} className="home-project">
+                    <button type="button" className="link-row" onClick={() => void studio.enterProject(name)} aria-label={`Open ${name} in Studio`}>
+                      <Icon name="project" size={16} />
+                      <span>{name}</span>
+                    </button>
+                    {summary !== undefined && summary.error === undefined && <small>{counted(summary.workflows, 'workflow')}</small>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
         <section className="home-card" aria-labelledby="home-workflows">
           <h3 id="home-workflows">Workflows{project ? ` in ${project}` : ''}</h3>
           {files.length === 0 ? (
             <p className="hint">No workflows in this project yet.</p>
           ) : (
             <ul className="home-list">
-              {files.map((f) => (
+              {files.slice(0, 8).map((f) => (
                 <li key={f.path}>
-                  <button type="button" className="link-row" onClick={() => openFile(f.path)} aria-label={`Open ${f.path}`}>
+                  <button type="button" className="link-row" onClick={() => void openFile(f.path)} aria-label={`Open ${f.path}`}>
                     <Icon name="file" size={16} />
                     <span>{f.path}</span>
                   </button>
@@ -400,10 +505,11 @@ function HomePage() {
             </ul>
           )}
         </section>
+        {orchestrator && <OperationsSummary />}
         <section className="home-card" aria-labelledby="home-runs">
           <h3 id="home-runs">Runs in this session</h3>
           {runs.length === 0 ? (
-            <p className="hint">No runs yet. Open a workflow and press Run (F5).</p>
+            <p className="hint">No runs yet. Open a workflow in Studio and press Run (F5).</p>
           ) : (
             <ul className="home-list">
               {runs.map((r) => (
@@ -416,7 +522,7 @@ function HomePage() {
           )}
         </section>
         <section className="home-card" aria-labelledby="home-activities">
-          <h3 id="home-activities">Activities</h3>
+          <h3 id="home-activities">Platform</h3>
           <p className="home-figure">
             <strong>{activities.length}</strong> activities: {builtIn} built-in, {activities.length - builtIn} from plugins.
           </p>
@@ -434,6 +540,11 @@ function HomePage() {
           ) : (
             <p className="hint">No plugins loaded. Start the server with --plugin or --plugin-config to add activities.</p>
           )}
+          {agentTools && (
+            <button type="button" className="link" onClick={() => studio.showPage('agentTools')}>
+              Agent tools and MCP servers
+            </button>
+          )}
         </section>
       </div>
     </main>
@@ -443,9 +554,9 @@ function HomePage() {
 const counted = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
- * The Projects page (ADR-0046): every project with what it holds; choosing one shows its workspace (Workflows). New
- * project creates a folder in the server's projects folder; Delete moves one of those to its trash. A --project folder
- * is never deleted here. No editing toolbar: nothing here edits a workflow.
+ * Studio's start (ADR-0046, ADR-0044 amendment): every project with what it holds; choosing one opens its workspace
+ * (the designer). New project creates a folder in the server's projects folder; Delete moves one of those to its trash.
+ * A --project folder is never deleted here. No editing toolbar: nothing here edits a workflow.
  */
 function ProjectsPage() {
   const studio = useStudio();
@@ -459,7 +570,7 @@ function ProjectsPage() {
     <main className="home projects-page" aria-labelledby="projects-heading">
       <div className="page-header">
         <h2 id="projects-heading" className="page-title">
-          <Icon name="project" size={22} /> Projects
+          <Icon name="flowchart" size={22} /> Studio
         </h2>
         <button
           type="button"
@@ -472,7 +583,7 @@ function ProjectsPage() {
         </button>
       </div>
       <p className="hint">
-        Choose a project to work on its workflows.{' '}
+        Studio builds workflows. Choose a project to work on, or create one.{' '}
         {projectsRoot !== undefined ? `New projects are created in ${projectsRoot}.` : 'To create projects here, start the server with --projects-root and a folder.'}
       </p>
       {projects.length === 0 ? (
@@ -683,31 +794,33 @@ function Toolbar() {
 
   const [theme, setTheme] = useTheme();
   const ready = connection === 'ready';
+  const inStudio = page === 'projects' || page === 'workflows';
   const readOnly = file?.readOnlyReason !== undefined;
   return (
     <header className="commandbar">
       <div className="titlebar">
-        {/* ADR-0044: the Laconi mark with the wordmark; the heading's accessible name is the product name. */}
+        {/* ADR-0044 amendment: the portal is Laconi Automation; Studio is its workflow builder. */}
         <span className="brand">
           <Icon name="logo" size={26} />
-          <h1 aria-label="Laconi Studio">
+          <h1 aria-label="Laconi Automation">
             <span className="wordmark" aria-hidden="true">
               laconi
             </span>
             <span className="product" aria-hidden="true">
-              Studio
+              Automation
             </span>
           </h1>
         </span>
-        <span className="document-title" data-testid="document-title">
-          {file ? `${file.path}${dirty ? ' •' : ''}${file.readOnlyReason ? ' (read-only)' : ''}` : 'No workflow open'}
-        </span>
         <nav className="location" aria-label="Location">
-          <button type="button" className="crumb with-icon" disabled={!ready} onClick={() => void studio.showProjects()} title="Show all projects">
-            <Icon name="project" size={15} />
-            <span>Projects</span>
-          </button>
-          {project !== undefined && (
+          {inStudio ? (
+            <button type="button" className="crumb with-icon" disabled={!ready} onClick={() => void studio.showProjects()} title="Choose a project">
+              <Icon name="flowchart" size={15} />
+              <span>Studio</span>
+            </button>
+          ) : (
+            <span className="crumb">{sectionOf(page)}</span>
+          )}
+          {page === 'workflows' && project !== undefined && (
             <>
               <span className="crumb-separator" aria-hidden="true">
                 /
@@ -718,23 +831,33 @@ function Toolbar() {
             </>
           )}
         </nav>
-        <label>
-          Workflow
-          <select value={choice} disabled={!ready} onChange={(e) => setChoice(e.target.value)}>
-            <option value="">Choose…</option>
-            {files.map((f) => (
-              <option key={f.path} value={f.path}>
-                {f.path}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className="with-icon" onClick={open} disabled={choice === '' || busy !== undefined}>
-          <Icon name="folder-open" size={16} />
-          <span>Open</span>
-        </button>
+        {page === 'workflows' && (
+          <span className="document-title" data-testid="document-title">
+            {file ? `${file.path}${dirty ? ' •' : ''}${file.readOnlyReason ? ' (read-only)' : ''}` : 'No workflow open'}
+          </span>
+        )}
+        {page === 'workflows' && (
+          <>
+            <label>
+              Workflow
+              <select value={choice} disabled={!ready} onChange={(e) => setChoice(e.target.value)}>
+                <option value="">Choose…</option>
+                {files.map((f) => (
+                  <option key={f.path} value={f.path}>
+                    {f.path}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="with-icon" onClick={open} disabled={choice === '' || busy !== undefined}>
+              <Icon name="folder-open" size={16} />
+              <span>Open</span>
+            </button>
+          </>
+        )}
       </div>
-      {ready && page !== 'projects' && (
+      {/* Only Studio's workspace edits workflows; every other page shows no editing toolbar. */}
+      {ready && page === 'workflows' && (
         <div className="commands">
           <div className="command-group" role="toolbar" aria-label="File">
             <Command icon="file-new" label="New workflow…" onClick={() => studio.startName('new')} disabled={project === undefined} title="Create a new workflow in the project" />
@@ -955,7 +1078,7 @@ function Toolbox() {
                                     aria-describedby={a.description || sideEffectsText(a) ? `toolbox-hint ${descriptionId(a.type)}` : 'toolbox-hint'}
                                     {...insertProps(a)}
                                   >
-                                    <Icon name={activityIcon(a.type, a)} size={15} />
+                                    <Icon name={activityIcon(a.type, a)} className={`family-${activityFamily(a.type, a)}`} size={15} />
                                     <span>{a.displayName}</span>
                                   </button>
                                   <button
@@ -1889,6 +2012,45 @@ const activityIcon = (type: string | undefined, activity?: ActivityDescriptor): 
   );
 };
 
+/**
+ * An activity's family (ADR-0044, Atlas): the hue of its icon. Built-ins by type or namespace, plugin activities by
+ * namespace, anything else by its declared side effects.
+ */
+export type ActivityFamily = 'control' | 'data' | 'browser' | 'files' | 'email' | 'ai' | 'database' | 'script' | 'other';
+
+const familyPrefixes: readonly (readonly [string, ActivityFamily])[] = [
+  ['Core.Assign', 'data'],
+  ['Core.Text.', 'data'],
+  ['Core.Json.', 'data'],
+  ['Core.Date.', 'data'],
+  ['Core.Collection.', 'data'],
+  ['Core.Log', 'data'],
+  ['Core.', 'control'],
+  ['Browser.', 'browser'],
+  ['File.', 'files'],
+  ['Excel.', 'files'],
+  ['Pdf.', 'files'],
+  ['Zip.', 'files'],
+  ['Sftp.', 'files'],
+  ['Email.', 'email'],
+  ['AI.', 'ai'],
+  ['Db.', 'database'],
+  ['Code.', 'script'],
+  ['Http.', 'script'],
+];
+
+export const activityFamily = (type: string | undefined, activity?: ActivityDescriptor): ActivityFamily => {
+  if (type === undefined) {
+    return 'other';
+  }
+
+  const effects = activity?.sideEffects ?? [];
+  return (
+    familyPrefixes.find(([prefix]) => type.startsWith(prefix))?.[1] ??
+    (effects.includes('Browser') ? 'browser' : effects.includes('Network') ? 'script' : effects.includes('FileSystem') ? 'files' : 'other')
+  );
+};
+
 const summaries = new WeakMap<JsonObject, string>();
 
 /** One line of a card's key values (UX-3), e.g. `message: 'Hello' · level: Warning`; cached per node version. */
@@ -2000,7 +2162,7 @@ const TreeNode = memo(function TreeNodeCard({ node, depth, slot, step }: { node:
             </button>
           )}
           {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
-          <Icon name={activityIcon(type, activity)} size={16} />
+          <Icon name={activityIcon(type, activity)} className={`family-${activityFamily(type, activity)}`} size={16} />
           <span className="title">
             {slot !== undefined && <span className="slot">{slot}:</span>}{slot !== undefined && ' '}
             <span className="label">{label}</span> <span className="type visually-hidden">{type}</span> {id !== undefined && <span className="id visually-hidden">#{id}</span>}
@@ -2402,7 +2564,7 @@ const CanvasStep = memo(function CanvasStepCard({ node, depth, start, at }: { no
       <div className={`node step-card${selected ? ' selected' : ''}${hasError ? ' has-error' : ''}`} data-run-status={status}>
         <div className="card-header">
           {(breakpoint || selected) && id !== undefined && <BreakpointToggle nodeKey={key} label={label} set={breakpoint} />}
-          <Icon name={activityIcon(type, activity)} size={16} />
+          <Icon name={activityIcon(type, activity)} className={`family-${activityFamily(type, activity)}`} size={16} />
           <span className="title">
             <span className="label">{label}</span> {id !== undefined && <span className="id">#{id}</span>}
             {start && ' '}

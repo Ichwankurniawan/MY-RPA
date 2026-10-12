@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { memoryDrafts } from './drafts';
 import { Studio } from './studio';
-import { FakeApi, FakeEventSource, immediately, helloWorldEvents, settle } from './test-support';
+import { FakeApi, FakeEventSource, immediately, helloWorldEvents, settle, enterStudio } from './test-support';
 
 /** The Properties panel (the only place properties are edited). */
 const properties = () => within(screen.getByRole('complementary', { name: 'Properties' }));
@@ -13,6 +13,7 @@ async function renderStudio(api = new FakeApi()) {
   const studio = new Studio(api, (url) => new FakeEventSource(url), immediately);
   render(<App studio={studio} />);
   await act(settle);
+  await enterStudio();
   fireEvent.change(screen.getByRole('combobox', { name: 'Workflow' }), { target: { value: 'hello-world.json' } });
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));

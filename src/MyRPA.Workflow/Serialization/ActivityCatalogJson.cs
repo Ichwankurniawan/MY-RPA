@@ -19,7 +19,8 @@ namespace MyRPA.Workflow.Serialization;
 /// (<c>List</c> or <c>Graph</c>, ADR-0037); snapshots of version 1.0 are still read (no <c>childLayout</c>: <c>List</c>).
 /// Version 1.2 (ADR-0042) adds, when set, a property's <c>valueType</c>, <c>default</c> (a JSON value) and <c>secret</c>,
 /// and an activity's <c>sideEffects</c> (a list of <c>FileSystem</c>, <c>Network</c>, <c>Browser</c>); older snapshots
-/// read without them.
+/// read without them. A property's optional <c>editor</c> hint (ADR-0048 amendment), like <c>multiline</c> (ADR-0045), is
+/// additive within 1.2: readers that do not know it ignore it.
 /// </remarks>
 public static class ActivityCatalogJson
 {
@@ -141,6 +142,11 @@ public static class ActivityCatalogJson
                 writer.WriteBoolean("multiline", true);
             }
 
+            if (property.Editor is not null)
+            {
+                writer.WriteString("editor", property.Editor);
+            }
+
             writer.WriteEndObject();
         }
 
@@ -208,6 +214,7 @@ public static class ActivityCatalogJson
                 DefaultValue = property.TryGetProperty("default", out var defaultValue) ? defaultValue.GetRawText() : null,
                 IsSecret = property.TryGetProperty("secret", out _) && Boolean(property, "secret", propertyPath),
                 IsMultiline = property.TryGetProperty("multiline", out _) && Boolean(property, "multiline", propertyPath),
+                Editor = OptionalString(property, "editor", propertyPath),
             });
         }
 

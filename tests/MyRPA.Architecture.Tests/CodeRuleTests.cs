@@ -29,15 +29,18 @@ public sealed class CodeRuleTests
     [Fact]
     public void BannedApiExemptions_AreUsedOnlyByTheirType()
     {
-        // The exemption must cover real calls (so it is not stale) and nothing outside the exempted type.
-        var plugins = CodeRuleDetectors.FindBannedCalls(AssemblyOf("MyRPA.Plugins").GetTypes());
-
-        foreach (var exemption in ArchitectureRules.BannedApiExemptions)
+        // Each exemption must cover real calls in its own project (so it is not stale), and every banned call in those
+        // projects must be exempted (nothing outside the exempted types).
+        foreach (var project in ArchitectureRules.BannedApiExemptions.Select(e => e.Project).Distinct(StringComparer.Ordinal))
         {
-            Assert.Contains(plugins, v => v.StartsWith(exemption.TypeName, StringComparison.Ordinal) && v.Contains(exemption.Api, StringComparison.Ordinal));
-        }
+            var violations = CodeRuleDetectors.FindBannedCalls(AssemblyOf(project).GetTypes());
+            foreach (var exemption in ArchitectureRules.BannedApiExemptions.Where(e => e.Project == project))
+            {
+                Assert.Contains(violations, v => v.StartsWith(exemption.TypeName, StringComparison.Ordinal) && v.Contains(exemption.Api, StringComparison.Ordinal));
+            }
 
-        Assert.All(plugins, v => Assert.True(ArchitectureRules.IsExempt(v), v));
+            Assert.All(violations, v => Assert.True(ArchitectureRules.IsExempt(v), v));
+        }
     }
 
     [Fact]
@@ -47,6 +50,11 @@ public sealed class CodeRuleTests
         Assert.False(ArchitectureRules.IsExempt("MyRPA.Plugins.Loading.PluginLoadContextHelper.X: AssemblyLoadContext.LoadFromStream loads arbitrary code"));
         Assert.False(ArchitectureRules.IsExempt("MyRPA.Plugins.Loading.PluginLoadContext.Load: Process.Start executes external programs"));
         Assert.True(ArchitectureRules.IsExempt("MyRPA.Plugins.Loading.PluginLoadContext.LoadVerified: AssemblyLoadContext.LoadFromStream loads arbitrary code (only the plugin load context may, ADR-0014)"));
+
+        // ADR-0049: only the Runner's connection may use HttpClient; another Runner type may not.
+        Assert.True(ArchitectureRules.IsExempt("MyRPA.Runner.RunnerConnection+<SendAsync>d__1.MoveNext: System.Net.Http.HttpClient performs network I/O"));
+        Assert.False(ArchitectureRules.IsExempt("MyRPA.Runner.JobExecutor.RunAsync: System.Net.Http.HttpClient performs network I/O"));
+        Assert.False(ArchitectureRules.IsExempt("MyRPA.Runner.RunnerConnection.Dispose: System.Net.Sockets.Socket performs network I/O"));
     }
 
     [Fact]

@@ -89,6 +89,29 @@ has structured (JSON-schema) output but no native tool calling.
 - **Coming later:**
   - native tool calling (a provider capability);
   - human approval with pause and resume;
-  - a tool picker in the Studio fed by a server endpoint;
+  - ~~a tool picker in the Studio fed by a server endpoint~~ (done, see the amendment below);
   - MyRPA as an MCP server;
   - OAuth for MCP.
+
+## Amendment (2026-10-12): agent tools in the Studio
+
+The owner could not see the MCP architecture: servers lived only in plugin settings and an agent's `tools` was raw
+JSON. Decisions:
+
+- **`IAgentToolCatalog`** (in `MyRPA.Ai.Contracts`, additive) is registered by the agent plugin: its built-ins, its
+  configured MCP servers (name, transport, URL or command, enabled, allowed and approval tools, the token's environment
+  variable and whether it is set; never a token value) and `DiscoverAsync`, a connection test that opens a short-lived
+  session (a stdio server's process ends with it), one at a time, never for a disabled server.
+- **Server:** `GET /api/agent-tools` and `POST /api/agent-tools/mcp/{name}/discover` (session, Origin and anti-forgery
+  as every Studio API); `/api/info` says `agentTools` when the plugin is loaded. Read-only: servers are still configured
+  only in the plugin's settings; the Studio, a model or a workflow can never add a server, a URL or a command.
+- **Catalog editor hint:** `ActivityPropertyDefinition.Editor` (catalog JSON `editor`, additive within 1.2 like
+  `multiline`) names a richer editor for a text property; tools that do not know it use their ordinary editor. The
+  agent's `tools` property declares `agentTools`. The Studio keeps no activity knowledge: it knows editor kinds, the
+  catalog says which property uses one.
+- **Studio:** an **Agent tools** rail page (only when the plugin is loaded) lists MCP servers with **Test connection**
+  and the built-ins; under `tools`, a picker adds MCP server tools (from the configuration, or from the server after
+  **Load tools from server**), built-ins and project workflows (their In arguments become `input`), and removes entries.
+  It writes the same JSON the text box shows; the text stays editable, and text the picker cannot read is left to it.
+- **Not done:** editing server settings from the Studio (the configuration file and a Server restart remain the way),
+  OAuth, MCP resources and prompts, and approval.

@@ -63,6 +63,9 @@ orchestrator/queues/triggers (10), RBAC/credentials (11), packages/signing (12).
 | `MyRPA.Execution.Hosting` | Execution hosting for the server (and later agents/robots): `ExecutionHost` (start, cancel, concurrency limit, retention), `ExecutionHandle` (state, result, `ReadEventsAsync` replay), per-run observer (ADR-0023) and log routing, `AddMyRpaExecutionHosting` | Core, Workflow, Contracts | DI.Abstractions, Logging.Abstractions |
 | `MyRPA.Server` | Control-plane composition root (ASP.NET Core; local mode, ADR-0022/0024/0025): projects and files with ETags, catalog, plugins, validation, runs through `ExecutionHost`, one multiplexed SSE stream per tab, loopback-only security, serves the built Web Studio (`--web`). See [server.md](server.md) | Core, Workflow, Activities, Runtime, Storage, Plugins, Contracts, Execution.Hosting | none (ASP.NET Core shared framework) |
 | `web/studio` (npm, outside the solution) | The Web Studio (ADR-0021, ADR-0028): React + TypeScript + Vite; talks only to its own `MyRPA.Server` origin. See [web-studio.md](web-studio.md) | — (HTTP API) | React, React DOM |
+| `MyRPA.Orchestration` | The orchestrator (ADR-0049, [orchestrator.md](orchestrator.md)): job state machine, packages (build and verify), leased dispatch, schedules and cron, access tokens, `IOrchestrationStore`. No HTTP, no driver, no engine | Core, Workflow, Contracts | DI.Abstractions, Logging.Abstractions |
+| `MyRPA.Orchestration.Sqlite` | The orchestrator's SQLite store (ADR-0050); the only src project with a database driver | Orchestration | Microsoft.Data.Sqlite |
+| `MyRPA.Runner` (`myrpa-runner`) | Composition root of the Runner (ADR-0049): claims jobs from the Server, verifies packages and dependencies, executes them with `ExecutionHost`, reports events and outcomes; console or Windows service. Only `RunnerConnection` makes HTTP calls | Core … Plugins, Contracts, Execution.Hosting, Orchestration, Browser.Contracts, Ai.Contracts | Hosting, Hosting.WindowsServices |
 | `MyRPA.Cli` (`myrpa`) | Composition root: Generic Host, logging (stderr), plugin loading (`--plugin`, `--plugin-config`), commands `info`, `validate`, `run`, `plugins`, `catalog` | Core … Plugins, Browser.Contracts (host-provided for the browser plugin) | Hosting |
 
 Plugins (outside `src`): `plugins/MyRPA.Browser.Playwright` (browser provider; the only project allowed to reference
@@ -109,6 +112,15 @@ graph BT
     Cli --> Storage
     Cli --> Plugins
     Cli --> Sdk
+    Orch[MyRPA.Orchestration] --> Workflow
+    Orch --> Contracts
+    OrchSqlite[MyRPA.Orchestration.Sqlite] --> Orch
+    Server[MyRPA.Server<br/>composition root] --> Hosting
+    Server --> OrchSqlite
+    Runner[MyRPA.Runner<br/>composition root] --> Hosting
+    Runner --> Plugins
+    Runner --> Orch
+    Runner -.->|Runner protocol, HTTPS| Server
     PluginAsm[Plugin assemblies<br/>own AssemblyLoadContext] -.->|compile against| Sdk
 ```
 

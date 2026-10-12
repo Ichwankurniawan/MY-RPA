@@ -69,6 +69,13 @@ internal static class LocalSecurity
         response.Headers["Referrer-Policy"] = "no-referrer";
         response.Headers.XFrameOptions = "DENY";
 
+        // The Runner listener (ADR-0051) serves only token-authenticated machine traffic; it never sees a browser session.
+        if (context.RequestServices.GetRequiredService<ServerListeners>().IsRunnerListener(context.Connection.LocalPort))
+        {
+            await RequestIdentity.RunnerListenerAsync(context, next).ConfigureAwait(false);
+            return;
+        }
+
         // DNS rebinding: only loopback host names, on the port this connection arrived at.
         if (!IsLoopbackHost(context))
         {
@@ -76,10 +83,42 @@ internal static class LocalSecurity
             return;
         }
 
+        // A Runner on this machine may use the loopback listener: its own token, no browser session.
+        if (request.Path.StartsWithSegments(MyRPA.Contracts.Orchestration.RunnerProtocol.PathPrefix, StringComparison.Ordinal))
+        {
+            response.Headers.CacheControl = "no-store";
+            if (await RequestIdentity.AuthenticateRunnerAsync(context).ConfigureAwait(false))
+            {
+                await next(context).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         var isApi = request.Path.StartsWithSegments("/api", StringComparison.Ordinal);
+        if (isApi && request.Path.StartsWithSegments("/api/orchestrator", StringComparison.Ordinal) && RequestIdentity.Bearer(context) is not null)
+        {
+            // A script or tool with an access token (ADR-0051). Browsers never attach bearer tokens by themselves, so the
+            // cross-site checks of cookie sessions do not apply; the token's role does.
+            response.Headers.CacheControl = "no-store";
+            if (!HttpMethods.IsGet(request.Method) && (request.ContentLength ?? 0) > 0 && request.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) != true)
+            {
+                await Reject(context, StatusCodes.Status415UnsupportedMediaType, "Request bodies must be application/json.").ConfigureAwait(false);
+                return;
+            }
+
+            if (await RequestIdentity.AuthenticateAccessTokenAsync(context).ConfigureAwait(false))
+            {
+                await next(context).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         if (isApi)
         {
             response.Headers.CacheControl = "no-store";
+            RequestIdentity.SetLocalOwner(context);
             var sessions = context.RequestServices.GetRequiredService<LocalSessions>();
             if (!sessions.IsValid(request.Cookies[LocalSessions.CookieName]))
             {

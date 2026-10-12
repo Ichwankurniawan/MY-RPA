@@ -2,7 +2,7 @@
 // the cookie set by the start link, sent automatically on same-origin requests. State-changing requests carry the
 // anti-forgery header and JSON bodies; the browser adds the Origin header itself.
 
-import type { ActivityDescriptor, AssistantGenerateBody, AssistantInfo, AssistantPreview, DebugAnswer, DebugCommandName, DebugState, Diagnostic, ExplainAnswer, ExpressionFunction, GeneratedActivities, GenerationAnswer, JsonObject, NameReferences, PluginReport, ProjectListing, ProjectsInfo, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, WorkflowFile } from './types';
+import type { ActivityDescriptor, AgentToolsInfo, AssistantGenerateBody, AssistantInfo, AssistantPreview, DebugAnswer, DebugCommandName, DebugState, Diagnostic, ExplainAnswer, ExpressionFunction, GeneratedActivities, GenerationAnswer, JsonObject, McpDiscoveryView, NameReferences, PluginReport, ProjectListing, ProjectsInfo, RecordedStep, RunStatus, ScopeName, ServerInfo, ValidationResult, WorkflowFile } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -39,6 +39,10 @@ export interface StudioApi {
   projects(): Promise<ProjectsInfo>;
   /** Whether the AI Workflow Assistant can answer (ADR-0047). */
   assistantInfo(): Promise<AssistantInfo>;
+  /** The AI Agent plugin's built-in tools and configured MCP servers (ADR-0048 amendment); read-only. */
+  agentTools(): Promise<AgentToolsInfo>;
+  /** Connects to a configured MCP server and lists its tools (a connection test). */
+  discoverMcp(server: string): Promise<McpDiscoveryView>;
   /** Exactly what an assistant request would send to the provider; nothing is sent. */
   assistantPreview(body: AssistantGenerateBody & { operation: 'generate' | 'explain' | 'debug' }): Promise<AssistantPreview>;
   /** A clarification, "unsupported", or a proposal checked by the server; nothing is saved, applied or run. */
@@ -143,6 +147,8 @@ export function httpApi(fetcher: typeof fetch = (input, init) => fetch(input, in
     plugins: () => get<PluginReport>('/api/plugins'),
     projects: () => get<ProjectsInfo>('/api/projects'),
     assistantInfo: () => get<AssistantInfo>('/api/assistant'),
+    agentTools: () => get<AgentToolsInfo>('/api/agent-tools'),
+    discoverMcp: async (server) => (await send('POST', `/api/agent-tools/mcp/${encodeURIComponent(server)}/discover`)).json() as Promise<McpDiscoveryView>,
     assistantPreview: async (body) => (await send('POST', '/api/assistant/preview', JSON.stringify(body))).json() as Promise<AssistantPreview>,
     assistantGenerate: async (body, signal) => (await send('POST', '/api/assistant/generate', JSON.stringify(body), {}, signal)).json() as Promise<GenerationAnswer>,
     assistantExplain: async (document, signal) => (await send('POST', '/api/assistant/explain', JSON.stringify({ document }), {}, signal)).json() as Promise<ExplainAnswer>,

@@ -28,6 +28,8 @@
   </ItemGroup>
   <ItemGroup Label="Composition roots only">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <!-- ADR-0049: the Runner can run as a Windows service (a no-op elsewhere; MIT, Microsoft). -->
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
   </ItemGroup>
   <ItemGroup Label="Tests only">
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />

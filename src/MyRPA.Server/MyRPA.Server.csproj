@@ -24,6 +24,8 @@
     <ProjectReference Include="..\MyRPA.Execution.Hosting\MyRPA.Execution.Hosting.csproj" />
     <ProjectReference Include="..\MyRPA.Ai.Contracts\MyRPA.Ai.Contracts.csproj" />
     <ProjectReference Include="..\MyRPA.Ai.Assistant\MyRPA.Ai.Assistant.csproj" />
+    <ProjectReference Include="..\MyRPA.Orchestration\MyRPA.Orchestration.csproj" />
+    <ProjectReference Include="..\MyRPA.Orchestration.Sqlite\MyRPA.Orchestration.Sqlite.csproj" />
   </ItemGroup>
   <!--
     W6 (ADR-0031): the built Web Studio (web/studio/dist, from 'npm run build') is copied next to the server as wwwroot,
@@ -35,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="MyRPA.Server.Tests" />
+    <InternalsVisibleTo Include="MyRPA.Runner.Tests" />
     <InternalsVisibleTo Include="MyRPA.Architecture.Tests" />
   </ItemGroup>
 </Project>

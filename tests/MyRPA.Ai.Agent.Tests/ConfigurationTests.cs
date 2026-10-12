@@ -18,6 +18,7 @@ public sealed class ConfigurationTests
         Assert.True(host.Catalog.TryGet(new ActivityTypeName("AI.Agent"), out var descriptor));
         Assert.Equal(["instructions", "task", "tools", "outputSchema", "maxIterations", "maxToolCalls", "timeoutMs", "toolTimeoutMs", "maxTokens", "result", "toolCalls"], descriptor.Properties.Select(p => p.Name));
         Assert.True(descriptor.Properties.Single(p => p.Name == "instructions").IsMultiline);
+        Assert.Equal("agentTools", descriptor.Properties.Single(p => p.Name == "tools").Editor);
         Assert.Equal(ActivitySideEffects.Network, descriptor.SideEffects);
     }
 

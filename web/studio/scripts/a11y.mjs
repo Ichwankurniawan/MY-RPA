@@ -51,10 +51,12 @@ await withStudio(async ({ project, page, startServer, problems }) => {
   };
 
   const filesTree = page.getByRole('tree', { name: 'Workflow files' });
-  // One project opens its workspace; the title bar's Projects link shows the Projects view.
-  await page.getByRole('navigation', { name: 'Location' }).getByRole('button', { name: 'Projects' }).click();
+  // Laconi Automation opens on Home; Studio starts with the projects (ADR-0044 amendment).
+  await page.locator('.home-hero').waitFor();
+  await scan('Home');
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Studio', exact: true }).click();
   await page.locator('.project-card').first().waitFor();
-  await scan('Projects view');
+  await scan('Studio projects');
   await showTab(page, 'Files');
   await filesTree.locator('[data-path="a11y.json"]').dblclick();
   await page.getByTestId('document-title').filter({ hasText: /^a11y\.json$/ }).waitFor();
@@ -205,14 +207,49 @@ await withStudio(async ({ project, page, startServer, problems }) => {
 
   // ADR-0047: the AI Workflow Assistant with a reviewed proposal (scripted provider: no model, no key).
   const proposal = { schemaVersion: '1.0', id: 'ai-a11y', name: 'AI', version: '1', root: { id: 'main', type: 'Core.Sequence', children: [{ id: 'say', type: 'Core.Log', properties: { message: "'hi'" } }] } };
-  const ai = scriptedAi(join(project, '..', 'ai'), [proposalAnswer(proposal, ['Log hi'])]);
+  const ai = scriptedAi(join(project, '..', 'ai'), [proposalAnswer(proposal, ['Log hi'])], { agent: true });
   await page.goto(await startServer(['--project', project, '--plugin-config', ai.config, '--web', join(repo, 'web', 'studio', 'dist')]));
   await page.getByText('Connected to MyRPA.Server').waitFor();
+  await showTab(page, 'Files');
   await page.getByRole('tab', { name: /^Assistant/ }).click();
   await page.getByLabel('Describe what to build or change').fill('Log hi');
   await page.getByRole('toolbar', { name: 'Assistant' }).getByRole('button', { name: 'New workflow', exact: true }).click();
   await page.getByTestId('assistant-proposal').waitFor();
   await scan('Assistant with a proposal');
+
+  // Phase 10 (ADR-0049): the operations pages, with a Runner created and a published, deployed workflow.
+  const rail = page.getByRole('navigation', { name: 'Main' });
+  await rail.getByRole('button', { name: 'Admin' }).click();
+  const runners = page.getByRole('region', { name: 'Runner administration' });
+  await runners.getByLabel('Name').fill('a11y-runner');
+  await runners.getByRole('button', { name: 'Create Runner' }).click();
+  await runners.locator('.ops-secret').waitFor();
+  await page.getByRole('region', { name: 'Audit history' }).getByText(/runner[.]create/).waitFor();
+  await scan('Administration (Runner token shown once)');
+  await rail.getByRole('button', { name: 'Deployments' }).click();
+  await page.getByRole('list', { name: 'Projects to deploy' }).waitFor();
+  await scan('Deployments (choose a project)');
+  await page.getByRole('list', { name: 'Projects to deploy' }).getByRole('button').first().click();
+  const publish = page.getByRole('region', { name: 'Publish the project' });
+  await publish.getByRole('checkbox').first().check();
+  await publish.getByRole('button', { name: 'Publish' }).click();
+  await publish.getByRole('status').waitFor();
+  await page.getByRole('region', { name: 'Deployment details' }).getByRole('button', { name: 'Deploy' }).click();
+  await page.getByRole('region', { name: 'Deployment details' }).getByRole('status').waitFor();
+  await scan('Deployments with a deployment selected');
+  await rail.getByRole('button', { name: 'Monitoring' }).click();
+  await page.getByRole('list', { name: 'Job counts' }).waitFor();
+  await scan('Monitoring');
+  await rail.getByRole('button', { name: 'Robots' }).click();
+  await page.getByRole('main', { name: 'Robots' }).getByText('a11y-runner').waitFor();
+  await scan('Robots');
+
+  // ADR-0048 amendment: the Agent tools page after a connection test to a (fake) stdio MCP server.
+  await rail.getByRole('button', { name: 'Agent tools' }).click();
+  const local = page.getByRole('listitem', { name: 'MCP server local' });
+  await local.getByRole('button', { name: 'Test connection' }).click();
+  await local.getByText(/^Connected in/).waitFor({ timeout: 30000 });
+  await scan('Agent tools (MCP server tested)');
 
   const blocking = findings.filter((f) => f.impact === 'serious' || f.impact === 'critical');
   check(blocking.length === 0, `${blocking.length} serious or critical accessibility violation(s)`);

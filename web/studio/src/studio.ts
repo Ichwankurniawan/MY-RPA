@@ -23,7 +23,7 @@ import {
 import { storageDrafts, type DraftStore } from './drafts';
 import { RunEventStream, type EventSourceFactory, type StreamStatus } from './events';
 import { createStore, type Store } from './store';
-import type { ActivityDescriptor, AssistantInfo, AssistantPreview, AssistantPurpose, AssistantTurn, DebugAnswer, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExecutionEvent, ExplainAnswer, ExpressionFunction, GenerationAnswer, Json, JsonObject, NameReference, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, ScopeName, WorkflowFile } from './types';
+import type { ActivityDescriptor, AgentToolsInfo, AssistantInfo, AssistantPreview, AssistantPurpose, AssistantTurn, DebugAnswer, DebugCommandName, DebugValue, Diagnostic, ExecutionError, ExecutionEvent, ExplainAnswer, ExpressionFunction, GenerationAnswer, Json, JsonObject, McpDiscoveryView, NameReference, PluginReport, PropertyDescriptor, RecordedStep, RecordingEvent, RunStatus, ScopeName, WorkflowFile } from './types';
 import { isBreakpointMap, isTypeList, preferenceKeys, storagePreferences, type PreferenceStore } from './preferences';
 import { renameReferences, usagesOf, type Usage } from './rename';
 import { diagnosticTarget, setNodeId, setPropertyValue, type DataList } from './workflowData';
@@ -211,6 +211,12 @@ export interface StudioState {
   readonly panes: Panes;
   /** The page shown in the main area (ADR-0044): the Studio itself, or the Home page. */
   readonly page: StudioPage;
+  /** Where Studio was last: the project picker or a project's workspace (the rail's Studio item returns there). */
+  readonly studioPage: 'projects' | 'workflows';
+  /** Whether the Server runs the orchestrator (Phase 10): the operations pages are shown only then. */
+  readonly orchestrator: boolean;
+  /** Whether the AI Agent plugin is loaded: the Agent tools page (built-ins, MCP servers) is shown only then. */
+  readonly agentTools: boolean;
   /** What each project holds, for the Projects page (loaded on connect and whenever it is shown). */
   readonly projectSummaries: ReadonlyMap<string, ProjectSummary>;
   /** The projects folder new projects go to (ADR-0046); undefined when the server has none, so none are created. */
@@ -300,8 +306,11 @@ export interface AssistantView {
   readonly error?: string;
 }
 
-/** The pages of the navigation rail (ADR-0044); only pages that work are listed. Workflows is the chosen project's workspace. */
-export type StudioPage = 'workflows' | 'home' | 'projects';
+/**
+ * The pages of Laconi Automation (ADR-0044 amendment). Studio is two pages: `projects` (choose or create a project) and
+ * `workflows` (the chosen project's workspace, the designer); the rail shows them as one item.
+ */
+export type StudioPage = 'workflows' | 'home' | 'projects' | 'monitoring' | 'deployments' | 'robots' | 'administration' | 'agentTools';
 
 /** A project on the Projects page, from its listing: how many workflows and folders, and the latest change. */
 export interface ProjectSummary {
@@ -860,7 +869,10 @@ export class Studio {
       recentActivities: (this.preferences.read(preferenceKeys.recent, isTypeList) ?? []).slice(0, maxRecent),
       outputTab: 'problems',
       panes: this.preferences.read(preferenceKeys.panes, isPanes) ?? { hidden: [] },
-      page: 'workflows',
+      page: 'home',
+      studioPage: 'projects',
+      orchestrator: false,
+      agentTools: false,
       projectSummaries: new Map(),
       removableProjects: new Set(),
       assistant: { request: '', conversation: [] },
@@ -982,6 +994,8 @@ export class Studio {
       const problems = plugins?.diagnostics.length ?? 0;
       this.store.set({
         connection: 'ready',
+        orchestrator: info.orchestrator === true,
+        agentTools: info.agentTools === true,
         projects: info.projects,
         activities,
         catalog: new Map(activities.map((activity) => [activity.type, activity])),
@@ -994,14 +1008,15 @@ export class Studio {
         await this.selectProject(info.open.project);
         await this.open(info.open.path);
       } else {
-        // The Projects page only when there is a choice: one project, or the last one used here, opens its workspace.
+        // Laconi Automation opens on Home; Studio starts with choosing (or creating) a project. The last project used
+        // here is preselected, so Home can show its workflows.
         const last = this.preferences.read(preferenceKeys.lastProject, isText);
-        const chosen = last !== undefined && info.projects.includes(last) ? last : info.projects.length === 1 ? info.projects[0] : undefined;
-        if (info.projects.length > 0) {
-          await this.selectProject(chosen ?? info.projects[0]);
+        const chosen = last !== undefined && info.projects.includes(last) ? last : info.projects[0];
+        if (chosen !== undefined) {
+          await this.selectProject(chosen);
         }
 
-        this.store.set({ page: chosen !== undefined && this.state.project === chosen ? 'workflows' : 'projects' });
+        this.store.set({ page: 'home', studioPage: 'projects' });
       }
 
       await this.loadProjects();
@@ -1065,6 +1080,7 @@ export class Studio {
         dialog: draft ? { kind: 'recover', path, savedAt: draft.savedAt, stale: draft.etag !== etag } : undefined,
         message: opened.readOnlyReason ? `Opened ${path} read-only: ${opened.readOnlyReason}` : `Opened ${path}.`,
         page: 'workflows',
+        studioPage: 'workflows',
       });
       this.preferences.write(preferenceKeys.lastProject, project);
       this.store.set(treeView);
@@ -1461,14 +1477,65 @@ export class Studio {
     this.preferences.write(preferenceKeys.sidebarTab, tab);
   }
 
+  /** The AI Agent plugin's built-in tools and configured MCP servers (read-only; ADR-0048 amendment). */
+  agentToolsInfo(): Promise<AgentToolsInfo> {
+    return this.api.agentTools();
+  }
+
+  /** Connects to a configured MCP server and lists its tools. */
+  discoverMcp(server: string): Promise<McpDiscoveryView> {
+    return this.api.discoverMcp(server);
+  }
+
+  /**
+   * The input map of an agent workflow tool for a saved workflow of the open project: its In and InOut arguments as
+   * name → type, with `?` when it may be left out (the AI Agent's `input` format).
+   */
+  async workflowToolInput(path: string): Promise<Record<string, string>> {
+    const project = this.store.get().project;
+    if (project === undefined) {
+      return {};
+    }
+
+    const { text } = await this.api.readWorkflow(project, path);
+    const parsed = JSON.parse(text) as { arguments?: { name?: unknown; direction?: unknown; type?: unknown; required?: unknown; default?: unknown }[] };
+    const known = new Set(['String', 'Int', 'Decimal', 'Boolean', 'DateTime', 'List', 'Dictionary', 'Object']);
+    const input: Record<string, string> = {};
+    for (const argument of Array.isArray(parsed.arguments) ? parsed.arguments : []) {
+      if (typeof argument.name !== 'string' || (argument.direction !== 'In' && argument.direction !== 'InOut')) {
+        continue;
+      }
+
+      const type = typeof argument.type === 'string' && known.has(argument.type) ? argument.type : 'Object';
+      input[argument.name] = argument.required === true && argument.default === undefined ? type : `${type}?`;
+    }
+
+    return input;
+  }
+
   /** Shows a page of the navigation rail. */
   showPage(page: StudioPage): void {
-    this.store.set({ page });
+    this.store.set(page === 'projects' || page === 'workflows' ? { page, studioPage: page } : { page });
+  }
+
+  /** Shows Studio where it was last: the project picker, or the chosen project's workspace. */
+  async showStudio(): Promise<void> {
+    if (this.state.studioPage === 'workflows' && this.state.project !== undefined) {
+      this.store.set({ page: 'workflows' });
+    } else {
+      await this.showProjects();
+    }
+  }
+
+  /** The workflow files of any project of this Server (Deployments' publish form), by path. */
+  async projectWorkflows(project: string): Promise<string[]> {
+    const { workflows } = await this.api.workflows(project);
+    return workflows.map((f) => f.path).sort((a, b) => a.localeCompare(b));
   }
 
   /** Shows the Projects page with what each project holds now. */
   async showProjects(): Promise<void> {
-    this.store.set({ page: 'projects' });
+    this.store.set({ page: 'projects', studioPage: 'projects' });
     await this.loadProjects();
   }
 
@@ -1477,7 +1544,7 @@ export class Studio {
     await this.selectProject(project);
     if (this.state.project === project) {
       this.preferences.write(preferenceKeys.lastProject, project);
-      this.store.set({ page: 'workflows', sidebarTab: this.state.file?.project === project ? this.state.sidebarTab : 'files' });
+      this.store.set({ page: 'workflows', studioPage: 'workflows', sidebarTab: this.state.file?.project === project ? this.state.sidebarTab : 'files' });
     }
   }
 

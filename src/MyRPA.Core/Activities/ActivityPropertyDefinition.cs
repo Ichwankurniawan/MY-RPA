@@ -110,4 +110,21 @@ public sealed record ActivityPropertyDefinition
             ? value
             : throw new ArgumentException($"Property '{Name}' is not a text property and cannot be multiline.", nameof(value));
     }
+
+    /// <summary>
+    /// A hint naming a richer editor for a text property (ADR-0048 amendment), such as <c>agentTools</c>; tools that do
+    /// not know the editor use their ordinary one. A hint only changes how the value is edited, never what it means:
+    /// the value stays the property's text. Letters and digits only, starting with a letter.
+    /// </summary>
+    public string? Editor
+    {
+        get;
+        init => field = value is null
+            ? null
+            : Kind != ActivityPropertyKind.Text
+                ? throw new ArgumentException($"Property '{Name}' is not a text property and cannot name an editor.", nameof(value))
+                : value.Length is > 0 and <= 40 && char.IsAsciiLetter(value[0]) && value.All(char.IsAsciiLetterOrDigit)
+                    ? value
+                    : throw new ArgumentException($"Property '{Name}': an editor hint has 1 to 40 letters or digits, starting with a letter.", nameof(value));
+    }
 }

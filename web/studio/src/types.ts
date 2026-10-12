@@ -110,6 +110,10 @@ export interface ServerInfo {
   projects: string[];
   /** The workflow named on the server's command line (`--open`), opened after connecting. */
   open?: { project: string; path: string } | null;
+  /** Whether the Server runs the orchestrator (Phase 10: publishing, jobs, Runners, schedules). */
+  orchestrator?: boolean;
+  /** Whether the AI Agent plugin is loaded (its built-in tools and MCP servers can be shown). */
+  agentTools?: boolean;
 }
 
 /** Property kinds of the activity catalog (ADR-0020, workflow-format.md §3). */
@@ -130,6 +134,8 @@ export interface PropertyDescriptor {
   secret?: boolean;
   /** ADR-0045: a text property of several lines (code, SQL), edited in a larger monospace box. */
   multiline?: boolean;
+  /** ADR-0048 amendment: a richer editor for this text property (such as `agentTools`); unknown hints are ignored. */
+  editor?: string;
 }
 
 export interface SlotDescriptor {
@@ -325,4 +331,47 @@ export interface NameReference {
 export interface NameReferences {
   declaration: ScopeName | null;
   references: NameReference[];
+}
+
+/** A built-in agent tool (ADR-0048 amendment). */
+export interface AgentBuiltInToolView {
+  readonly name: string;
+  readonly description: string;
+}
+
+/** An MCP server as an administrator configured it in the AI Agent plugin's settings (never its token). */
+export interface McpServerView {
+  readonly name: string;
+  readonly transport: 'http' | 'stdio';
+  readonly endpoint: string;
+  readonly enabled: boolean;
+  readonly allowedTools: readonly string[];
+  readonly approvalTools: readonly string[];
+  readonly tokenVariable?: string | null;
+  readonly tokenSet: boolean;
+}
+
+/** `GET /api/agent-tools`. */
+export interface AgentToolsInfo {
+  readonly available: boolean;
+  readonly reason?: string | null;
+  readonly builtIns: readonly AgentBuiltInToolView[];
+  readonly servers: readonly McpServerView[];
+}
+
+/** A tool an MCP server listed (its description and schema come from the server: untrusted text). */
+export interface McpToolView {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema?: unknown;
+  readonly allowed: boolean;
+  readonly requiresApproval: boolean;
+}
+
+/** `POST /api/agent-tools/mcp/{name}/discover`: a connection test. */
+export interface McpDiscoveryView {
+  readonly ok: boolean;
+  readonly error?: string | null;
+  readonly durationMs: number;
+  readonly tools: readonly McpToolView[];
 }

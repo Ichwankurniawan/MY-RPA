@@ -349,12 +349,20 @@ internal static class BuiltInTools
 {
     public static readonly IReadOnlyList<string> Names = ["time_now", "regex_extract", "json_get"];
 
+    /// <summary>What each built-in does (shown to the model and in the Studio).</summary>
+    public static readonly IReadOnlyDictionary<string, string> Descriptions = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["time_now"] = "The current date and time (UTC, ISO 8601).",
+        ["regex_extract"] = "Finds the matches of a .NET regular expression in a text (at most 50; 1 s timeout).",
+        ["json_get"] = "Reads a value from JSON text by a path such as items[0].name.",
+    };
+
     public static IAgentTool Create(string name, IActivityContext context) => name switch
     {
-        "time_now" => new BuiltIn(name, "The current date and time (UTC, ISO 8601).", """{"type":"object","properties":{},"additionalProperties":false}""", _ =>
+        "time_now" => new BuiltIn(name, Descriptions[name], """{"type":"object","properties":{},"additionalProperties":false}""", _ =>
             new JsonObject { ["utc"] = context.TimeProvider.GetUtcNow().ToString("O", CultureInfo.InvariantCulture) }),
-        "regex_extract" => new BuiltIn(name, "Finds the matches of a .NET regular expression in a text (at most 50; 1 s timeout).", """{"type":"object","properties":{"text":{"type":"string","maxLength":200000},"pattern":{"type":"string","maxLength":500}},"required":["text","pattern"],"additionalProperties":false}""", RegexExtract),
-        _ => new BuiltIn(name, "Reads a value from JSON text by a path such as items[0].name.", """{"type":"object","properties":{"json":{"type":"string","maxLength":1000000},"path":{"type":"string","maxLength":500}},"required":["json","path"],"additionalProperties":false}""", JsonGet),
+        "regex_extract" => new BuiltIn(name, Descriptions[name], """{"type":"object","properties":{"text":{"type":"string","maxLength":200000},"pattern":{"type":"string","maxLength":500}},"required":["text","pattern"],"additionalProperties":false}""", RegexExtract),
+        _ => new BuiltIn(name, Descriptions["json_get"], """{"type":"object","properties":{"json":{"type":"string","maxLength":1000000},"path":{"type":"string","maxLength":500}},"required":["json","path"],"additionalProperties":false}""", JsonGet),
     };
 
     private static JsonObject RegexExtract(JsonElement arguments)

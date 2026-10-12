@@ -67,7 +67,7 @@ public sealed class PlatformNeutralityTests
     [MemberData(nameof(SourceProjectNames))]
     public void PackageReferences_ContainNoForbiddenTechnology(string name)
     {
-        var forbidden = Project(name).PackageReferences.Where(p => ArchitectureRules.MatchForbidden(p) is not null);
+        var forbidden = Project(name).PackageReferences.Where(p => ArchitectureRules.MatchForbidden(p) is not null && !(Rule(name).AllowedTechnologies ?? []).Contains(p, StringComparer.OrdinalIgnoreCase));
 
         Assert.Empty(forbidden);
     }
@@ -79,7 +79,8 @@ public sealed class PlatformNeutralityTests
         var rule = Rule(name);
         var forbidden = rule.Assembly.GetReferencedAssemblies()
             .Select(a => a.Name!)
-            .Where(n => ArchitectureRules.MatchForbidden(n) is { } prefix && !(rule.AllowsAspNetCore && prefix == "Microsoft.AspNetCore"));
+            .Where(n => ArchitectureRules.MatchForbidden(n) is { } prefix && !(rule.AllowsAspNetCore && prefix == "Microsoft.AspNetCore")
+                && !(rule.AllowedTechnologies ?? []).Contains(prefix, StringComparer.OrdinalIgnoreCase));
 
         Assert.Empty(forbidden);
     }
