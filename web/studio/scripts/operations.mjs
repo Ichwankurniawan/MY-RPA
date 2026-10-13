@@ -81,9 +81,10 @@ await withStudio(async ({ project, page, startServer, problems, workspace, confi
     const detail = deployments.getByRole('region', { name: 'Deployment details' });
     await detail.getByRole('button', { name: 'Deploy' }).click();
     await detail.getByRole('status').filter({ hasText: 'Deployed v1.' }).waitFor();
-    await detail.getByLabel('Entry point to run').selectOption('greet.json');
-    await detail.getByLabel(/^who/).fill('Ada');
-    await detail.getByRole('button', { name: 'Run now' }).click();
+    const runNow = detail.getByRole('region', { name: 'Run now' });
+    await runNow.getByLabel('Entry point to run').selectOption('greet.json');
+    await runNow.getByLabel(/^who/).fill('Ada');
+    await runNow.getByRole('button', { name: 'Run now' }).click();
     await detail.getByRole('status').filter({ hasText: 'Job submitted for v1 (greet.json).' }).waitFor();
     step('Deployments published the project as v1 (immutable, two entry points), deployed it and submitted a job for greet.json');
 

@@ -36,6 +36,23 @@ public sealed class PluginConfigurationFileTests
     }
 
     [Fact]
+    public void Parse_RelativeFileRoot_IsResolvedAgainstTheFile_OtherSettingsAreNot()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "files");
+        var json = $$"""
+            { "pluginConfigVersion": "1.0", "plugins": [
+                { "directory": "a", "settings": { "fileRoot": "work", "connection": "Data Source=work/demo.db" } },
+                { "directory": "b", "settings": { "fileRoot": {{System.Text.Json.JsonSerializer.Serialize(absolute)}} } } ] }
+            """;
+
+        var options = PluginConfigurationFile.Parse(json, _base);
+
+        Assert.Equal(Path.GetFullPath(Path.Combine(_base, "work")), options.Sources[0].Settings["fileRoot"]);
+        Assert.Equal("Data Source=work/demo.db", options.Sources[0].Settings["connection"]);
+        Assert.Equal(absolute, options.Sources[1].Settings["fileRoot"]);
+    }
+
+    [Fact]
     public void Parse_AbsoluteDirectory_IsKept()
     {
         var absolute = Path.Combine(Path.GetTempPath(), "somewhere", "plugin");

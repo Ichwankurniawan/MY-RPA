@@ -170,9 +170,8 @@ class FakeOrchestrator implements OrchestratorApi {
   undeploy = (processId: string) => this.record(`undeploy ${processId}`, process.process);
   setProcessEnabled = (processId: string, enabled: boolean) => this.record(`enabled ${processId} ${enabled}`, process.process);
   configureProcess = (processId: string) => this.record(`configure ${processId}`, process.process);
-  createSchedule = async () => {
-    throw new ApiError(400, 'unused');
-  };
+  createSchedule = (processId: string, body: { name: string; entryPath?: string; argumentText?: Readonly<Record<string, string>> }) =>
+    this.record(`schedule ${processId} ${body.name} ${body.entryPath} ${JSON.stringify(body.argumentText ?? {})}`, undefined as never);
   setScheduleEnabled = async () => {
     throw new ApiError(400, 'unused');
   };
@@ -335,28 +334,45 @@ describe('Operations pages', () => {
     await click(detail.getByRole('button', { name: 'Roll back to this' }));
     expect(orchestrator.calls).toContain('deploy prc_1 v1');
 
-    const secret = detail.getByPlaceholderText('Secret: the Runner supplies it, never a job') as HTMLInputElement;
+    const run = within(detail.getByRole('region', { name: 'Run now' }));
+    const secret = run.getByPlaceholderText('Secret: the Runner supplies it, never a job') as HTMLInputElement;
     expect(secret.disabled).toBe(true);
-    await act(async () => fireEvent.change(detail.getByLabelText(/customer/), { target: { value: 'ACME' } }));
-    await click(detail.getByRole('button', { name: 'Run now' }));
+    await act(async () => fireEvent.change(run.getByLabelText(/customer/), { target: { value: 'ACME' } }));
+    await click(run.getByRole('button', { name: 'Run now' }));
     expect(orchestrator.calls).toContain('submit prc_1 hello-world.json {"customer":"ACME"}');
     expect(detail.getAllByText('hello-world.json, orders/import.json').length).toBeGreaterThan(0);
 
     // Another entry point of the deployed version has its own arguments.
-    await act(async () => fireEvent.change(detail.getByLabelText('Entry point to run'), { target: { value: 'orders/import.json' } }));
-    expect(detail.queryByLabelText(/customer/)).toBeNull();
+    await act(async () => fireEvent.change(run.getByLabelText('Entry point to run'), { target: { value: 'orders/import.json' } }));
+    expect(run.queryByLabelText(/customer/)).toBeNull();
     // Defaults show what an empty field means; a Boolean is a choice, not a text box.
-    expect(detail.getByLabelText(/batch/).getAttribute('placeholder')).toBe('Default: 5');
-    const dryRun = detail.getByLabelText(/dryRun/) as HTMLSelectElement;
+    expect(run.getByLabelText(/batch/).getAttribute('placeholder')).toBe('Default: 5');
+    const dryRun = run.getByLabelText(/dryRun/) as HTMLSelectElement;
     expect([...dryRun.options].map((o) => o.text)).toEqual(['Default (true)', 'true', 'false']);
-    await act(async () => fireEvent.change(detail.getByLabelText(/batch/), { target: { value: '7' } }));
+    await act(async () => fireEvent.change(run.getByLabelText(/batch/), { target: { value: '7' } }));
     await act(async () => fireEvent.change(dryRun, { target: { value: 'false' } }));
-    await click(detail.getByRole('button', { name: 'Run now' }));
+    await click(run.getByRole('button', { name: 'Run now' }));
     expect(orchestrator.calls).toContain('submit prc_1 orders/import.json {"batch":"7","dryRun":"false"}');
 
     // All projects goes back to the choice.
     await click(page.getByRole('button', { name: 'All projects' }));
     expect(screen.getByRole('table', { name: 'Projects and their deployments' })).toBeTruthy();
+  });
+
+  it('creates a schedule for an entry point with typed arguments', async () => {
+    const { orchestrator } = await renderStudio();
+    await show('Deployments');
+    await click(screen.getByRole('button', { name: 'Deployment of demo' }));
+    const form = within(screen.getByLabelText('New schedule'));
+
+    await act(async () => fireEvent.change(form.getByLabelText('Name'), { target: { value: 'nightly import' } }));
+    await act(async () => fireEvent.change(form.getByLabelText('Entry point'), { target: { value: 'orders/import.json' } }));
+    expect(form.getByLabelText(/batch/).getAttribute('placeholder')).toBe('Default: 5');
+    await act(async () => fireEvent.change(form.getByLabelText(/batch/), { target: { value: '9' } }));
+    await act(async () => fireEvent.change(form.getByLabelText(/dryRun/), { target: { value: 'false' } }));
+    await click(form.getByRole('button', { name: 'Create schedule' }));
+
+    expect(orchestrator.calls).toContain('schedule prc_1 nightly import orders/import.json {"batch":"9","dryRun":"false"}');
   });
 
   it('an Operator cannot publish or deploy, and is told why', async () => {

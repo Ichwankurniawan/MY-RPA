@@ -60,6 +60,8 @@ Settings: `fileRoot`, `maxFileBytes` (50 MB), `maxItems` (10000), `maxRows` (100
 [plugins/MyRPA.Files/README.md](../../plugins/MyRPA.Files/README.md).
 
 File policy (`MyRPA.Sdk.Files.FileRootPolicy`, shared with the Excel plugin):
+- In a plugin configuration file, a relative `fileRoot` is resolved against the file's folder (like plugin
+  directories), so the same file works whatever folder the host starts from.
 - A path is relative to `fileRoot` (or absolute inside it) and is normalized. A path that leaves the root is refused
   (`FileAccessDenied`), and so is one that goes through a symbolic link or junction.
 - Nothing is replaced silently: writing to an existing file needs `overwrite` (`FileAlreadyExists` otherwise).

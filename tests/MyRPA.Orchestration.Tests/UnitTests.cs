@@ -225,6 +225,20 @@ public sealed class WorkflowPackageTests
     }
 
     [Fact]
+    public void TryVerify_APackageOfAnotherFormat_SaysWhichFormats()
+    {
+        var result = Build(("main.json", Workflows.Hello()));
+        var node = JsonNode.Parse(result.Content)!;
+        node["format"] = "myrpa-package/9";
+        var other = Encoding.UTF8.GetBytes(node.ToJsonString());
+
+        Assert.Equal("myrpa-package/9", WorkflowPackage.ReadFormat(other));
+        Assert.False(WorkflowPackage.TryVerify(other, WorkflowPackage.Sha256Hex(other), out _, out var error));
+        Assert.Equal("The package uses format myrpa-package/9; this Runner reads myrpa-package/2. Update the Runner and the Server to the same version.", error);
+        Assert.Null(WorkflowPackage.ReadFormat("not json"u8));
+    }
+
+    [Fact]
     public void TryVerify_AnotherHash_IsRefused()
     {
         var result = Build(("main.json", Workflows.Hello()));

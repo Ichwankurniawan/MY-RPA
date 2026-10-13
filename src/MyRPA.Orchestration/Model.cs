@@ -181,6 +181,9 @@ public sealed record JobRecord
     /// <summary>Plugins (id and minimum version) the package needs.</summary>
     public IReadOnlyList<PackagePlugin> RequiredPlugins { get; init; } = [];
 
+    /// <summary>The package's format; only Runners that read it are assigned the job.</summary>
+    public string PackageFormat { get; init; } = WorkflowPackage.FormatName;
+
     /// <summary>Current state.</summary>
     public JobState State { get; init; }
 
@@ -484,6 +487,9 @@ public sealed record RunnerRecord
 
     /// <summary>Plugin load failures it reported.</summary>
     public IReadOnlyList<string> PluginErrors { get; init; } = [];
+
+    /// <summary>Package formats it reads (empty until it registers).</summary>
+    public IReadOnlyList<string> PackageFormats { get; init; } = [];
 
     /// <summary>Optimistic concurrency revision.</summary>
     public long Revision { get; init; }

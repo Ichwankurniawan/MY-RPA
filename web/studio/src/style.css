@@ -864,3 +864,4 @@ h2, .ops-card h3 { letter-spacing: 0.06em; }
 .runner-list li, .schedule-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .schedule-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
 .ops-table tr.current td { background: var(--accent-soft); }
+.schedule-arguments { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; margin: 0; display: grid; gap: 8px; }

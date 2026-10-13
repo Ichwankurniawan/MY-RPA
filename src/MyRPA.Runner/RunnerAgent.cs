@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Logging;
 using MyRPA.Contracts.Orchestration;
 using MyRPA.Core.Activities;
+using MyRPA.Orchestration;
 using MyRPA.Plugins;
 using MyRPA.Workflow.Validation;
 
@@ -63,6 +64,7 @@ public sealed partial class RunnerAgent(
         {
             ProtocolVersion = RunnerProtocol.Version,
             RunnerVersion = typeof(RunnerAgent).Assembly.GetName().Version?.ToString() ?? "0.0.0",
+            PackageFormats = [WorkflowPackage.FormatName],
             OperatingSystem = RuntimeInformation.OSDescription,
             Architecture = RuntimeInformation.ProcessArchitecture.ToString(),
             MachineName = Environment.MachineName,

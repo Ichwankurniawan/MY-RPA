@@ -35,6 +35,9 @@ public sealed record ScheduleDefinition
     /// <summary>Job arguments as JSON values.</summary>
     public IReadOnlyDictionary<string, JsonElement>? Arguments { get; init; }
 
+    /// <summary>Job arguments as text typed by a person (converted like Run now's).</summary>
+    public IReadOnlyDictionary<string, string>? ArgumentText { get; init; }
+
     /// <summary>Enabled.</summary>
     public bool Enabled { get; init; } = true;
 }
@@ -241,7 +244,7 @@ public sealed partial class Orchestrator
             ? await SoleEntryPointAsync(process, version, cancellationToken).ConfigureAwait(false)
             : definition.EntryPath;
         var (_, workflow) = await LoadEntryAsync(process.ProcessId, version, entryPath, cancellationToken).ConfigureAwait(false);
-        return (entryPath, ValidateArguments(workflow, definition.Arguments, null));
+        return (entryPath, ValidateArguments(workflow, definition.Arguments, definition.ArgumentText));
     }
 
     private static ScheduleRecord Define(ScheduleRecord schedule, ScheduleDefinition definition, string entryPath, string arguments, DateTimeOffset now)

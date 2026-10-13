@@ -208,6 +208,11 @@ public sealed partial class Orchestrator
             return $"not in group '{group}'";
         }
 
+        if (runner.PackageFormats.Count > 0 && !runner.PackageFormats.Contains(job.PackageFormat, StringComparer.Ordinal))
+        {
+            return $"reads {string.Join(", ", runner.PackageFormats)}, not {job.PackageFormat}: update this Runner";
+        }
+
         var activities = runner.Activities.ToHashSet(StringComparer.Ordinal);
         var missingActivities = job.RequiredActivities.Where(a => !activities.Contains(a)).ToList();
         if (missingActivities.Count > 0)
@@ -314,6 +319,7 @@ public sealed partial class Orchestrator
             ArgumentsJson = argumentsJson,
             RequiredActivities = package.Manifest.Activities,
             RequiredPlugins = package.Manifest.Plugins,
+            PackageFormat = package.Manifest.Format,
             State = JobState.Queued,
             CreatedAt = _time.GetUtcNow(),
             CorrelationId = id,

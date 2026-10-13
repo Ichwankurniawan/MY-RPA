@@ -4,32 +4,25 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Phase discipline (most important)
 
-- The project follows the phases in `MyRPA-PRD.md` §9. **Current phase: Phase 7 — Enterprise Automation Activities,
-  authorized by the owner on 2026-10-09 (the Phase 7 brief); plan `docs/architecture/enterprise-activities-plan.md`,
-  ADR-0042; slices P7-1 → P7-6 done (2026-10-09; catalog reference
-  `docs/architecture/enterprise-activities.md`), merged. Phase 7.1 (more enterprise integrations) authorized by the
-  owner on 2026-10-09 ("Go with your recommendations, and write ADR"); plan
-  `docs/architecture/enterprise-activities-7-1-plan.md`, ADR-0043; slices 1–9 done (2026-10-10): HTTP extras, ZIP and
-  file extras, Excel append/clear, and the `MyRPA.Documents`, `MyRPA.Email`, `MyRPA.Database` and `MyRPA.Sftp` plugins;
-  their server tests run in the CI `Integration services` job.** Phase 6 (Selectors & Recorder, ADR-0038/0039) is complete, as are Phase 5, the
-  Studio UX slice and graph workflows (ADR-0037). **Debugger slice authorized by the owner on
-  2026-10-08 ("merge and D-1"); plan `docs/architecture/debugger-plan.md`, ADR-0040; slices D-1 → D-3 done.** **Expression assist authorized by the owner on 2026-10-09 ("continue E-1"); plan
-  `docs/architecture/expression-assist-plan.md`, ADR-0041; slices E-1 → E-3 done.**
-  **Scripting authorized by the owner on 2026-10-10 ("do both"): ADR-0045, plugin `MyRPA.Scripting` (sandboxed
-  JavaScript, opt-in Python); scripting stays out of the engine and `src`.**
-  **Phase 8 (AI Automation) authorized by the owner on 2026-10-11 ("proceed for the next phase"); plan
-  `docs/architecture/ai-automation-plan.md` (the owner's brief `ai-workflow-assistant-brief.md`), ADR-0047; slices A-1 →
-  A-6 done (2026-10-11; `docs/architecture/ai-workflow-assistant.md`).** AI never executes anything: answers are advice,
-  proposals pass `WorkflowLoader` and a person applies them; providers are plugins (`MyRPA.Ai.Contracts`). Phase 9 (AI Agents & MCP) must not start
-  **Phase 9 (AI Agents & MCP) authorized by the owner on 2026-10-12 (the Phase 9 brief, "Yes, proceed to Phase 9");
-  plan `docs/architecture/ai-agents-plan.md`, ADR-0048; done (2026-10-12; `docs/architecture/ai-agents.md`).** `AI.Agent`
-  (plugin `MyRPA.Ai.Agent`) is a bounded agent activity: tools only from the author's list, checked at every call,
-  budgets in the runtime, output validated; MCP client only in that plugin.
-  **Phase 10 (Orchestrator) authorized by the owner on 2026-10-12 (the Phase 10 brief, "Yes, proceed to Phase 10");
-  plan `docs/architecture/orchestrator-plan.md`, ADR-0049/0050/0051; slices O-1 → O-6 done (2026-10-12;
-  `docs/architecture/orchestrator.md`).** The Server decides (`MyRPA.Orchestration`, SQLite store), Runners execute
-  (`src/MyRPA.Runner`, the existing engine through `ExecutionHost`); the Server never executes published jobs. Phase 11
-  (Enterprise Security & Operations) must not start without the owner's explicit authorization.
+- The project follows the phases in `MyRPA-PRD.md` §9. **Current state: Phases 0–10 are done; Phase 11 (Enterprise
+  Security & Operations) must not start without the owner's explicit authorization.** Each authorized phase or slice,
+  with the owner's words, plan and ADRs:
+
+  | Phase / slice | Authorized | Plan · ADRs | Notes |
+  |---|---|---|---|
+  | 5, Studio UX, graph workflows | — | `web-studio-roadmap.md` · ADR-0037 | done |
+  | 6 Selectors & Recorder | — | ADR-0038/0039 | done |
+  | Debugger D-1 → D-3 | 2026-10-08 ("merge and D-1") | `debugger-plan.md` · ADR-0040 | done |
+  | Expression assist E-1 → E-3 | 2026-10-09 ("continue E-1") | `expression-assist-plan.md` · ADR-0041 | done |
+  | 7 Enterprise activities P7-1 → P7-6 | 2026-10-09 (the Phase 7 brief) | `enterprise-activities-plan.md` · ADR-0042 | done; reference `enterprise-activities.md` |
+  | 7.1 More integrations, slices 1–9 | 2026-10-09 ("Go with your recommendations, and write ADR") | `enterprise-activities-7-1-plan.md` · ADR-0043 | done; Documents, Email, Database, Sftp plugins; server tests in the CI `Integration services` job |
+  | Scripting | 2026-10-10 ("do both") | ADR-0045 | plugin `MyRPA.Scripting` (sandboxed JavaScript, opt-in Python); never in the engine or `src` |
+  | 8 AI Automation A-1 → A-6 | 2026-10-11 ("proceed for the next phase") | `ai-automation-plan.md` · ADR-0047 | done; AI never executes anything: answers are advice, proposals pass `WorkflowLoader` and a person applies them; providers are plugins (`MyRPA.Ai.Contracts`) |
+  | 9 AI Agents & MCP | 2026-10-12 ("Yes, proceed to Phase 9") | `ai-agents-plan.md` · ADR-0048 | done; `AI.Agent` (plugin `MyRPA.Ai.Agent`) is bounded: tools only from the author's list, checked at every call, budgets in the runtime, output validated; MCP client only in that plugin; MyRPA is not an MCP server |
+  | 10 Orchestrator O-1 → O-6 | 2026-10-12 ("Yes, proceed to Phase 10") | `orchestrator-plan.md` · ADR-0049/0050/0051 | done; the Server decides (`MyRPA.Orchestration`, SQLite store), Runners execute (`src/MyRPA.Runner`, the engine through `ExecutionHost`); the Server never executes published jobs |
+  | Hardening (before Phase 11) | 2026-10-12 ("do your recomendation") | — | Runner package formats, plugin `fileRoot` paths, start-up errors, schedule arguments, Prettier config, local guide |
+
+  Parked by the owner: MyRPA as an MCP server (an extra phase after the authorized ones); Git in the Studio (Phase 12).
 - Never start the next phase without explicit user authorization ("Proceed to Phase N").
 - Do not implement features from later phases "because the architecture anticipates them". Interfaces/placeholders only
   when the current phase genuinely needs them.

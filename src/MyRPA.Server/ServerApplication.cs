@@ -107,6 +107,17 @@ internal static class ServerApplication
 
             return 2;
         }
+        catch (IOException ex) when (ex.InnerException is Microsoft.AspNetCore.Connections.AddressInUseException)
+        {
+            // One clear line instead of a stack trace: the usual cause is a Server that is still running.
+            await error.WriteLineAsync($"Error: {ex.Message.TrimEnd('.')}. Another program (often a MyRPA.Server that is still running) uses that port: stop it, or start this one with another --port.").ConfigureAwait(false);
+            if (plugins is not null)
+            {
+                await plugins.DisposeAsync().ConfigureAwait(false);
+            }
+
+            return 2;
+        }
 
         await using var running = server;
         await output.WriteLineAsync($"MyRPA Server (local mode) listening on {server.BaseUri}").ConfigureAwait(false);
@@ -229,7 +240,17 @@ internal static class ServerApplication
 
         var listeners = app.Services.GetRequiredService<ServerListeners>();
         listeners.StartedAt = app.Services.GetRequiredService<TimeProvider>().GetUtcNow();
-        await app.StartAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await app.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // A Server that did not start releases what it opened (the orchestration store, plugin services).
+            await app.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
         if (runnerListen is not null && options.RunnerUrl is { } configured)
         {
             // Port 0 picks a free port; the bound one is known only now.

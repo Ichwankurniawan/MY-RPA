@@ -80,6 +80,32 @@ public sealed class EntryPointTests
     }
 
     [Fact]
+    public async Task Schedule_TakesArgumentsAsTypedText_AndItsJobsGetThem()
+    {
+        await using var f = await OrchestratorFixture.CreateAsync();
+        var process = await f.DeployedAsync(Workflows.Hello());
+        var definition = new ScheduleDefinition
+        {
+            Name = "hourly",
+            Kind = ScheduleKind.Cron,
+            Cron = "0 * * * *",
+            TimeZone = "UTC",
+            ArgumentText = new Dictionary<string, string> { ["who"] = "Ada", ["count"] = "3" },
+        };
+
+        var bad = await Assert.ThrowsAsync<OrchestrationException>(() => f.Orchestrator.CreateScheduleAsync(
+            OrchestratorFixture.Admin, process.ProcessId, definition with { ArgumentText = new Dictionary<string, string> { ["count"] = "three" } }, Ct));
+        Assert.Contains("Argument 'count'", bad.Message, StringComparison.Ordinal);
+        var schedule = await f.Orchestrator.CreateScheduleAsync(OrchestratorFixture.Admin, process.ProcessId, definition, Ct);
+        f.Time.Advance(TimeSpan.FromHours(1));
+        await f.Orchestrator.EvaluateSchedulesAsync(Ct);
+
+        using var stored = System.Text.Json.JsonDocument.Parse(schedule.ArgumentsJson);
+        Assert.Equal(("Ada", 3), (stored.RootElement.GetProperty("who").GetString(), stored.RootElement.GetProperty("count").GetInt32()));
+        Assert.Equal(schedule.ArgumentsJson, Assert.Single((await f.Store.QueryJobsAsync(new JobQuery(), Ct)).Jobs).ArgumentsJson);
+    }
+
+    [Fact]
     public async Task Schedule_KeepsItsEntryPoint_AndSkipsWhenTheDeployedVersionDropsIt()
     {
         await using var f = await OrchestratorFixture.CreateAsync();
@@ -112,6 +138,23 @@ public sealed class EntryPointTests
         var outcome = (await f.Store.GetScheduleAsync(schedule.ScheduleId, Ct))!.LastOutcome;
         Assert.StartsWith("Skipped", outcome, StringComparison.Ordinal);
         Assert.Contains("orders/import.json", outcome, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARunnerThatDoesNotSayWhatItReads_IsNotAssignedNewPackages_AndTheWaitSaysWhy()
+    {
+        await using var f = await OrchestratorFixture.CreateAsync();
+        var process = await f.DeployedAsync(Workflows.Hello());
+        var job = await f.SubmitAsync(process.ProcessId);
+        var (old, _) = await f.Orchestrator.CreateRunnerAsync(OrchestratorFixture.Admin, "old-runner", null, 1, Ct);
+        await f.RegisterAsync(old, formats: []);
+
+        Assert.Null(await f.ClaimAsync((await f.Store.GetRunnerAsync(old.RunnerId, Ct))!));
+        Assert.Equal([WorkflowPackage.FirstFormatName], (await f.Store.GetRunnerAsync(old.RunnerId, Ct))!.PackageFormats);
+        Assert.Contains(await f.Orchestrator.ExplainWaitAsync(job, Ct), w => w.Contains("not myrpa-package/2: update this Runner", StringComparison.Ordinal));
+
+        var current = await f.RunnerAsync("new-runner");
+        Assert.Equal(job.JobId, (await f.ClaimAsync(current))!.JobId);
     }
 
     [Fact]

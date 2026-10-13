@@ -274,6 +274,8 @@ export interface Diagnostics {
 
 export interface ScheduleBody {
   readonly name: string;
+  /** Job arguments as typed text, converted by the Server like Run now's. */
+  readonly argumentText?: Readonly<Record<string, string>>;
   /** The entry point to start (omitted: the deployed package's only entry point). */
   readonly entryPath?: string;
   readonly kind: 'Once' | 'Interval' | 'Cron';

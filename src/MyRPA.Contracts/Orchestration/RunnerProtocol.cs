@@ -73,6 +73,12 @@ public sealed record RunnerRegisterRequest
 
     /// <summary>Jobs the Runner is still executing (empty after a restart).</summary>
     public IReadOnlyList<RunnerActiveJob> ActiveJobs { get; init; } = [];
+
+    /// <summary>
+    /// Package formats the Runner reads, such as <c>myrpa-package/2</c>. Absent (Runners from before this field): the
+    /// first format only. The Server never assigns a job whose package the Runner cannot read.
+    /// </summary>
+    public IReadOnlyList<string>? PackageFormats { get; init; }
 }
 
 /// <summary>Answer to a registration.</summary>

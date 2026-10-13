@@ -150,3 +150,17 @@ The first implementation made each published workflow its own process (`myrpa-pa
   - queues of work items (PRD 10.4);
   - human approval;
   - checkpoint and resume.
+
+## Amendment (2026-10-13): Runners say which package formats they read
+
+An old Runner given a `myrpa-package/2` package failed with an unreadable-package error (MYRPA5004), which looked like
+a corrupt package. Now:
+
+- `RunnerRegisterRequest.PackageFormats` (additive in protocol v1) lists the formats a Runner reads. A Runner that does
+  not send it is taken to read `myrpa-package/1` only.
+- A job records its package's format; dispatch never assigns it to a Runner that cannot read it. The job waits, and
+  the wait explanation (Monitoring, the deployment's Runners) says "reads myrpa-package/1, not myrpa-package/2: update
+  this Runner".
+- The Runner reads a package's `format` before anything else and names both formats when they differ.
+- Schedules take job arguments as typed text too (converted like Run now's), so an entry point with required
+  arguments can be scheduled from the Studio.

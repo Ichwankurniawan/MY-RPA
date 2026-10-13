@@ -2,6 +2,9 @@
 
 | Document | Contents |
 |---|---|
+| [guides/run-locally.md](guides/run-locally.md) | **Start here:** run the Server, the Studio and a Runner on one machine (PowerShell and cmd.exe), and what common errors mean |
+| [architecture/orchestrator.md](architecture/orchestrator.md) | Orchestrator and Runners: publishing, deployments, jobs, schedules, roles and tokens |
+| [architecture/ai-agents.md](architecture/ai-agents.md) | AI agents and MCP: the AI.Agent activity, tools, MCP servers, the Agent tools page |
 | [architecture/overview.md](architecture/overview.md) | Projects, dependency direction, enforced rules, composition |
 | [architecture/execution-model.md](architecture/execution-model.md) | Engine: loading, execution, activity execution, statuses, lifetimes, observability |
 | [architecture/workflow-format.md](architecture/workflow-format.md) | Workflow JSON v1.0, built-in activities, expressions, diagnostic and error codes |

@@ -617,6 +617,7 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
   const api = useOrchestrator();
   const zones = useLoad(() => api.timeZones(), [], 0);
   const [body, setBody] = useState<ScheduleBody>({ name: '', kind: 'Cron', cron: '0 9 * * MON-FRI', timeZone: '', misfire: 'RunOnce', overlap: 'Skip' });
+  const [argumentText, setArgumentText] = useState<Record<string, string>>({});
   const timeZone = body.timeZone || zones.data?.local || 'UTC';
   const entryPath = body.entryPath ?? entryPoints[0]?.path;
   const effective: ScheduleBody = { ...body, timeZone, entryPath };
@@ -625,6 +626,7 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
   const id = useId();
   const reason = body.name.trim() === '' ? 'Name the schedule' : entryPath === undefined ? 'Deploy a version first' : preview.data?.valid === false ? preview.data.error : lacking(role, 'Developer');
   const set = (change: Partial<ScheduleBody>) => setBody((b) => ({ ...b, ...change }));
+  const inputs = (entryPoints.find((e) => e.path === entryPath)?.arguments ?? []).filter((a) => a.direction !== 'Out');
   return (
     <div className="ops-form" aria-label="New schedule">
       <label htmlFor={`${id}-name`}>Name</label>
@@ -632,7 +634,14 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
       {entryPoints.length > 1 && (
         <>
           <label htmlFor={`${id}-entry`}>Entry point</label>
-          <select id={`${id}-entry`} value={entryPath} onChange={(e) => set({ entryPath: e.target.value })}>
+          <select
+            id={`${id}-entry`}
+            value={entryPath}
+            onChange={(e) => {
+              set({ entryPath: e.target.value });
+              setArgumentText({});
+            }}
+          >
             {entryPoints.map((e) => (
               <option key={e.path} value={e.path}>
                 {e.path}
@@ -683,10 +692,18 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
         <option value="Skip">Skip</option>
         <option value="Allow">Start another</option>
       </select>
+      {inputs.length > 0 && (
+        <fieldset className="ops-wide schedule-arguments">
+          <legend>Arguments for each job (empty: the default)</legend>
+          {inputs.map((a) => (
+            <RunArgument key={`${entryPath}:${a.name}`} argument={a} value={argumentText[a.name] ?? ''} onChange={(value) => setArgumentText({ ...argumentText, [a.name]: value })} />
+          ))}
+        </fieldset>
+      )}
       <p className="hint ops-wide" aria-live="polite">
         {preview.data === undefined ? 'Checking…' : preview.data.valid ? `Next: ${(preview.data.next ?? []).map((n) => time(n)).join(', ') || 'none'}` : preview.data.error}
       </p>
-      <button type="button" className="primary" disabled={action.busy || reason !== undefined} title={reason} onClick={() => void action.run('Schedule created.', () => api.createSchedule(processId, effective), onCreated)}>
+      <button type="button" className="primary" disabled={action.busy || reason !== undefined} title={reason} onClick={() => void action.run('Schedule created.', () => api.createSchedule(processId, { ...effective, argumentText: Object.fromEntries(Object.entries(argumentText).filter(([, v]) => v !== '')) }), onCreated)}>
         Create schedule
       </button>
       {action.outcome}
@@ -718,6 +735,14 @@ function RunArgument({ argument, value, onChange }: { argument: PackageArgument;
     </div>
   );
 }
+
+/** A schedule's job arguments as "name = value, …" (empty when there are none). */
+const argumentsText = (values: unknown): string =>
+  values !== null && typeof values === 'object'
+    ? Object.entries(values as Record<string, unknown>)
+        .map(([name, value]) => `${name} = ${typeof value === 'string' ? value : JSON.stringify(value)}`)
+        .join(', ')
+    : '';
 
 const scheduleText = (s: ScheduleView): string =>
   `${s.kind === 'Cron' ? `cron ${s.cron}` : s.kind === 'Interval' ? `every ${s.intervalMinutes} min` : `once at ${time(s.startAt)}`} (${s.timeZone})`;
@@ -913,6 +938,7 @@ function ProcessPanel({ processId, role, onChanged }: { processId: string; role?
                               {s.entryPath} · {scheduleText(s)}
                               {s.enabled && ` · next ${time(s.nextFireAt)}`}
                             </div>
+                            {argumentsText(s.arguments) && <div className="hint">with {argumentsText(s.arguments)}</div>}
                             {s.lastOutcome && <div className="hint">Last: {s.lastOutcome}</div>}
                           </div>
                           <div className="ops-actions">
