@@ -660,6 +660,7 @@ internal static class OrchestratorEndpoints
                 EntryPath = package.Manifest.EntryPoints[0].Path,
                 RequiredActivities = package.Manifest.Activities,
                 RequiredPlugins = package.Manifest.Plugins,
+                PackageFormat = package.Manifest.Format,
                 TargetGroup = process.TargetGroup,
                 TargetRunnerId = process.TargetRunnerId,
                 CreatedAt = DateTimeOffset.MinValue,
@@ -690,6 +691,7 @@ internal static class OrchestratorEndpoints
             Misfire = string.Equals(body.Misfire, "Skip", StringComparison.OrdinalIgnoreCase) ? MisfirePolicy.Skip : MisfirePolicy.RunOnce,
             Overlap = string.Equals(body.Overlap, "Allow", StringComparison.OrdinalIgnoreCase) ? OverlapPolicy.Allow : OverlapPolicy.Skip,
             Arguments = body.Arguments,
+            ArgumentText = body.ArgumentText?.Where(a => a.Value is not null).ToDictionary(a => a.Key, a => a.Value!, StringComparer.Ordinal),
             Enabled = body.Enabled ?? true,
         };
     }
@@ -755,7 +757,8 @@ internal sealed record ScheduleBody(
     string? Misfire,
     string? Overlap,
     Dictionary<string, JsonElement>? Arguments,
-    bool? Enabled);
+    bool? Enabled,
+    Dictionary<string, string?>? ArgumentText = null);
 
 /// <summary><c>POST /api/orchestrator/runners</c>.</summary>
 internal sealed record CreateRunnerBody(string? Name, string? Group, int? MaxConcurrency);

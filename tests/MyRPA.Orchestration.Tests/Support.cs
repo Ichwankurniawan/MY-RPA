@@ -155,7 +155,7 @@ internal sealed class OrchestratorFixture : IAsyncDisposable
         return (await Store.GetRunnerAsync(runner.RunnerId, ct))!;
     }
 
-    public Task<RunnerRegisterResponse> RegisterAsync(RunnerRecord runner, int capacity = 1, IReadOnlyList<string>? activities = null, IReadOnlyList<RunnerPluginInfo>? plugins = null, IReadOnlyList<RunnerActiveJob>? held = null) =>
+    public Task<RunnerRegisterResponse> RegisterAsync(RunnerRecord runner, int capacity = 1, IReadOnlyList<string>? activities = null, IReadOnlyList<RunnerPluginInfo>? plugins = null, IReadOnlyList<RunnerActiveJob>? held = null, IReadOnlyList<string>? formats = null) =>
         Orchestrator.RegisterAsync(runner, new RunnerRegisterRequest
         {
             ProtocolVersion = RunnerProtocol.Version,
@@ -166,6 +166,7 @@ internal sealed class OrchestratorFixture : IAsyncDisposable
             Activities = activities ?? TestCatalog.AllActivities,
             Plugins = plugins ?? [new RunnerPluginInfo("Demo.Plugin", "1.2.0")],
             ActiveJobs = held ?? [],
+            PackageFormats = formats ?? [WorkflowPackage.FormatName],
         }, TestContext.Current.CancellationToken);
 
     public Task<JobAssignment?> ClaimAsync(RunnerRecord runner) => Orchestrator.ClaimAsync(runner, TimeSpan.Zero, TestContext.Current.CancellationToken);

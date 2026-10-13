@@ -79,6 +79,9 @@ public static class WorkflowPackage
     /// <summary>The package format this assembly writes and reads.</summary>
     public const string FormatName = "myrpa-package/2";
 
+    /// <summary>The first package format (one entry workflow per package); Runners that do not say what they read read only this.</summary>
+    public const string FirstFormatName = "myrpa-package/1";
+
     /// <summary>Most files in a package.</summary>
     public const int MaxFiles = 500;
 
@@ -229,6 +232,13 @@ public static class WorkflowPackage
             return false;
         }
 
+        // The format first: a package from a newer (or older) Server says so plainly instead of failing to deserialize.
+        if (ReadFormat(content) is { } format && format != FormatName)
+        {
+            error = $"The package uses format {format}; this Runner reads {FormatName}. Update the Runner and the Server to the same version.";
+            return false;
+        }
+
         PackageDocument? parsed;
         try
         {
@@ -275,6 +285,41 @@ public static class WorkflowPackage
         return true;
     }
 
+    /// <summary>The top-level <c>format</c> of package bytes, or null when it cannot be read.</summary>
+    public static string? ReadFormat(ReadOnlySpan<byte> content)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(content);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return null;
+            }
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                var isFormat = reader.ValueTextEquals("format"u8);
+                if (!reader.Read())
+                {
+                    return null;
+                }
+
+                if (isFormat)
+                {
+                    return reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+                }
+
+                reader.Skip();
+            }
+
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Whether a package path is relative, uses <c>/</c>, and never leaves the package.</summary>
     public static bool IsSafePath(string path)
     {
@@ -317,8 +362,22 @@ public static class WorkflowPackage
         Name = workflow.Name,
         WorkflowVersion = workflow.Version,
         SchemaVersion = workflow.SchemaVersion.ToString(),
-        Arguments = [.. workflow.Arguments.Select(a => new PackageArgument(a.Name, a.Direction.ToString(), a.Type.ToString(), a.IsRequired && a.DefaultValue is null, workflow.SecretNames.Contains(a.Name)))],
+        Arguments = [.. workflow.Arguments.Select(a => new PackageArgument(a.Name, a.Direction.ToString(), a.Type.ToString(), a.IsRequired && a.DefaultValue is null, workflow.SecretNames.Contains(a.Name))
+        {
+            Default = a.DefaultValue is null || workflow.SecretNames.Contains(a.Name) ? null : DefaultJson(a.DefaultValue),
+        })],
     };
+
+    private static string DefaultJson(object value)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            MyRPA.Workflow.Values.WorkflowValues.WriteJson(writer, value);
+        }
+
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
 
     private static PackageBuildResult Fail(List<string> errors) => new(errors, [], string.Empty, null);
 }

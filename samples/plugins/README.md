@@ -35,7 +35,9 @@ from the host. Use `myrpa --plugin <dir> plugins` to see the SHA-256 digest you 
 | [`local-71-demo.json`](local-71-demo.json) (7.1) | A file hashed and waited for, a folder zipped and extracted, invoices stored and queried in SQLite with parameters only, an Excel register appended to and partly cleared | MyRPA.Files, MyRPA.Database (connection `demo`), MyRPA.Spreadsheet |
 
 [`all-plugins.json`](all-plugins.json) loads the Debug builds of every sample plugin (demo, browser, files, Excel, HTTP, documents, database with the SQLite connection `demo`, email and SFTP without servers, scripting without `pythonPath`, so their activities appear in the catalog); their `fileRoot` is
-`samples/plugins/work` (git-ignored), so run from the repository root:
+`work`, which is resolved against the configuration file's folder, so it is `samples/plugins/work` (git-ignored) from
+any folder. The SQLite connection string is a plain setting and stays relative to the working directory, so run from
+the repository root:
 
 ```bash
 dotnet build plugins/MyRPA.Files && dotnet build plugins/MyRPA.Spreadsheet && dotnet build plugins/MyRPA.Http && dotnet build plugins/MyRPA.Documents && dotnet build plugins/MyRPA.Database && dotnet build plugins/MyRPA.Email && dotnet build plugins/MyRPA.Sftp && dotnet build plugins/MyRPA.Scripting

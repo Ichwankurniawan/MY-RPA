@@ -141,6 +141,8 @@ export interface PackageArgument {
   readonly type: string;
   readonly required: boolean;
   readonly secret: boolean;
+  /** The default as JSON (absent: none); an empty Run now field means this value. */
+  readonly default?: string | null;
 }
 
 /** A workflow of a package that a job may start. */
@@ -272,6 +274,8 @@ export interface Diagnostics {
 
 export interface ScheduleBody {
   readonly name: string;
+  /** Job arguments as typed text, converted by the Server like Run now's. */
+  readonly argumentText?: Readonly<Record<string, string>>;
   /** The entry point to start (omitted: the deployed package's only entry point). */
   readonly entryPath?: string;
   readonly kind: 'Once' | 'Interval' | 'Cron';

@@ -3,13 +3,16 @@
 A modern, extensible RPA platform in C#/.NET 10, inspired by OpenRPA and redesigned from the
 [Phase 0 research](docs/research/openrpa-analysis.md). Product requirements: [MyRPA-PRD.md](MyRPA-PRD.md).
 
-**Status:** Phase 5 complete — MyRPA Studio. Versioned JSON workflows are validated and executed by a deterministic
-async engine with 12 control-flow activities, via the `myrpa` CLI and **MyRPA Studio**, a web designer served by
-`MyRPA.Server` (drag-and-drop, slots, properties, variables, arguments, undo/redo, cut/copy/paste, files, runs with live
-node states) that uses the same model and engine. The earlier WPF Studio is archived in `archive/wpf-studio`. Plugins
-add activities and automation providers through the Automation SDK and are loaded into isolated
-`AssemblyLoadContext`s. The first real provider is the Playwright browser plugin (Chromium, 11 `Browser.*`
-activities). No recorder and no desktop automation yet.
+**Status:** Phases 0–10 complete. Versioned JSON workflows are validated and executed by a deterministic async engine,
+through the `myrpa` CLI and **Laconi Automation**, the web portal served by `MyRPA.Server`:
+
+- **Studio** builds workflows (projects, designer, debugger, recorder, AI assistant);
+- **Deployments, Monitoring, Robots and Admin** publish projects as immutable packages and run them as jobs on
+  **Runners** (`myrpa-runner`), on demand or on schedules;
+- plugins add activities (browser, files, Excel, HTTP, documents, email, databases, SFTP, scripting, AI agents with
+  MCP tools) through the Automation SDK.
+
+To run it on one machine, see [docs/guides/run-locally.md](docs/guides/run-locally.md).
 
 ## Repository layout
 

@@ -19,6 +19,8 @@ import {
   type Policy,
   type ProcessDetail,
   type ProcessListItem,
+  type PackageArgument,
+  type ScheduleView,
   type Role,
   type RunnerView,
   type ScheduleBody,
@@ -211,7 +213,7 @@ function TrendChart({ overview }: { overview: Overview }) {
   );
 }
 
-function JobsTable({ jobs, onSelect, selected, caption }: { jobs: readonly JobSummary[]; onSelect: (jobId: string) => void; selected?: string; caption: string }) {
+function JobsTable({ jobs, onSelect, selected, caption, byEntry = false }: { jobs: readonly JobSummary[]; onSelect: (jobId: string) => void; selected?: string; caption: string; byEntry?: boolean }) {
   return (
     <div className="ops-table-wrap">
       <table className="ops-table">
@@ -219,7 +221,7 @@ function JobsTable({ jobs, onSelect, selected, caption }: { jobs: readonly JobSu
         <thead>
           <tr>
             <th scope="col">Job</th>
-            <th scope="col">Workflow</th>
+            <th scope="col">{byEntry ? 'Entry point' : 'Workflow'}</th>
             <th scope="col">State</th>
             <th scope="col">Runner</th>
             <th scope="col">Created</th>
@@ -235,7 +237,7 @@ function JobsTable({ jobs, onSelect, selected, caption }: { jobs: readonly JobSu
                 </button>
               </td>
               <td>
-                {j.processName} <small>v{j.version}</small>
+                {byEntry ? (j.entryPath ?? '—') : j.processName} <small>v{j.version}</small>
               </td>
               <td>
                 <Badge value={j.state} />
@@ -615,6 +617,7 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
   const api = useOrchestrator();
   const zones = useLoad(() => api.timeZones(), [], 0);
   const [body, setBody] = useState<ScheduleBody>({ name: '', kind: 'Cron', cron: '0 9 * * MON-FRI', timeZone: '', misfire: 'RunOnce', overlap: 'Skip' });
+  const [argumentText, setArgumentText] = useState<Record<string, string>>({});
   const timeZone = body.timeZone || zones.data?.local || 'UTC';
   const entryPath = body.entryPath ?? entryPoints[0]?.path;
   const effective: ScheduleBody = { ...body, timeZone, entryPath };
@@ -623,6 +626,7 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
   const id = useId();
   const reason = body.name.trim() === '' ? 'Name the schedule' : entryPath === undefined ? 'Deploy a version first' : preview.data?.valid === false ? preview.data.error : lacking(role, 'Developer');
   const set = (change: Partial<ScheduleBody>) => setBody((b) => ({ ...b, ...change }));
+  const inputs = (entryPoints.find((e) => e.path === entryPath)?.arguments ?? []).filter((a) => a.direction !== 'Out');
   return (
     <div className="ops-form" aria-label="New schedule">
       <label htmlFor={`${id}-name`}>Name</label>
@@ -630,7 +634,14 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
       {entryPoints.length > 1 && (
         <>
           <label htmlFor={`${id}-entry`}>Entry point</label>
-          <select id={`${id}-entry`} value={entryPath} onChange={(e) => set({ entryPath: e.target.value })}>
+          <select
+            id={`${id}-entry`}
+            value={entryPath}
+            onChange={(e) => {
+              set({ entryPath: e.target.value });
+              setArgumentText({});
+            }}
+          >
             {entryPoints.map((e) => (
               <option key={e.path} value={e.path}>
                 {e.path}
@@ -681,16 +692,60 @@ function ScheduleForm({ processId, entryPoints, role, onCreated }: { processId: 
         <option value="Skip">Skip</option>
         <option value="Allow">Start another</option>
       </select>
+      {inputs.length > 0 && (
+        <fieldset className="ops-wide schedule-arguments">
+          <legend>Arguments for each job (empty: the default)</legend>
+          {inputs.map((a) => (
+            <RunArgument key={`${entryPath}:${a.name}`} argument={a} value={argumentText[a.name] ?? ''} onChange={(value) => setArgumentText({ ...argumentText, [a.name]: value })} />
+          ))}
+        </fieldset>
+      )}
       <p className="hint ops-wide" aria-live="polite">
         {preview.data === undefined ? 'Checking…' : preview.data.valid ? `Next: ${(preview.data.next ?? []).map((n) => time(n)).join(', ') || 'none'}` : preview.data.error}
       </p>
-      <button type="button" className="primary" disabled={action.busy || reason !== undefined} title={reason} onClick={() => void action.run('Schedule created.', () => api.createSchedule(processId, effective), onCreated)}>
+      <button type="button" className="primary" disabled={action.busy || reason !== undefined} title={reason} onClick={() => void action.run('Schedule created.', () => api.createSchedule(processId, { ...effective, argumentText: Object.fromEntries(Object.entries(argumentText).filter(([, v]) => v !== '')) }), onCreated)}>
         Create schedule
       </button>
       {action.outcome}
     </div>
   );
 }
+
+/** One input of Run now: a choice for a Boolean, a text box otherwise; the default shows what an empty field means. */
+function RunArgument({ argument, value, onChange }: { argument: PackageArgument; value: string; onChange: (value: string) => void }) {
+  const id = useId();
+  const fallback = argument.default === undefined || argument.default === null ? undefined : argument.default.replace(/^"(.*)"$/, '$1');
+  return (
+    <div className="run-argument">
+      <label htmlFor={id}>
+        {argument.name} <span className="type-chip">{argument.type}</span>
+        {argument.required && <span className="required-tag">required</span>}
+      </label>
+      {argument.secret ? (
+        <input id={id} disabled placeholder="Secret: the Runner supplies it, never a job" />
+      ) : argument.type === 'Boolean' ? (
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">{fallback === undefined ? 'Not set' : `Default (${fallback})`}</option>
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+      ) : (
+        <input id={id} value={value} placeholder={fallback !== undefined ? `Default: ${fallback}` : argument.required ? 'Required' : 'Optional'} onChange={(e) => onChange(e.target.value)} />
+      )}
+    </div>
+  );
+}
+
+/** A schedule's job arguments as "name = value, …" (empty when there are none). */
+const argumentsText = (values: unknown): string =>
+  values !== null && typeof values === 'object'
+    ? Object.entries(values as Record<string, unknown>)
+        .map(([name, value]) => `${name} = ${typeof value === 'string' ? value : JSON.stringify(value)}`)
+        .join(', ')
+    : '';
+
+const scheduleText = (s: ScheduleView): string =>
+  `${s.kind === 'Cron' ? `cron ${s.cron}` : s.kind === 'Interval' ? `every ${s.intervalMinutes} min` : `once at ${time(s.startAt)}`} (${s.timeZone})`;
 
 function ProcessPanel({ processId, role, onChanged }: { processId: string; role?: Role; onChanged: () => void }) {
   const api = useOrchestrator();
@@ -705,7 +760,7 @@ function ProcessPanel({ processId, role, onChanged }: { processId: string; role?
   };
   const developer = lacking(role, 'Developer');
   return (
-    <section className="ops-card ops-detail" aria-label="Deployment details">
+    <section className="ops-detail-page" aria-label="Deployment details">
       <LoadState loaded={detail}>
         {(d: ProcessDetail) => {
           const deployed = d.versions.find((v) => v.version === d.process.deployedVersion);
@@ -713,158 +768,256 @@ function ProcessPanel({ processId, role, onChanged }: { processId: string; role?
           const entry = entryPoints.find((e) => e.path === entryChoice) ?? entryPoints[0];
           const inputs = (entry?.arguments ?? []).filter((a) => a.direction !== 'Out');
           const runReason = !d.process.enabled ? 'The deployment is disabled' : deployed === undefined ? 'No version is deployed' : lacking(role, 'Operator');
+          const runners = d.eligibleRunners ?? [];
+          const ready = runners.filter((r) => r.reason === 'eligible');
+          const revoked = runners.filter((r) => r.status === 'Disabled');
+          const lastJob = d.jobs.items[0];
+          const nextSchedule = d.schedules.find((x) => x.enabled && x.nextFireAt);
           return (
             <>
-              <div className="page-header">
-                <h3>
-                  {d.process.name} <Badge value={d.process.status} />
-                </h3>
-                <div className="ops-actions">
-                  <button type="button" disabled={action.busy || developer !== undefined} title={developer} onClick={() => void action.run(d.process.enabled ? 'Deployment disabled.' : 'Deployment enabled.', () => api.setProcessEnabled(processId, !d.process.enabled), changed)}>
-                    {d.process.enabled ? 'Disable' : 'Enable'}
-                  </button>
-                  {d.process.deployedVersion !== undefined && (
-                    <button type="button" disabled={action.busy || developer !== undefined} title={developer} onClick={() => void action.run('Undeployed: jobs now need an explicit version.', () => api.undeploy(processId), changed)}>
-                      Undeploy
+              <div className="ops-card deployment-head">
+                <div className="page-header">
+                  <h3>
+                    Deployment <Badge value={d.process.status} />
+                  </h3>
+                  <div className="ops-actions">
+                    <button type="button" disabled={action.busy || developer !== undefined} title={developer} onClick={() => void action.run(d.process.enabled ? 'Deployment disabled.' : 'Deployment enabled.', () => api.setProcessEnabled(processId, !d.process.enabled), changed)}>
+                      {d.process.enabled ? 'Disable' : 'Enable'}
                     </button>
-                  )}
+                    {d.process.deployedVersion !== undefined && (
+                      <button type="button" disabled={action.busy || developer !== undefined} title={developer} onClick={() => void action.run('Undeployed: jobs now need an explicit version.', () => api.undeploy(processId), changed)}>
+                        Undeploy
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <p className="hint">
-                Project {d.process.project} · deployed {d.process.deployedVersion === undefined ? 'nothing' : `v${d.process.deployedVersion} by ${d.process.deployedBy} ${time(d.process.deployedAt)}`} · target{' '}
-                {d.process.targetGroup ? `group ${d.process.targetGroup}` : 'any group'}
-                {d.process.targetRunnerId ? `, Runner ${d.process.targetRunnerId}` : ''}
-              </p>
-              {action.outcome}
-              <h4>Run now</h4>
-              <div className="ops-form">
-                {entryPoints.length > 1 && (
-                  <label className="ops-argument">
-                    Entry point to run
-                    <select
-                      value={entry?.path}
-                      onChange={(e) => {
-                        setEntryChoice(e.target.value);
-                        setArgumentText({});
-                      }}
-                    >
-                      {entryPoints.map((e) => (
-                        <option key={e.path} value={e.path}>
-                          {e.path}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                {inputs.map((a) => (
-                  <label key={a.name} className="ops-argument">
-                    {a.name}{' '}
-                    <small>
-                      ({a.type}
-                      {a.required ? ', required' : ''})
+                <dl className="deployment-facts" aria-label="Deployment summary">
+                  <div>
+                    <dt>Deployed version</dt>
+                    <dd>{deployed ? `v${deployed.version}` : 'None'}
+                      <small>{deployed ? `published ${time(deployed.publishedAt)}` : 'Deploy a version below'}</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Deployed by</dt>
+                    <dd>{d.process.deployedBy ?? '—'}
+                      <small>{d.process.deployedAt ? time(d.process.deployedAt) : ''}</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Runs on</dt>
+                    <dd>{d.process.targetRunnerId ? `Runner ${d.process.targetRunnerId}` : d.process.targetGroup ? `Group ${d.process.targetGroup}` : 'Any Runner'}
+                      <small>
+                      {ready.length} of {runners.length - revoked.length} Runner{runners.length - revoked.length === 1 ? '' : 's'} ready
                     </small>
-                    <input value={argumentText[a.name] ?? ''} disabled={a.secret} placeholder={a.secret ? 'secret: comes from the Runner, never from a job' : ''} onChange={(e) => setArgumentText({ ...argumentText, [a.name]: e.target.value })} />
-                  </label>
-                ))}
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={action.busy || runReason !== undefined}
-                  title={runReason}
-                  onClick={() => void action.run(`Job submitted for v${deployed?.version} (${entry?.path}).`, () => api.submitJob({ processId, entryPath: entry?.path, argumentText: Object.fromEntries(Object.entries(argumentText).filter(([, v]) => v !== '')) }), changed)}
-                >
-                  Submit job
-                </button>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Schedules</dt>
+                    <dd>{d.schedules.length === 0 ? 'None' : `${d.schedules.filter((x) => x.enabled).length} of ${d.schedules.length} on`}
+                      <small>{nextSchedule ? `next ${time(nextSchedule.nextFireAt)}` : ''}</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Last run</dt>
+                    <dd>{lastJob ? <Badge value={lastJob.state} /> : 'Never'}
+                      <small>{lastJob ? ago(lastJob.createdAt) : ''}</small>
+                    </dd>
+                  </div>
+                </dl>
+                {action.outcome}
               </div>
-              <h4>Versions</h4>
-              <div className="ops-table-wrap">
-                <table className="ops-table">
-                  <caption className="sr-only">Published versions, newest first</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Version</th>
-                      <th scope="col">Published</th>
-                      <th scope="col">Integrity</th>
-                      <th scope="col">Contents</th>
-                      <th scope="col">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.versions.map((v) => {
-                      const isDeployed = v.version === d.process.deployedVersion;
-                      const rollback = d.process.deployedVersion !== undefined && v.version < d.process.deployedVersion;
-                      return (
-                        <tr key={v.version}>
-                          <td>
-                            v{v.version} {isDeployed && <Badge value="Deployed" />}
-                          </td>
-                          <td>
-                            {time(v.publishedAt)} by {v.publishedBy}
-                            {v.notes && <div className="hint">{v.notes}</div>}
-                          </td>
-                          <td>
-                            <code title={v.sha256}>sha256 {short(v.sha256)}</code>
-                          </td>
-                          <td>
-                            {v.entryPoints.length === 1 ? 'entry point' : 'entry points'} {v.entryPoints.map((e) => e.path).join(', ')} · {v.files.length} file(s)
-                            {v.plugins.length > 0 && <div className="hint">plugins: {v.plugins.map((p) => `${p.id} ${p.version}`).join(', ')}</div>}
-                            {v.excluded.length > 0 && <div className="hint">left out: {v.excluded.join('; ')}</div>}
-                          </td>
-                          <td>
-                            {!isDeployed && (
-                              <button type="button" disabled={action.busy || developer !== undefined} title={developer} onClick={() => void action.run(rollback ? `Rolled back to v${v.version}.` : `Deployed v${v.version}.`, () => api.deploy(processId, v.version), changed)}>
-                                {rollback ? 'Roll back to this' : 'Deploy'}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {d.eligibleRunners && (
-                <>
-                  <h4>Runners for the deployed version</h4>
-                  {d.eligibleRunners.length === 0 ? (
-                    <p className="hint">No Runner is registered.</p>
+
+              <div className="deployment-columns">
+                <section className="ops-card" aria-labelledby={`${processId}-run`}>
+                  <h4 id={`${processId}-run`}>Run now</h4>
+                  <p className="hint">{deployed ? `Starts a job for v${deployed.version} on a ready Runner. Leave a field empty to use its default.` : 'Deploy a version to run it.'}</p>
+                  <div className="run-form">
+                    {entryPoints.length > 1 && (
+                      <div className="run-argument">
+                        <label htmlFor={`${processId}-entry`}>Entry point to run</label>
+                        <select
+                          id={`${processId}-entry`}
+                          value={entry?.path}
+                          onChange={(e) => {
+                            setEntryChoice(e.target.value);
+                            setArgumentText({});
+                          }}
+                        >
+                          {entryPoints.map((e) => (
+                            <option key={e.path} value={e.path}>
+                              {e.path}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {entry !== undefined && inputs.length === 0 && <p className="hint">{entry.path} takes no input.</p>}
+                    {inputs.map((a) => (
+                      <RunArgument key={`${entry?.path}:${a.name}`} argument={a} value={argumentText[a.name] ?? ''} onChange={(value) => setArgumentText({ ...argumentText, [a.name]: value })} />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={action.busy || runReason !== undefined}
+                    title={runReason}
+                    onClick={() => void action.run(`Job submitted for v${deployed?.version} (${entry?.path}).`, () => api.submitJob({ processId, entryPath: entry?.path, argumentText: Object.fromEntries(Object.entries(argumentText).filter(([, v]) => v !== '')) }), changed)}
+                  >
+                    Run now
+                  </button>
+                </section>
+
+                <section className="ops-card" aria-labelledby={`${processId}-version`}>
+                  <h4 id={`${processId}-version`}>Deployed version</h4>
+                  {deployed === undefined ? (
+                    <p className="hint">Nothing is deployed. Choose a version below and Deploy it.</p>
                   ) : (
-                    <ul className="ops-list">
-                      {d.eligibleRunners.map((r) => (
-                        <li key={r.runnerId}>
-                          {r.name} <Badge value={r.status} /> {r.reason}
+                    <dl className="ops-facts">
+                      <dt>Version</dt>
+                      <dd>
+                        v{deployed.version} <code title={deployed.sha256}>sha256 {short(deployed.sha256)}</code>
+                      </dd>
+                      <dt>{deployed.entryPoints.length === 1 ? 'Entry point' : 'Entry points'}</dt>
+                      <dd>{deployed.entryPoints.map((e) => e.path).join(', ')}</dd>
+                      <dt>Files</dt>
+                      <dd>{deployed.files.length} workflow file(s)</dd>
+                      <dt>Needs plugins</dt>
+                      <dd>
+                        {deployed.plugins.length === 0
+                          ? 'None (built-in activities only)'
+                          : deployed.plugins.map((p) => (
+                              <span key={p.id} className="plugin-chip">
+                                {p.id} {p.version}
+                              </span>
+                            ))}
+                      </dd>
+                      {deployed.notes && (
+                        <>
+                          <dt>Notes</dt>
+                          <dd>{deployed.notes}</dd>
+                        </>
+                      )}
+                    </dl>
+                  )}
+                </section>
+
+                <section className="ops-card" aria-labelledby={`${processId}-runners`}>
+                  <h4 id={`${processId}-runners`}>Runners</h4>
+                  {runners.length === revoked.length ? (
+                    <p className="hint">No Runner can take jobs. Create one in Admin and start it.</p>
+                  ) : (
+                    <ul className="ops-list runner-list">
+                      {runners
+                        .filter((r) => r.status !== 'Disabled')
+                        .map((r) => (
+                          <li key={r.runnerId}>
+                            <span>{r.name}</span> <Badge value={r.status} /> <small>{r.reason === 'eligible' ? 'can run this version' : r.reason}</small>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                  {revoked.length > 0 && (
+                    <p className="hint">
+                      {revoked.length} revoked Runner{revoked.length === 1 ? '' : 's'} not shown.
+                    </p>
+                  )}
+                </section>
+
+                <section className="ops-card" aria-labelledby={`${processId}-schedules`}>
+                  <h4 id={`${processId}-schedules`}>Schedules</h4>
+                  {d.schedules.length === 0 ? (
+                    <p className="hint">No schedule: jobs start only when someone runs them.</p>
+                  ) : (
+                    <ul className="ops-list schedule-list">
+                      {d.schedules.map((s) => (
+                        <li key={s.scheduleId}>
+                          <div>
+                            <strong>{s.name}</strong> <Badge value={s.enabled ? 'Enabled' : 'Disabled'} />
+                            <div className="hint">
+                              {s.entryPath} · {scheduleText(s)}
+                              {s.enabled && ` · next ${time(s.nextFireAt)}`}
+                            </div>
+                            {argumentsText(s.arguments) && <div className="hint">with {argumentsText(s.arguments)}</div>}
+                            {s.lastOutcome && <div className="hint">Last: {s.lastOutcome}</div>}
+                          </div>
+                          <div className="ops-actions">
+                            <button type="button" className="small" disabled={action.busy || lacking(role, 'Operator') !== undefined} title={lacking(role, 'Operator')} onClick={() => void action.run(s.enabled ? 'Schedule disabled.' : 'Schedule enabled.', () => api.setScheduleEnabled(s.scheduleId, !s.enabled), changed)}>
+                              {s.enabled ? 'Disable' : 'Enable'}
+                            </button>
+                            <button type="button" className="small" disabled={action.busy || developer !== undefined} title={developer} aria-label={`Delete schedule ${s.name}`} onClick={() => void action.run('Schedule deleted.', () => api.deleteSchedule(s.scheduleId), changed)}>
+                              Delete
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
                   )}
-                </>
-              )}
-              <h4>Schedules</h4>
-              {d.schedules.length === 0 ? (
-                <p className="hint">No schedule.</p>
-              ) : (
-                <ul className="ops-list">
-                  {d.schedules.map((s) => (
-                    <li key={s.scheduleId}>
-                      <strong>{s.name}</strong> <small>({s.entryPath})</small> {s.kind === 'Cron' ? `cron ${s.cron}` : s.kind === 'Interval' ? `every ${s.intervalMinutes} min` : `once at ${time(s.startAt)}`} ({s.timeZone}) · {s.enabled ? `next ${time(s.nextFireAt)}` : 'disabled'}{' '}
-                      {s.lastOutcome && <small>· last: {s.lastOutcome}</small>}{' '}
-                      <button type="button" className="small" disabled={action.busy || lacking(role, 'Operator') !== undefined} title={lacking(role, 'Operator')} onClick={() => void action.run(s.enabled ? 'Schedule disabled.' : 'Schedule enabled.', () => api.setScheduleEnabled(s.scheduleId, !s.enabled), changed)}>
-                        {s.enabled ? 'Disable' : 'Enable'}
-                      </button>{' '}
-                      <button type="button" className="small" disabled={action.busy || developer !== undefined} title={developer} aria-label={`Delete schedule ${s.name}`} onClick={() => void action.run('Schedule deleted.', () => api.deleteSchedule(s.scheduleId), changed)}>
-                        Delete
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <details>
-                <summary>New schedule</summary>
-                <ScheduleForm processId={processId} entryPoints={entryPoints} role={role} onCreated={changed} />
-              </details>
-              <h4>Recent executions ({d.jobs.total})</h4>
-              {d.jobs.items.length === 0 ? <p className="hint">No job yet.</p> : <JobsTable jobs={d.jobs.items} onSelect={setSelectedJob} selected={selectedJob} caption="Recent jobs of this deployment" />}
-              {selectedJob !== undefined && <JobPanel key={selectedJob} jobId={selectedJob} role={role} onClose={() => setSelectedJob(undefined)} onChanged={changed} />}
+                  <details>
+                    <summary>New schedule</summary>
+                    <ScheduleForm processId={processId} entryPoints={entryPoints} role={role} onCreated={changed} />
+                  </details>
+                </section>
+              </div>
+
+              <section className="ops-card" aria-labelledby={`${processId}-executions`}>
+                <h4 id={`${processId}-executions`}>Recent executions ({d.jobs.total})</h4>
+                {d.jobs.items.length === 0 ? <p className="hint">No job yet. Use Run now above.</p> : <JobsTable jobs={d.jobs.items} onSelect={setSelectedJob} selected={selectedJob} caption="Recent jobs of this deployment" byEntry />}
+                {selectedJob !== undefined && <JobPanel key={selectedJob} jobId={selectedJob} role={role} onClose={() => setSelectedJob(undefined)} onChanged={changed} />}
+              </section>
+
+              <section className="ops-card" aria-labelledby={`${processId}-versions`}>
+                <h4 id={`${processId}-versions`}>Versions</h4>
+                <div className="ops-table-wrap">
+                  <table className="ops-table">
+                    <caption className="sr-only">Published versions, newest first</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Version</th>
+                        <th scope="col">Published</th>
+                        <th scope="col">Entry points</th>
+                        <th scope="col">Plugins</th>
+                        <th scope="col">Integrity</th>
+                        <th scope="col">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.versions.map((v) => {
+                        const isDeployed = v.version === d.process.deployedVersion;
+                        const rollback = d.process.deployedVersion !== undefined && v.version < d.process.deployedVersion;
+                        return (
+                          <tr key={v.version} className={isDeployed ? 'current' : undefined}>
+                            <td>
+                              v{v.version} {isDeployed && <Badge value="Deployed" />}
+                            </td>
+                            <td>
+                              {time(v.publishedAt)}
+                              <div className="hint">by {v.publishedBy}</div>
+                              {v.notes && <div className="hint">{v.notes}</div>}
+                            </td>
+                            <td>
+                              {v.entryPoints.map((e) => e.path).join(', ')}
+                              <div className="hint">{v.files.length} file(s)</div>
+                              {v.excluded.length > 0 && <div className="hint">left out: {v.excluded.join('; ')}</div>}
+                            </td>
+                            <td>{v.plugins.length === 0 ? '—' : v.plugins.map((p) => `${p.id} ${p.version}`).join(', ')}</td>
+                            <td>
+                              <code title={v.sha256}>sha256 {short(v.sha256)}</code>
+                            </td>
+                            <td>
+                              {!isDeployed && (
+                                <button type="button" disabled={action.busy || developer !== undefined} title={developer} onClick={() => void action.run(rollback ? `Rolled back to v${v.version}.` : `Deployed v${v.version}.`, () => api.deploy(processId, v.version), changed)}>
+                                  {rollback ? 'Roll back to this' : 'Deploy'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </>
           );
         }}
@@ -872,19 +1025,6 @@ function ProcessPanel({ processId, role, onChanged }: { processId: string; role?
     </section>
   );
 }
-
-/** What a project card says about its deployment. */
-const deploymentState = (item: ProcessListItem | undefined): string =>
-  item === undefined
-    ? 'Not published'
-    : [
-        item.process.status === 'Disabled' ? 'Disabled' : item.process.deployedVersion !== undefined ? `v${item.process.deployedVersion} deployed` : 'Not deployed',
-        `latest v${item.process.latestVersion}`,
-        item.schedules > 0 && `${item.enabledSchedules}/${item.schedules} schedules on`,
-        item.lastJob && `last job ${item.lastJob.state}`,
-      ]
-        .filter(Boolean)
-        .join(' · ');
 
 /**
  * Deployments (ADR-0049, ADR-0044 amendment): starts with choosing a project (a process is a project); then that
@@ -915,45 +1055,61 @@ export function DeploymentsPage() {
         <>
           <p className="hint">Choose a project to publish it, deploy a version, run it now or schedule it.</p>
           <LoadState loaded={processes}>
-            {() => (
-              <>
-                {projects.length === 0 ? (
-                  <p className="hint">There are no projects yet. Create one in Studio.</p>
-                ) : (
-                  <ul className="project-grid" aria-label="Projects to deploy">
-                    {projects.map((name) => {
-                      const p = byProject.get(name);
-                      return (
-                        <li key={name} className="project-card">
-                          <button type="button" className="project-open" aria-label={`Deployment of ${name}`} aria-describedby={`deploy-${name}`} onClick={() => setChosen(name)}>
-                            <Icon name="deploy" size={24} />
-                            <span className="project-name">{name}</span>
-                          </button>
-                          <small id={`deploy-${name}`}>
-                            {p && <Badge value={p.process.status} />} {deploymentState(p)}
-                          </small>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                {others.length > 0 && (
-                  <section className="ops-card" aria-label="Published from other projects">
-                    <h3>Published from projects not on this Server</h3>
-                    <ul className="ops-list">
-                      {others.map((p) => (
-                        <li key={p.process.processId}>
-                          <button type="button" className="link" onClick={() => setChosen(p.process.project)}>
-                            {p.process.name}
-                          </button>{' '}
-                          <Badge value={p.process.status} /> {deploymentState(p)}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-              </>
-            )}
+            {() =>
+              projects.length === 0 && others.length === 0 ? (
+                <p className="hint">There are no projects yet. Create one in Studio.</p>
+              ) : (
+                <section className="ops-card" aria-label="Projects to deploy">
+                  <div className="ops-table-wrap">
+                    <table className="ops-table project-table">
+                      <caption className="sr-only">Projects and their deployments</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Project</th>
+                          <th scope="col">Status</th>
+                          <th scope="col">Deployed</th>
+                          <th scope="col">Latest version</th>
+                          <th scope="col">Schedules</th>
+                          <th scope="col">Last job</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...projects.map((name) => ({ name, item: byProject.get(name), here: true })), ...others.map((p) => ({ name: p.process.project, item: p as ProcessListItem | undefined, here: false }))].map(({ name, item, here }) => (
+                          <tr key={`${here}:${name}`}>
+                            <th scope="row">
+                              <button type="button" className="link project-link" aria-label={`Deployment of ${name}`} onClick={() => setChosen(name)}>
+                                <Icon name="project" size={16} /> {name}
+                              </button>
+                              {!here && <div className="hint">not on this Server</div>}
+                            </th>
+                            <td>{item ? <Badge value={item.process.status} /> : <span className="hint">Not published</span>}</td>
+                            <td>{item?.process.deployedVersion !== undefined ? `v${item.process.deployedVersion}` : '—'}</td>
+                            <td>
+                              {item ? `v${item.process.latestVersion}` : '—'}
+                              {item?.latest && (
+                                <div className="hint">
+                                  {ago(item.latest.publishedAt)} by {item.latest.publishedBy}
+                                </div>
+                              )}
+                            </td>
+                            <td>{item && item.schedules > 0 ? `${item.enabledSchedules} of ${item.schedules} on` : '—'}</td>
+                            <td>
+                              {item?.lastJob ? (
+                                <>
+                                  <Badge value={item.lastJob.state} /> <span className="hint">{ago(item.lastJob.createdAt)}</span>
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )
+            }
           </LoadState>
         </>
       ) : (

@@ -181,6 +181,9 @@ public sealed record JobRecord
     /// <summary>Plugins (id and minimum version) the package needs.</summary>
     public IReadOnlyList<PackagePlugin> RequiredPlugins { get; init; } = [];
 
+    /// <summary>The package's format; only Runners that read it are assigned the job.</summary>
+    public string PackageFormat { get; init; } = WorkflowPackage.FormatName;
+
     /// <summary>Current state.</summary>
     public JobState State { get; init; }
 
@@ -397,7 +400,11 @@ public sealed record PackageFile(string Path, string Sha256, long Size);
 /// <param name="Type">Data type.</param>
 /// <param name="Required">Whether it must be given.</param>
 /// <param name="Secret">Whether it feeds a secret property (then a job may not set it).</param>
-public sealed record PackageArgument(string Name, string Direction, string Type, bool Required, bool Secret);
+public sealed record PackageArgument(string Name, string Direction, string Type, bool Required, bool Secret)
+{
+    /// <summary>The default value as JSON (null: no default), so run forms can show what an empty field means.</summary>
+    public string? Default { get; init; }
+}
 
 /// <summary>A workflow of a package that a job may start.</summary>
 public sealed record PackageEntryPoint
@@ -480,6 +487,9 @@ public sealed record RunnerRecord
 
     /// <summary>Plugin load failures it reported.</summary>
     public IReadOnlyList<string> PluginErrors { get; init; } = [];
+
+    /// <summary>Package formats it reads (empty until it registers).</summary>
+    public IReadOnlyList<string> PackageFormats { get; init; } = [];
 
     /// <summary>Optimistic concurrency revision.</summary>
     public long Revision { get; init; }

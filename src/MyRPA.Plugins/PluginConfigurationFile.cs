@@ -19,10 +19,15 @@ namespace MyRPA.Plugins;
 ///   ]
 /// }
 /// </code>
-/// Relative directories are resolved against the configuration file's directory, never the working directory.
+/// Relative directories are resolved against the configuration file's directory, never the working directory. So is a
+/// relative <c>fileRoot</c> setting (the folder file-touching plugins are confined to, ADR-0042): the same configuration
+/// works whatever folder the host is started from.
 /// </remarks>
 public static class PluginConfigurationFile
 {
+    /// <summary>The setting that names a plugin's file root (ADR-0042); a relative value is resolved like a directory.</summary>
+    public const string FileRootSetting = "fileRoot";
+
     /// <summary>The supported <c>pluginConfigVersion</c>.</summary>
     public const string CurrentVersion = "1.0";
 
@@ -177,7 +182,10 @@ public static class PluginConfigurationFile
             RequireKind(settings, JsonValueKind.Object, $"{path}.settings");
             foreach (var setting in settings.EnumerateObject())
             {
-                source.Settings[setting.Name] = String(setting.Value, $"{path}.settings.{setting.Name}");
+                var value = String(setting.Value, $"{path}.settings.{setting.Name}");
+                source.Settings[setting.Name] = setting.Name == FileRootSetting && value.Trim().Length > 0 && !Path.IsPathRooted(value)
+                    ? Path.GetFullPath(Path.Combine(baseDirectory, value))
+                    : value;
             }
         }
 

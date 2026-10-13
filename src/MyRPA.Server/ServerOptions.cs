@@ -309,6 +309,14 @@ internal static class ServerCommandLine
             return null;
         }
 
+        // The Runner listener is a second listener: it cannot share the Studio's port. Runners on this machine do not need
+        // it at all (they may use the Studio's loopback address).
+        if (runnerUrl is not null && port != 0 && runnerUrl.Port == port)
+        {
+            error = $"--runner-url uses port {port}, which is the Studio's port (--port). Choose another port for Runners on other machines, such as {(port == 65535 ? 5311 : port + 1)}; a Runner on this machine can use http://127.0.0.1:{port}/ without --runner-url.";
+            return null;
+        }
+
         error = null;
         return new ServerOptions
         {

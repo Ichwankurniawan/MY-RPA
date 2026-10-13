@@ -143,6 +143,9 @@ public sealed partial class Orchestrator
                 Plugins = [.. request.Plugins.Take(200).Select(p => new PackagePlugin(Truncate(p.Id, 120), Truncate(p.Version, 40)))],
                 Activities = [.. request.Activities.Take(2000).Select(a => Truncate(a, 120)).Distinct(StringComparer.Ordinal)],
                 PluginErrors = [.. request.PluginErrors.Take(50).Select(e => Truncate(e, 500))],
+                PackageFormats = request.PackageFormats is { Count: > 0 } formats
+                    ? [.. formats.Take(10).Select(f => Truncate(f, 40)).Distinct(StringComparer.Ordinal)]
+                    : [WorkflowPackage.FirstFormatName],
             };
             await UpdateOrThrowAsync(_store.UpdateRunnerAsync(updated, cancellationToken)).ConfigureAwait(false);
 

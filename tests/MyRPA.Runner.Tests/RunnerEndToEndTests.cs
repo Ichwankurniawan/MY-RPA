@@ -279,6 +279,7 @@ public sealed class RunnerEndToEndTests
             Architecture = "X64",
             MaxConcurrency = 1,
             Activities = ["Core.Sequence", "Core.Assign", "Core.Log"],
+            PackageFormats = [MyRPA.Orchestration.WorkflowPackage.FormatName],
         }, Ct);
         var assignment = (await stack.Orchestrator.ClaimAsync(holderRecord, TimeSpan.Zero, Ct))!;
 
